@@ -133,6 +133,20 @@ services:
       - "backend.app.worker"
     volumes:
       - "chroma_data:/srv/recpro/data/chroma"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - >-
+          import glob, pathlib;
+          raise SystemExit(0 if any(
+          b'backend.app.worker' in pathlib.Path(path).read_bytes()
+          for path in glob.glob('/proc/[0-9]*/cmdline')) else 1)
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
     init: true
     restart: unless-stopped
     networks:

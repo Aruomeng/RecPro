@@ -97,6 +97,7 @@ class ComposeContractTest(unittest.TestCase):
         self.assertIn("healthcheck", self.services["mysql"])
         self.assertIn("healthcheck", self.services["neo4j"])
         self.assertIn("healthcheck", self.services["backend"])
+        self.assertIn("healthcheck", self.services["worker"])
         self.assertIn("healthcheck", self.services["frontend"])
         for service_name in ("backend", "worker"):
             self.assertEqual(
@@ -116,6 +117,11 @@ class ComposeContractTest(unittest.TestCase):
             "/healthz",
             " ".join(self.services["frontend"]["healthcheck"]["test"]),
         )
+        worker_healthcheck = " ".join(
+            self.services["worker"]["healthcheck"]["test"]
+        )
+        self.assertIn("backend.app.worker", worker_healthcheck)
+        self.assertNotIn("/api/v1/health/live", worker_healthcheck)
 
     def test_application_build_and_commands_match_runtime_contract(self) -> None:
         for service_name in ("backend", "worker"):
