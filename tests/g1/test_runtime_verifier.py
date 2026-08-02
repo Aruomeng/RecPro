@@ -3,9 +3,11 @@ from __future__ import annotations
 import contextlib
 import io
 import unittest
+import urllib.request
 from unittest.mock import patch
 
 from scripts.verify_g1_runtime import (
+    DIRECT_HTTP_OPENER,
     EXPECTED_SERVICES,
     build_parser,
     inspect_frontend_page,
@@ -22,6 +24,14 @@ from scripts.verify_g1_runtime import (
 
 
 class RuntimeVerifierContractTests(unittest.TestCase):
+    def test_runtime_http_client_bypasses_environment_proxy(self) -> None:
+        proxy_handlers = [
+            handler
+            for handler in DIRECT_HTTP_OPENER.handlers
+            if isinstance(handler, urllib.request.ProxyHandler)
+        ]
+        self.assertEqual([], proxy_handlers)
+
     def test_accepts_truthful_g1_health_pair(self) -> None:
         validate_health_pair(
             200,

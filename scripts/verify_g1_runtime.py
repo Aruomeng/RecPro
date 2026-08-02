@@ -34,6 +34,7 @@ HEALTHY_SERVICES = frozenset(EXPECTED_SERVICES)
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(password|secret|token|api[_-]?key)\s*=\s*[^\s;]+"
 )
+DIRECT_HTTP_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,7 @@ def run_command(command: Sequence[str], *, timeout: int = 180) -> CommandResult:
 def fetch_json(url: str, *, timeout: float = 3.0) -> tuple[int, dict[str, Any]]:
     request = urllib.request.Request(url, method="GET")
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
+        with DIRECT_HTTP_OPENER.open(request, timeout=timeout) as response:
             status = response.status
             body = response.read().decode("utf-8")
     except urllib.error.HTTPError as exc:
@@ -148,13 +149,13 @@ def stable_health_signature(value: Mapping[str, Any]) -> dict[str, Any]:
 
 def fetch_text(url: str, *, timeout: float = 3.0) -> tuple[int, str]:
     request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with DIRECT_HTTP_OPENER.open(request, timeout=timeout) as response:
         return response.status, response.read().decode("utf-8")
 
 
 def fetch_bytes(url: str, *, timeout: float = 3.0) -> tuple[int, bytes, str]:
     request = urllib.request.Request(url, method="GET")
-    with urllib.request.urlopen(request, timeout=timeout) as response:
+    with DIRECT_HTTP_OPENER.open(request, timeout=timeout) as response:
         return (
             response.status,
             response.read(),
