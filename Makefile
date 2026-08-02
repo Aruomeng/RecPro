@@ -52,7 +52,7 @@ verify-g1-local: verify-g0 test-g1-python frontend-test frontend-build
 
 verify-g1-runtime:
 	@test -n "$(RUN_ID)" || { echo "RUN_ID is required and must identify a new evidence run"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/verify_g1_runtime.py --run-id "$(RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g1_runtime --run-id "$(RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g1: verify-g1-local verify-g1-runtime
 

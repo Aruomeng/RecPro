@@ -373,7 +373,7 @@ def query_probe_counts(compose: Sequence[str]) -> dict[str, int]:
         "'$RECPRO_PERSISTENCE_PROBE_ID';\""
     )
     result = run_command(
-        (*compose, "exec", "--no-TTY", "mysql", "sh", "-ceu", shell_program),
+        (*compose, "exec", "--no-tty", "mysql", "sh", "-ceu", shell_program),
         timeout=30,
     )
     return parse_probe_counts(result.stdout)

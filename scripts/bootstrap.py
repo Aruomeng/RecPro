@@ -71,6 +71,13 @@ def _help_has_option(help_text: str, option: str) -> bool:
     ) is not None
 
 
+def _compose_exec_no_tty_available(help_text: str) -> bool:
+    return any(
+        _help_has_option(help_text, option)
+        for option in ("--no-tty", "--no-TTY", "-T")
+    )
+
+
 def check_tools(
     runner: Callable[[Sequence[str]], ToolCheck] = _run_version,
     python_version: tuple[int, int, int] | None = None,
@@ -111,8 +118,8 @@ def check_tools(
                 _help_has_option(compose_up_help.detail, "--wait-timeout"),
             ),
             (
-                "exec --no-TTY",
-                _help_has_option(compose_exec_help.detail, "--no-TTY"),
+                "exec --no-tty",
+                _compose_exec_no_tty_available(compose_exec_help.detail),
             ),
         )
         if not available

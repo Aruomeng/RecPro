@@ -35,7 +35,7 @@ class BootstrapContractTests(unittest.TestCase):
             if command[-2:] == ("up", "--help"):
                 return ToolCheck("docker", True, "--wait --wait-timeout")
             if command[-2:] == ("exec", "--help"):
-                return ToolCheck("docker", True, "-T, --no-TTY")
+                return ToolCheck("docker", True, "-T, --no-tty")
             return ToolCheck(command[0], True, "test")
 
         results = check_tools(fake_runner, python_version=(3, 11, 14))
@@ -56,7 +56,7 @@ class BootstrapContractTests(unittest.TestCase):
             if command[-2:] == ("up", "--help"):
                 return ToolCheck("docker", True, "--wait --wait-timeout")
             if command[-2:] == ("exec", "--help"):
-                return ToolCheck("docker", True, "--no-TTY")
+                return ToolCheck("docker", True, "--no-tty")
             return ToolCheck(command[0], True, "test")
 
         results = check_tools(supported_runner, python_version=(3, 10, 10))
@@ -70,7 +70,7 @@ class BootstrapContractTests(unittest.TestCase):
             if command[-2:] == ("up", "--help"):
                 return ToolCheck("docker", True, "--wait")
             if command[-2:] == ("exec", "--help"):
-                return ToolCheck("docker", True, "-T")
+                return ToolCheck("docker", True, "--index --env")
             return ToolCheck(command[0], True, "test")
 
         results = check_tools(incompatible_runner, python_version=(3, 11, 14))
@@ -78,7 +78,7 @@ class BootstrapContractTests(unittest.TestCase):
         self.assertFalse(results[1].available)
         self.assertFalse(results[4].available)
         self.assertIn("up --wait-timeout", results[4].detail)
-        self.assertIn("exec --no-TTY", results[4].detail)
+        self.assertIn("exec --no-tty", results[4].detail)
 
     def test_node_version_range_matches_all_locked_frontend_tools(self) -> None:
         expectations = {
