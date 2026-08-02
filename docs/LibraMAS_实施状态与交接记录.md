@@ -51,8 +51,8 @@
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
-  - `gh` 已安装但尚未登录 GitHub，因此本地提交尚未推送或创建 Draft PR；不得绕过认证流程发布。
-- `next_step`：完成 GitHub CLI 认证并推送 `codex/g1-runnable-skeleton`；随后进入 G2 前先冻结演示数据与论文评价数据的来源、许可证和版本清单。
+  - `gh` 已安装但尚未登录 GitHub；Git HTTPS 凭据已成功推送 `codex/g1-runnable-skeleton`，Draft PR 仍需 `gh` 认证或在 GitHub 网页创建。
+- `next_step`：进入 G2 前先冻结演示数据与论文评价数据的来源、许可证和版本清单；如需 Draft PR，先完成 GitHub CLI 认证。
 
 ---
 
@@ -99,8 +99,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：Docker 与本地 Gate 已通过；当前仅 `gh` 未认证，无法可靠推送远程或创建 Draft PR。
-- `next_action`：执行 `gh auth login` 完成用户授权后推送当前分支；不需要也不允许清理为本轮隔离验收创建的容器、网络或卷。
+- `immediate_risk`：Docker、本地 Gate 与远程分支推送均已通过；当前仅 `gh` 未认证，无法由 CLI 创建 Draft PR。
+- `next_action`：按 G2 Gate 冻结数据来源、许可证和版本清单；如需要 Draft PR，先执行 `gh auth login`。不需要也不允许清理为本轮隔离验收创建的容器、网络或卷。
 
 ---
 
@@ -180,8 +180,8 @@ Gate：G1 可启动工程骨架
 测试结果：G0 131 tests OK；G1 Python 102 tests OK；五服务两轮均 healthy 且 restart_count=0；三卷 Name/CreatedAt 前后一致；探针 total_rows=1、matching_probe_rows=1 前后一致。
 验证证据目录：artifacts/verification/g1/g1-runtime-20260802-014；manifest 绑定 git commit 6f7d6581d5087ce02b26542f8d3ce20df5e52b98；destructive_actions=0。
 配置/数据/索引版本：config=rec-1.0.0；隔离探针项目 recpro-g1-tianyuhang-20260802f；业务数据与推荐索引未创建。
-未解决风险：推荐链路仍按 G1 边界禁用；gh 2.97.0 已安装但尚未认证，远程发布待用户授权。
-下一步唯一动作：完成 gh auth login 并推送当前分支；随后按 G2 Gate 冻结数据来源、许可证和版本清单。
+未解决风险：推荐链路仍按 G1 边界禁用；分支已推送，gh 2.97.0 尚未认证，因此 Draft PR 尚未创建。
+下一步唯一动作：按 G2 Gate 冻结数据来源、许可证和版本清单；如需 Draft PR，先完成 gh auth login。
 ```
 
 ---

@@ -60,7 +60,7 @@ G1 的代码、静态契约、隔离安装、前端生产构建、浏览器交�
 
 ## 5. 运行态验收
 
-本机 Docker Desktop 版本为 29.3.1，Compose 版本为 5.1.1。Docker 应用位于 `/Applications/编程/Docker.app`，命令执行时显式加入其资源目录。GitHub CLI 2.97.0 已通过 Homebrew 安装，但尚未完成 GitHub 认证，因此未推送远程，也未创建 Pull Request。
+本机 Docker Desktop 版本为 29.3.1，Compose 版本为 5.1.1。Docker 应用位于 `/Applications/编程/Docker.app`，命令执行时显式加入其资源目录。GitHub CLI 2.97.0 已通过 Homebrew 安装但尚未完成 `gh` 认证；Git HTTPS 凭据可用，分支 `codex/g1-runnable-skeleton` 已成功推送并跟踪 `origin/codex/g1-runnable-skeleton`，尚未创建 Pull Request。
 
 正式证据位于 `artifacts/verification/g1/g1-runtime-20260802-014`，manifest 绑定提交 `6f7d6581d5087ce02b26542f8d3ce20df5e52b98`，结果为 PASS：
 
@@ -74,4 +74,4 @@ G1 的代码、静态契约、隔离安装、前端生产构建、浏览器交�
 | 数据库动作 | 初始化脚本在新卷创建探针对象；验收器 SELECT=4，writes/updates/deletes/ddl=0 |
 | 破坏性动作 | `destructive_actions=0`；只执行 start、inspect、GET、SELECT 和 stop |
 
-G1 Gate 据此关闭。所有隔离运行资源仍保留且处于停止状态；未获得用户详细审批前不得清理。下一步是完成 `gh auth login` 后推送当前分支，再按 G2 Gate 处理数据来源、许可证与版本清单。
+G1 Gate 据此关闭。所有隔离运行资源仍保留且处于停止状态；未获得用户详细审批前不得清理。下一步可完成 `gh auth login` 后创建 Draft PR，或直接按 G2 Gate 处理数据来源、许可证与版本清单。
