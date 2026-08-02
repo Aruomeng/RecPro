@@ -39,6 +39,10 @@ EXCLUDED_PARTS = {".git", "node_modules", "__pycache__"}
 EXCLUDED_FILES = {
     Path("scripts/safety_scan.py"),
 }
+# Vite output is reproducibly generated from scanned source and package scripts.
+# Keep this exact path narrow: a generic ``dist`` exclusion would create an
+# avoidable hiding place elsewhere in the repository.
+GENERATED_PREFIXES = (Path("frontend/dist"),)
 
 
 def _join(*parts: str) -> str:
@@ -209,6 +213,18 @@ class Violation:
 
 def should_scan(relative_path: Path) -> bool:
     if relative_path in EXCLUDED_FILES:
+        return False
+    # Root-only local interpreters are isolated, ignored dependency trees.  Do
+    # not generalize this to nested directories, which remain fail-closed.
+    if relative_path.parts and (
+        relative_path.parts[0] == ".venv"
+        or relative_path.parts[0].startswith(".venv-")
+    ):
+        return False
+    if any(
+        relative_path == prefix or prefix in relative_path.parents
+        for prefix in GENERATED_PREFIXES
+    ):
         return False
     if any(part in EXCLUDED_PARTS for part in relative_path.parts):
         return False

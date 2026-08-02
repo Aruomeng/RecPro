@@ -1,0 +1,178 @@
+name: "${COMPOSE_PROJECT_NAME:?set_a_unique_lowercase_project_name}"
+
+x-backend-environment: &backend-environment
+  RECPRO_APP_ENV: "${RECPRO_APP_ENV:-development}"
+  RECPRO_LOG_LEVEL: "${RECPRO_LOG_LEVEL:-INFO}"
+  RECPRO_CONFIG_BUNDLE_VERSION: "${RECPRO_CONFIG_BUNDLE_VERSION:-rec-1.0.0}"
+  RECPRO_CONFIG_BUNDLE_PATH: "${RECPRO_CONFIG_BUNDLE_PATH:-contracts/config/examples/rec-1.0.0.json}"
+  RECPRO_CONFIG_BUNDLE_SHA256: "${RECPRO_CONFIG_BUNDLE_SHA256:?set_RECPRO_CONFIG_BUNDLE_SHA256}"
+  RECPRO_MYSQL_HOST: "mysql"
+  RECPRO_MYSQL_PORT: "3306"
+  RECPRO_MYSQL_DATABASE: "${RECPRO_MYSQL_DATABASE:?set_RECPRO_MYSQL_DATABASE}"
+  RECPRO_MYSQL_USER: "${RECPRO_MYSQL_USER:?set_RECPRO_MYSQL_USER}"
+  RECPRO_MYSQL_PASSWORD: "${RECPRO_MYSQL_PASSWORD:?set_RECPRO_MYSQL_PASSWORD}"
+  RECPRO_MYSQL_CONNECT_TIMEOUT_SECONDS: "${RECPRO_MYSQL_CONNECT_TIMEOUT_SECONDS:-3}"
+  RECPRO_PERSISTENCE_PROBE_ID: "${COMPOSE_PROJECT_NAME:?set_COMPOSE_PROJECT_NAME}"
+
+services:
+  mysql:
+    image: "mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6"
+    environment:
+      MYSQL_DATABASE: "${RECPRO_MYSQL_DATABASE:?set_RECPRO_MYSQL_DATABASE}"
+      MYSQL_ROOT_PASSWORD: "${RECPRO_MYSQL_ROOT_PASSWORD:?set_RECPRO_MYSQL_ROOT_PASSWORD}"
+      RECPRO_MYSQL_RUNTIME_USER: "${RECPRO_MYSQL_USER:?set_RECPRO_MYSQL_USER}"
+      RECPRO_MYSQL_RUNTIME_PASSWORD: "${RECPRO_MYSQL_PASSWORD:?set_RECPRO_MYSQL_PASSWORD}"
+      RECPRO_PERSISTENCE_PROBE_ID: "${COMPOSE_PROJECT_NAME:?set_COMPOSE_PROJECT_NAME}"
+      TZ: "UTC"
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_0900_ai_ci"
+      - "--default-time-zone=+00:00"
+    ports:
+      - "127.0.0.1:${RECPRO_MYSQL_HOST_PORT:-3306}:3306"
+    volumes:
+      - "mysql_data:/var/lib/mysql"
+      - "./infra/mysql/init/10-create-runtime-user.sh:/docker-entrypoint-initdb.d/10-create-runtime-user.sh:ro"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          mysql --protocol=socket
+          --user="$${RECPRO_MYSQL_RUNTIME_USER}"
+          --password="$${RECPRO_MYSQL_RUNTIME_PASSWORD}"
+          --database="$${MYSQL_DATABASE}"
+          --execute='SELECT 1' >/dev/null 2>&1
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - data-plane
+
+  neo4j:
+    image: "neo4j:5.26.28-community@sha256:362542416de6c09a971484d1893878016cc3b5cdec166e54b1c824a220ecd6b9"
+    environment:
+      NEO4J_AUTH: "${RECPRO_NEO4J_USER:?set_RECPRO_NEO4J_USER}/${RECPRO_NEO4J_PASSWORD:?set_RECPRO_NEO4J_PASSWORD}"
+      RECPRO_NEO4J_USER: "${RECPRO_NEO4J_USER:?set_RECPRO_NEO4J_USER}"
+      RECPRO_NEO4J_PASSWORD: "${RECPRO_NEO4J_PASSWORD:?set_RECPRO_NEO4J_PASSWORD}"
+      TZ: "UTC"
+    ports:
+      - "127.0.0.1:${RECPRO_NEO4J_HTTP_HOST_PORT:-7474}:7474"
+      - "127.0.0.1:${RECPRO_NEO4J_BOLT_HOST_PORT:-7687}:7687"
+    volumes:
+      - "neo4j_data:/data"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          cypher-shell --address neo4j://127.0.0.1:7687
+          --username "$${RECPRO_NEO4J_USER}"
+          --password "$${RECPRO_NEO4J_PASSWORD}"
+          'RETURN 1' >/dev/null 2>&1
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    restart: unless-stopped
+    networks:
+      - data-plane
+
+  backend:
+    image: "${COMPOSE_PROJECT_NAME}-backend:g1"
+    build:
+      context: "."
+      dockerfile: "backend/Dockerfile"
+    environment: *backend-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      - "python"
+      - "-m"
+      - "uvicorn"
+      - "backend.app.main:app"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8000"
+    ports:
+      - "127.0.0.1:${RECPRO_BACKEND_HOST_PORT:-8000}:8000"
+    volumes:
+      - "chroma_data:/srv/recpro/data/chroma"
+    healthcheck:
+      test:
+        - "CMD"
+        - "python"
+        - "-c"
+        - >-
+          from urllib.request import urlopen;
+          urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2).read()
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    init: true
+    restart: unless-stopped
+    networks:
+      - app-plane
+      - data-plane
+
+  worker:
+    image: "${COMPOSE_PROJECT_NAME}-backend:g1"
+    build:
+      context: "."
+      dockerfile: "backend/Dockerfile"
+    environment: *backend-environment
+    depends_on:
+      mysql:
+        condition: service_healthy
+    command:
+      - "python"
+      - "-m"
+      - "backend.app.worker"
+    volumes:
+      - "chroma_data:/srv/recpro/data/chroma"
+    init: true
+    restart: unless-stopped
+    networks:
+      - data-plane
+
+  frontend:
+    image: "${COMPOSE_PROJECT_NAME}-frontend:g1"
+    build:
+      context: "./frontend"
+      dockerfile: "Dockerfile"
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${RECPRO_FRONTEND_HOST_PORT:-5173}:8080"
+    healthcheck:
+      test:
+        - "CMD"
+        - "wget"
+        - "--quiet"
+        - "--output-document=-"
+        - "http://127.0.0.1:8080/healthz"
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - app-plane
+
+volumes:
+  mysql_data:
+    name: "${COMPOSE_PROJECT_NAME}_mysql_data"
+  neo4j_data:
+    name: "${COMPOSE_PROJECT_NAME}_neo4j_data"
+  chroma_data:
+    name: "${COMPOSE_PROJECT_NAME}_chroma_data"
+
+networks:
+  app-plane:
+    name: "${COMPOSE_PROJECT_NAME}_app"
+  data-plane:
+    name: "${COMPOSE_PROJECT_NAME}_data"

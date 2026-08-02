@@ -31,6 +31,7 @@ class G0WorkflowTest(unittest.TestCase):
             step for step in self.steps if step.get("uses") == CHECKOUT_ACTION
         )
         self.assertEqual("0", checkout["with"]["fetch-depth"])
+        self.assertEqual("false", checkout["with"]["clean"])
 
     def test_third_party_actions_are_pinned_to_full_commits(self) -> None:
         action_refs = {

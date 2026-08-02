@@ -11,6 +11,7 @@ DOCKERFILE = ROOT / "frontend/Dockerfile"
 NGINX_CONFIG = ROOT / "frontend/nginx/nginx.conf"
 NGINX_SITE = ROOT / "frontend/nginx/default.conf"
 PACKAGE_JSON = ROOT / "frontend/package.json"
+PACKAGE_LOCK = ROOT / "frontend/package-lock.json"
 
 
 class FrontendContainerContractTests(unittest.TestCase):
@@ -36,10 +37,15 @@ class FrontendContainerContractTests(unittest.TestCase):
 
     def test_local_development_server_is_loopback_only(self) -> None:
         package = json.loads(PACKAGE_JSON.read_text(encoding="utf-8"))
+        package_lock = json.loads(PACKAGE_LOCK.read_text(encoding="utf-8"))
         self.assertEqual("vite --host 127.0.0.1", package["scripts"]["dev"])
         self.assertEqual(
             "^20.19.0 || ^22.13.0 || >=24.0.0",
             package["engines"]["node"],
+        )
+        self.assertEqual(
+            package["engines"]["node"],
+            package_lock["packages"][""]["engines"]["node"],
         )
 
     def test_missing_production_assets_never_fall_back_to_html(self) -> None:

@@ -115,6 +115,18 @@ docker compose stop
         self.assertTrue(should_scan(Path("frontend/src/App.vue")))
         self.assertTrue(should_scan(Path("package.json")))
 
+    def test_only_known_vite_output_is_excluded_from_source_scan(self) -> None:
+        self.assertFalse(should_scan(Path("frontend/dist/assets/app.js")))
+        self.assertTrue(should_scan(Path("other/dist/assets/app.js")))
+        self.assertTrue(should_scan(Path("frontend/src/generated/app.ts")))
+
+    def test_only_root_virtual_environments_are_excluded(self) -> None:
+        self.assertFalse(should_scan(Path(".venv/lib/site-packages/tool.py")))
+        self.assertFalse(should_scan(Path(".venv-g1/lib/site-packages/tool.py")))
+        self.assertTrue(
+            should_scan(Path("backend/.venv-hidden/lib/site-packages/tool.py"))
+        )
+
     def test_executable_files_cannot_escape_under_docs_or_safety_tests(self) -> None:
         self.assertTrue(should_scan(Path("docs/cleanup.sh")))
         self.assertTrue(should_scan(Path("tests/safety/test_safety_scan.py")))
