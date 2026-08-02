@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/agent/agent-result.schema.json",
+  "title": "AgentResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result_id",
+    "input_message_id",
+    "agent_name",
+    "agent_version",
+    "status",
+    "confidence",
+    "payload",
+    "evidence_refs",
+    "warnings",
+    "fallback_used",
+    "tool_calls",
+    "error_code",
+    "duration_ms"
+  ],
+  "properties": {
+    "result_id": {"type": "string", "format": "uuid"},
+    "input_message_id": {"type": "string", "format": "uuid"},
+    "agent_name": {"type": "string", "minLength": 1},
+    "agent_version": {"type": "string", "minLength": 1},
+    "status": {"type": "string", "enum": ["SUCCESS", "PARTIAL", "FAILED"]},
+    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+    "payload": {"type": ["object", "array", "string", "number", "boolean", "null"]},
+    "evidence_refs": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "warnings": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    },
+    "fallback_used": {"type": "boolean"},
+    "tool_calls": {"type": "array", "items": {"type": "object"}},
+    "error_code": {"type": ["string", "null"]},
+    "duration_ms": {"type": "integer", "minimum": 0}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"status": {"const": "SUCCESS"}}},
+      "then": {
+        "properties": {
+          "payload": {"not": {"type": "null"}},
+          "error_code": {"type": "null"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "FAILED"}}},
+      "then": {
+        "properties": {
+          "payload": {"type": "null"},
+          "error_code": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"status": {"const": "PARTIAL"}}},
+      "then": {
+        "properties": {
+          "warnings": {"minItems": 1},
+          "error_code": {"type": "null"}
+        }
+      }
+    }
+  ]
+}

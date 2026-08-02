@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.0
+> 状态版本：1.2
 > 更新时间：2026-08-02
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -18,8 +18,9 @@
   - 架构采用模块化单体与端口适配器，保持低耦合、高内聚。
 - `environment`：
   - 工作区：`/Users/tianyuhang/Documents/RecPro`
-  - 当前仓库只有文档，无系统实现代码。
-  - 当前存在未跟踪的 `.DS_Store` 和 `docs/`，均不得删除。
+  - Git 分支：`codex/g0-safety-baseline`；远程：`https://github.com/Aruomeng/RecPro.git`。
+  - G0 已有安全/架构/契约代码，但尚无可启动 HTTP 服务、数据库迁移或前端。
+  - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
   - 当前未连接或修改任何业务数据库。
 - `decisions`：
   - 用户最新零删除要求优先于旧实施文档中的reset、destroy和clear语义。
@@ -33,12 +34,19 @@
   - 已完成安全、低耦合、高内聚的系统实施计划。
   - 已建立本交接记录。
   - 已验证计划文档代码围栏成对、JSON示例合法、相对链接目标存在，且需求基线哈希未变化。
+  - 已完成零删除政策、删除前汇报模板、G0 基线清单和两份架构 ADR。
+  - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
+  - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
+  - 已冻结 A01—A25 的首次实现 Gate、最终复验 Gate 和证据要求。
+  - 已建立安全、架构、文档、Schema/枚举一致性门禁和 GitHub Actions 工作流。
+  - `make verify-g0` 已通过：安全扫描 28 个可执行文件、架构扫描 8 个后端文件、13 个 Markdown/42 个结构化示例、8 个 JSON 契约和 125 个自动化测试均无失败。
 - `open_issues`：
-  - G0尚未开始，安全扫描器、ADR和代码契约尚未实现。
-  - Python、Node、MySQL、Neo4j具体版本需在G1前通过环境探测冻结。
-  - 演示数据和论文评价数据来源、许可证仍需在G0/G2确认。
+  - G1 尚未开始；当前不能声称 Web 服务或推荐系统可运行。
+  - Python 已验证为 3.11.4；Node、MySQL、Neo4j具体版本需在G1环境探测后冻结。
+  - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
-- `next_step`：用户明确要求开始实施后，只执行G0安全与规格基线，不连接或写入数据库。
+  - 本机缺少 `gh` 命令，因此尚未把本地提交推送到远程或创建 Draft PR；不得绕过认证流程发布。
+- `next_step`：先向用户汇报 G0 证据和远程发布阻塞；得到后续指示后进入 G1 可启动工程骨架。
 
 ---
 
@@ -47,7 +55,7 @@
 | Gate | 状态 | 完成证据 | 备注 |
 |---|---|---|---|
 | 计划制定 | COMPLETED | `docs/LibraMAS_系统实施计划_安全低耦合版.md` | 本轮完成 |
-| G0 安全与规格基线 | NOT_STARTED | — | 下一阶段 |
+| G0 安全与规格基线 | COMPLETED | `make verify-g0`：125 tests；安全/架构/文档/契约均 PASS | 本轮完成；未连接数据库 |
 | G1 可启动工程骨架 | NOT_STARTED | — | 依赖G0 |
 | G2 数据与持久化 | NOT_STARTED | — | 依赖G1 |
 | G3 MySQL-only推荐闭环 | NOT_STARTED | — | 依赖G2 |
@@ -65,14 +73,24 @@
 
 ## Working Set
 
-- `current_subtask`：实施计划已完成，等待用户决定是否启动G0。
-- `current_evidence`：计划文档共926行；代码围栏成对，JSON示例合法，基线SHA-256匹配；未执行数据库写入；未删除文件。
+- `current_subtask`：将已通过终审门禁的 G0 全量工作集创建详细本地 Git 提交并交接；G1 未开始。
+- `current_evidence`：`make verify-g0` 全部通过；125 个测试；安全违规0、架构违规0、文档问题0、契约问题0；基线提交后的逐提交文件删除/改名检查为0；数据库连接/写入/删除均为0。
 - `active_files_or_commands`：
+  - `Makefile`
+  - `backend/app/shared_kernel/contracts/`
+  - `contracts/`
+  - `scripts/`
+  - `tests/`
+  - `docs/SAFETY_POLICY.md`
+  - `docs/api.md`
+  - `docs/data_dictionary.md`
+  - `docs/experiment_protocol.md`
+  - `docs/acceptance_matrix.md`
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：旧实施文档仍含 `demo-reset`、清除历史和测试销毁等表述；实际实施必须以新计划的零删除覆盖规则为准。
-- `next_action`：等待用户明确要求进入G0；在此之前不执行系统实现或数据库操作。
+- `immediate_risk`：主实施文档顶部已增加安全勘误，但 HTTP 服务和数据基础设施尚未实现；本机缺少 `gh`，本轮提交不能推送至远程。
+- `next_action`：向用户汇报 G0 产出、验证证据和远程发布阻塞；不提前实施 G1。
 
 ---
 
@@ -81,6 +99,30 @@
 | 申请编号 | 状态 | 目标 | 用户批准 | 执行结果 |
 |---|---|---|---|---|
 | — | 无申请 | — | — | 本项目尚未执行任何删除操作 |
+
+---
+
+## G0 阶段交接记录
+
+```text
+交接ID：G0-20260802-001
+Gate：G0 安全与规格基线
+状态：COMPLETED
+时间：2026-08-02（Asia/Shanghai）
+目标：冻结零删除约束、领域语言、模块依赖、API/Agent/配置契约、实验协议和验收映射。
+新增文件：安全政策与模板、ADR、数据/API/实验/验收文档、Python契约、JSON Schema/OpenAPI、门禁脚本、测试、Makefile、CI工作流。
+修改文件及原版本保存位置：README.md 与 .gitignore；原版本位于提交 2f529febc922c69d3bf72cc10fa25fbee2d518df。
+新增数据库对象和行数：0；未连接数据库。
+受控UPDATE对象和审计ID：0；不适用。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：make verify-g0；git diff --check；Git状态/差异/哈希只读检查。
+测试结果：125 tests OK；安全、架构、文档、契约四类报告均 PASS。
+验证证据：命令输出、本交接记录、docs/G0_BASELINE_MANIFEST.md 和本文件所在 Git 提交。
+配置/数据/索引版本：config=rec-1.0.0；数据与索引未创建。
+未解决风险：HTTP服务、MySQL、Neo4j、Chroma和前端尚未实现；本机缺少gh，远程推送暂停。
+下一步唯一动作：用户确认G0后进入G1，先做只读环境探测与可启动健康检查垂直切片。
+```
 
 ---
 

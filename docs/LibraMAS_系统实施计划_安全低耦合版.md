@@ -138,33 +138,15 @@ docker compose down -v / docker volume rm / volume prune
 
 ### 1.6 ChangePlan
 
-导入、回填、迁移、画像重算、索引构建和Fixture准备均默认dry-run。申请apply的计划至少包含：
-
-```json
-{
-  "plan_id": "uuid",
-  "environment_id": "recpro_dev",
-  "operation": "IMPORT_RESOURCES",
-  "targets": [],
-  "expected_insert_count": 0,
-  "expected_update_count": 0,
-  "expected_delete_count": 0,
-  "max_affected_rows": 0,
-  "backup_id": "backup-...",
-  "input_hashes": {},
-  "preconditions": [],
-  "compensation": [],
-  "created_at": "UTC timestamp"
-}
-```
+导入、回填、迁移、画像重算、索引构建和Fixture准备均默认dry-run。ChangePlan 不在本计划中维护第二份字段清单；唯一机器契约为 [`contracts/safety/change-plan.schema.json`](../contracts/safety/change-plan.schema.json)，可执行示例为 [`contracts/safety/examples/change-plan-dry-run.json`](../contracts/safety/examples/change-plan-dry-run.json)，语义和授权规则见 [`SAFETY_POLICY.md`](SAFETY_POLICY.md)。文档、示例与 Schema 发生漂移时门禁直接失败。
 
 执行规则：
 
 1. dry-run输出环境、数据库、目标范围、主键范围、输入哈希和预估行数。
-2. `expected_delete_count` 不为0时立即拒绝。
+2. 零删除断言不满足、目标计数下降或分类与操作不匹配时立即拒绝。
 3. apply必须显式携带 `--apply --plan-id <id>`。
 4. apply前重新计算 `plan_hash`；数据或计划变化则重新dry-run。
-5. 超过 `max_affected_rows` 自动停止。
+5. 最小预期增量超过 `max_changes` 时自动停止。
 6. 同名输出目录或run已存在时失败，不覆盖。
 7. 写操作结束后生成包含实际影响数和校验结果的回执。
 

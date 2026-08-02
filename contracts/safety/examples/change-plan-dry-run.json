@@ -1,0 +1,43 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "bb4cae47-8bd8-4a33-9b18-0d269c90bff1",
+  "created_at": "2026-08-02T00:00:00Z",
+  "git_commit": "0123456789abcdef0123456789abcdef01234567",
+  "classification": "S1_APPEND",
+  "mode": "DRY_RUN",
+  "intent": "Append a new, uniquely named fixture generation without changing existing facts.",
+  "environment": {
+    "environment_id": "recpro_dev_unique",
+    "workspace": "/workspace/RecPro",
+    "host_fingerprint": "sha256:9e5ed3a061ba0d5b74ea500c884a54c4f89cf94c6405318d2e5da47c404e70f1",
+    "database_identity": "mysql://recpro_dev_unique",
+    "index_namespace": null
+  },
+  "targets": [
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro_dev_unique.resource_catalog:fixture_generation=fixture-20260802-g0",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 120
+    }
+  ],
+  "input_hashes": {
+    "resources.jsonl": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  },
+  "idempotency_key": "fixture-20260802-g0",
+  "max_changes": 120,
+  "preconditions": [
+    "environment identity matches the reviewed dry-run target",
+    "runtime role has no delete privilege",
+    "fixture generation does not already exist"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+}

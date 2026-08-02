@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/safety/change-plan.schema.json",
+  "title": "LibraMAS ChangePlan",
+  "description": "Fail-closed plan for read-only, append-only, or controlled status-change work. Destructive work is outside this schema and requires a separately approved deletion request.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "created_at",
+    "git_commit",
+    "classification",
+    "mode",
+    "intent",
+    "environment",
+    "targets",
+    "input_hashes",
+    "idempotency_key",
+    "max_changes",
+    "preconditions",
+    "safety_assertions",
+    "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "1.0.0"},
+    "plan_id": {"type": "string", "format": "uuid"},
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:[zZ]|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "classification": {"type": "string", "enum": ["S0_READ_ONLY", "S1_APPEND", "S2_CONTROLLED_UPDATE"]},
+    "mode": {"type": "string", "enum": ["DRY_RUN", "APPLY"]},
+    "intent": {"type": "string", "minLength": 1, "maxLength": 2000},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment_id", "workspace", "host_fingerprint"],
+      "properties": {
+        "environment_id": {"type": "string", "minLength": 1},
+        "workspace": {"type": "string", "pattern": "^/"},
+        "host_fingerprint": {"type": "string", "minLength": 1},
+        "database_identity": {"type": ["string", "null"]},
+        "index_namespace": {"type": ["string", "null"]}
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "identifier", "operation", "expected_before_count", "expected_after_min_count"],
+        "properties": {
+          "kind": {"type": "string", "enum": ["FILE", "MYSQL", "CHROMA", "NEO4J", "DOCKER", "GIT"]},
+          "identifier": {"type": "string", "minLength": 1},
+          "operation": {"type": "string", "enum": ["READ", "CREATE", "APPEND", "UPDATE_STATUS", "START", "STOP", "COMMIT"]},
+          "expected_before_count": {"type": "integer", "minimum": 0},
+          "expected_after_min_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "input_hashes": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+    },
+    "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128},
+    "max_changes": {"type": "integer", "minimum": 0},
+    "preconditions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "safety_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_deletions",
+        "database_physical_deletions",
+        "overwrite_existing",
+        "destructive_capabilities_required",
+        "counts_must_not_decrease"
+      ],
+      "properties": {
+        "file_deletions": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "overwrite_existing": {"const": false},
+        "destructive_capabilities_required": {"const": false},
+        "counts_must_not_decrease": {"const": true}
+      }
+    },
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

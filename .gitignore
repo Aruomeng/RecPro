@@ -1,3 +1,4 @@
+# Preserve Finder metadata locally while keeping it outside project commits.
 .DS_Store
 __pycache__/
 *.py[cod]
@@ -13,4 +14,3 @@ dist/
 .env
 .env.*
 !.env.example
-

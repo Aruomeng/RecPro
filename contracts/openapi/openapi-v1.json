@@ -1,0 +1,1165 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "LibraMAS Recommendation API",
+    "version": "0.1.0-draft",
+    "description": "G0 contract baseline. The implementation is introduced gate by gate; this document does not claim that the HTTP service is already available."
+  },
+  "servers": [
+    {"url": "http://localhost:8000", "description": "Local development"}
+  ],
+  "tags": [
+    {"name": "Health"},
+    {"name": "Recommendation"},
+    {"name": "Interaction"},
+    {"name": "Profile"},
+    {"name": "Debug"}
+  ],
+  "paths": {
+    "/api/v1/health/live": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Process liveness",
+        "operationId": "health_liveness_v1",
+        "security": [],
+        "parameters": [{"$ref": "#/components/parameters/ClientRequestId"}],
+        "responses": {
+          "200": {
+            "description": "The API process is alive",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LivenessResponse"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Recommendation capability readiness",
+        "operationId": "health_readiness_v1",
+        "security": [],
+        "parameters": [{"$ref": "#/components/parameters/ClientRequestId"}],
+        "responses": {
+          "200": {
+            "description": "Component state and truthful recommendation capability",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReadinessResponse"}}}
+          },
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"}
+        }
+      }
+    },
+    "/api/v1/recommendation-tasks": {
+      "post": {
+        "tags": ["Recommendation"],
+        "summary": "Create or replay a recommendation task",
+        "operationId": "recommendation_create_task_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationTaskCreateRequest"}}}
+        },
+        "responses": {
+          "201": {
+            "description": "New completed, degraded, or clarification-waiting task",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationExecutionResponse"}}}
+          },
+          "200": {
+            "description": "Idempotently replayed task",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationExecutionResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-tasks/{task_id}/clarifications": {
+      "post": {
+        "tags": ["Recommendation"],
+        "summary": "Resume the same task with clarification answers",
+        "operationId": "recommendation_submit_clarification_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/TaskId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ClarificationRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Resumed task state",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationExecutionResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-tasks/{task_id}": {
+      "get": {
+        "tags": ["Recommendation"],
+        "summary": "Read recommendation task state",
+        "operationId": "recommendation_get_task_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/TaskId"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Current task state",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationTaskStatusResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-records/{record_id}": {
+      "get": {
+        "tags": ["Recommendation"],
+        "summary": "Read a persisted recommendation record",
+        "operationId": "recommendation_get_record_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/RecordId"},
+          {"name": "include_unavailable_now", "in": "query", "required": false, "schema": {"type": "boolean", "default": false}},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Persisted record and evidence-bearing items",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RecommendationRecord"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-items/{item_id}/explanation": {
+      "get": {
+        "tags": ["Recommendation"],
+        "summary": "Read natural-language and structured evidence",
+        "operationId": "recommendation_get_item_explanation_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/ItemId"},
+          {"name": "version", "in": "query", "required": false, "schema": {"type": "integer", "minimum": 1, "default": 1}},
+          {
+            "name": "include_scores",
+            "in": "query",
+            "required": false,
+            "schema": {"type": "boolean", "default": false},
+            "description": "Research-admin only. Unauthorized true requests return SCORE_VIEW_FORBIDDEN."
+          },
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Validated explanation",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ExplanationResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-impressions/batch": {
+      "post": {
+        "tags": ["Interaction"],
+        "summary": "Append a batch of observed card impressions",
+        "operationId": "interaction_append_impressions_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImpressionBatchRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Per-impression idempotent receipts",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ImpressionBatchResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/recommendation-items/{item_id}/feedback": {
+      "post": {
+        "tags": ["Interaction"],
+        "summary": "Append recommendation feedback",
+        "operationId": "interaction_append_feedback_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/ItemId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FeedbackRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotently replayed feedback",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FeedbackReceipt"}}}
+          },
+          "201": {
+            "description": "Feedback and synchronous profile projection applied",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FeedbackReceipt"}}}
+          },
+          "202": {
+            "description": "Feedback committed and profile projection pending",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/FeedbackReceipt"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/behavior-events": {
+      "post": {
+        "tags": ["Interaction"],
+        "summary": "Append an allowed independent behavior event",
+        "operationId": "interaction_append_behavior_event_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BehaviorEventRequest"}}}
+        },
+        "responses": {
+          "200": {
+            "description": "Idempotently replayed event",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BehaviorEventReceipt"}}}
+          },
+          "201": {
+            "description": "Event and synchronous projection applied",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BehaviorEventReceipt"}}}
+          },
+          "202": {
+            "description": "Event committed and profile projection pending",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/BehaviorEventReceipt"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/profiles/{user_id}": {
+      "get": {
+        "tags": ["Profile"],
+        "summary": "Read an authorized profile snapshot",
+        "operationId": "profile_get_snapshot_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/UserId"},
+          {"name": "as_of_time", "in": "query", "required": false, "schema": {"type": "string", "format": "date-time"}},
+          {"name": "include_evidence", "in": "query", "required": false, "schema": {"type": "boolean", "default": false}},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Versioned profile snapshot",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProfileResponse"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/profiles/{user_id}/refresh": {
+      "post": {
+        "tags": ["Profile"],
+        "summary": "Request a new profile projection version",
+        "operationId": "profile_refresh_v1",
+        "security": [{"bearerAuth": []}, {"demoUserAuth": []}],
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/UserId"},
+          {"$ref": "#/components/parameters/IdempotencyKey"},
+          {"$ref": "#/components/parameters/DemoUserId"}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProfileRefreshRequest"}}}
+        },
+        "responses": {
+          "202": {
+            "description": "Refresh accepted or idempotently replayed",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+              "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ProfileRefreshResponse"}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "409": {"$ref": "#/components/responses/Conflict"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/debug/tasks/{task_id}/context": {
+      "get": {
+        "tags": ["Debug"],
+        "summary": "Read the versioned task context for research audit",
+        "operationId": "debug_get_task_context_v1",
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/TaskId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Task context",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DebugDocument"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/debug/tasks/{task_id}/trace": {
+      "get": {
+        "tags": ["Debug"],
+        "summary": "Read the ordered Agent trace for research audit",
+        "operationId": "debug_get_task_trace_v1",
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/TaskId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent trace",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DebugDocument"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    },
+    "/api/v1/debug/tasks/{task_id}/policy-decision": {
+      "get": {
+        "tags": ["Debug"],
+        "summary": "Read policy inputs and decision for research audit",
+        "operationId": "debug_get_policy_decision_v1",
+        "parameters": [
+          {"$ref": "#/components/parameters/ClientRequestId"},
+          {"$ref": "#/components/parameters/TaskId"}
+        ],
+        "responses": {
+          "200": {
+            "description": "Policy decision",
+            "headers": {
+              "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+              "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"}
+            },
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DebugDocument"}}}
+          },
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"$ref": "#/components/responses/Forbidden"},
+          "404": {"$ref": "#/components/responses/NotFound"},
+          "422": {"$ref": "#/components/responses/UnprocessableEntity"},
+          "429": {"$ref": "#/components/responses/TooManyRequests"},
+          "503": {"$ref": "#/components/responses/ServiceUnavailable"},
+          "504": {"$ref": "#/components/responses/GatewayTimeout"}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
+      "demoUserAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Demo-User-Id",
+        "description": "Local demo identity only. The server accepts it only when APP_ENV=demo and demo identity is explicitly enabled; it never grants research_admin privileges."
+      }
+    },
+    "parameters": {
+      "ClientRequestId": {
+        "name": "X-Request-Id",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "string", "format": "uuid"},
+        "description": "Optional client-generated request UUID. The server validates and echoes it; when absent, the server generates one."
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "schema": {"type": "string", "minLength": 8, "maxLength": 255},
+        "description": "Stable key for safe replay of a write request."
+      },
+      "DemoUserId": {
+        "name": "X-Demo-User-Id",
+        "in": "header",
+        "required": false,
+        "schema": {"type": "integer", "minimum": 1},
+        "description": "User-scoped routes only. Accepted only when APP_ENV=demo and demo identity is explicitly enabled; production derives identity from bearer authentication. This header never grants research_admin privileges."
+      },
+      "TaskId": {"name": "task_id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}},
+      "RecordId": {"name": "record_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}},
+      "ItemId": {"name": "item_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}},
+      "UserId": {"name": "user_id", "in": "path", "required": true, "schema": {"type": "integer", "minimum": 1}}
+    },
+    "headers": {
+      "XRequestId": {
+        "description": "The validated or server-generated request UUID. It is returned on every operation response.",
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "XTraceId": {
+        "description": "The trace UUID used to correlate the complete operation. It is returned on every operation response.",
+        "schema": {"type": "string", "format": "uuid"}
+      },
+      "IdempotencyReplayed": {
+        "description": "True when an idempotent write response was replayed from the original result; false otherwise.",
+        "schema": {"type": "boolean"}
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Malformed JSON or invalid HTTP protocol input",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Unauthorized": {
+        "description": "Authentication is required or invalid",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Forbidden": {
+        "description": "The caller cannot access the requested data or score view",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "NotFound": {
+        "description": "The requested resource was not found",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "Conflict": {
+        "description": "Context version or idempotency conflict",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "UnprocessableEntity": {
+        "description": "The request violates a domain constraint",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "TooManyRequests": {
+        "description": "The caller exceeded the configured request or concurrency limit",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"},
+          "Retry-After": {"description": "Seconds until the client should retry.", "schema": {"type": "integer", "minimum": 1}}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "ServiceUnavailable": {
+        "description": "Core MySQL storage is unavailable, so recommendation cannot proceed",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      },
+      "GatewayTimeout": {
+        "description": "The operation deadline elapsed before a safe result could be formed",
+        "headers": {
+          "X-Request-Id": {"$ref": "#/components/headers/XRequestId"},
+          "X-Trace-Id": {"$ref": "#/components/headers/XTraceId"},
+          "Idempotency-Replayed": {"$ref": "#/components/headers/IdempotencyReplayed"}
+        },
+        "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}
+      }
+    },
+    "schemas": {
+      "LivenessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "service", "version", "time"],
+        "properties": {
+          "status": {"type": "string", "const": "UP"},
+          "service": {"type": "string", "const": "recpro-backend"},
+          "version": {"type": "string", "minLength": 1},
+          "time": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ReadinessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "can_recommend", "components", "config_bundle_version", "checked_at"],
+        "properties": {
+          "status": {"type": "string", "enum": ["READY", "DEGRADED", "NOT_READY"]},
+          "can_recommend": {"type": "boolean"},
+          "components": {
+            "type": "object",
+            "minProperties": 1,
+            "additionalProperties": {"$ref": "#/components/schemas/ComponentReadiness"}
+          },
+          "config_bundle_version": {"type": "string", "minLength": 1},
+          "checked_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ComponentReadiness": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["status", "required"],
+        "properties": {
+          "status": {"type": "string", "enum": ["UP", "DOWN", "DISABLED", "MOCK", "UNKNOWN"]},
+          "required": {"type": "boolean"},
+          "active_version": {"type": "string"},
+          "provider": {"type": "string"},
+          "error_code": {"type": "string"}
+        }
+      },
+      "RecommendationTaskCreateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["request_id", "session_id", "scene"],
+        "properties": {
+          "request_id": {"type": "string", "format": "uuid"},
+          "user_id": {"type": ["integer", "null"], "minimum": 1},
+          "session_id": {"type": "string", "format": "uuid"},
+          "scene": {"$ref": "#/components/schemas/TriggerScene"},
+          "input_text": {"type": ["string", "null"], "maxLength": 2000},
+          "requested_resource_types": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {"$ref": "#/components/schemas/ResourceType"},
+            "default": ["BOOK", "PAPER"]
+          },
+          "requested_output_type": {"oneOf": [{"$ref": "#/components/schemas/OutputType"}, {"type": "null"}]},
+          "source_resource_id": {"type": ["integer", "null"], "minimum": 1},
+          "source_item_id": {"type": ["integer", "null"], "minimum": 1},
+          "as_of_time": {"type": ["string", "null"], "format": "date-time"},
+          "constraints": {"type": "object", "additionalProperties": true},
+          "limit": {"type": "integer", "minimum": 1, "maximum": 20, "default": 10}
+        }
+      },
+      "ClarificationRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["context_version", "answers"],
+        "properties": {
+          "context_version": {"type": "integer", "minimum": 1},
+          "answers": {"type": "object", "minProperties": 1, "additionalProperties": {"type": "string", "minLength": 1}}
+        }
+      },
+      "RecommendationExecutionResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task_id", "trace_id", "status", "context_version", "decision", "warnings"],
+        "properties": {
+          "task_id": {"type": "string", "format": "uuid"},
+          "record_id": {"type": ["integer", "null"], "minimum": 1},
+          "trace_id": {"type": "string", "format": "uuid"},
+          "status": {"$ref": "#/components/schemas/TaskStatus"},
+          "context_version": {"type": "integer", "minimum": 1},
+          "evaluation_at": {"type": "string", "format": "date-time"},
+          "decision": {"$ref": "#/components/schemas/InteractionDecision"},
+          "groups": {"type": "array", "items": {"$ref": "#/components/schemas/RecommendationGroup"}},
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/RecommendationItem"}},
+          "questions": {"type": "array", "items": {"$ref": "#/components/schemas/ClarificationQuestion"}},
+          "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/WarningCode"}},
+          "versions": {"$ref": "#/components/schemas/VersionBundle"}
+        }
+      },
+      "RecommendationTaskStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task_id", "trace_id", "status", "context_version", "evaluation_at", "started_at", "warnings", "versions"],
+        "properties": {
+          "task_id": {"type": "string", "format": "uuid"},
+          "trace_id": {"type": "string", "format": "uuid"},
+          "status": {"$ref": "#/components/schemas/TaskStatus"},
+          "context_version": {"type": "integer", "minimum": 1},
+          "record_id": {"type": ["integer", "null"], "minimum": 1},
+          "evaluation_at": {"type": "string", "format": "date-time"},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": ["string", "null"], "format": "date-time"},
+          "error_code": {"type": ["string", "null"]},
+          "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/WarningCode"}},
+          "versions": {"$ref": "#/components/schemas/VersionBundle"}
+        }
+      },
+      "RecommendationRecord": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["record_id", "task_id", "evaluation_at", "decision", "groups", "items", "warnings", "versions"],
+        "properties": {
+          "record_id": {"type": "integer", "minimum": 1},
+          "task_id": {"type": "string", "format": "uuid"},
+          "evaluation_at": {"type": "string", "format": "date-time"},
+          "decision": {"$ref": "#/components/schemas/InteractionDecision"},
+          "groups": {"type": "array", "items": {"$ref": "#/components/schemas/RecommendationGroup"}},
+          "items": {"type": "array", "items": {"$ref": "#/components/schemas/RecommendationItem"}},
+          "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/WarningCode"}},
+          "versions": {"$ref": "#/components/schemas/VersionBundle"}
+        }
+      },
+      "InteractionDecision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["output_type", "delivery_strategy", "explanation_level", "adaptation_state", "decision_reason_codes", "decision_reason", "policy_version"],
+        "properties": {
+          "output_type": {"$ref": "#/components/schemas/OutputType"},
+          "delivery_strategy": {"type": "string", "enum": ["DIRECT", "GUIDED", "DEGRADED"]},
+          "explanation_level": {"type": "string", "enum": ["SUMMARY", "EVIDENCE", "LIMITED"]},
+          "adaptation_state": {"type": "string", "enum": ["NORMAL", "FEEDBACK_ADJUSTED"]},
+          "decision_reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "decision_reason": {"type": "string", "minLength": 1},
+          "policy_version": {"type": "string", "minLength": 1}
+        }
+      },
+      "ClarificationQuestion": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["slot", "question", "options", "required"],
+        "properties": {
+          "slot": {"type": "string", "minLength": 1},
+          "question": {"type": "string", "minLength": 1},
+          "options": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "required": {"type": "boolean"}
+        }
+      },
+      "RecommendationGroup": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["group_id", "group_type", "group_key", "title", "order_no"],
+        "properties": {
+          "group_id": {"type": "integer", "minimum": 1},
+          "group_type": {"type": "string", "minLength": 1},
+          "group_key": {"type": "string"},
+          "title": {"type": "string"},
+          "goal": {"type": ["string", "null"]},
+          "order_no": {"type": "integer", "minimum": 1}
+        }
+      },
+      "RecommendationItem": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "resource", "rank_no", "group_id", "reason_summary", "evidence_confidence"],
+        "properties": {
+          "item_id": {"type": "integer", "minimum": 1},
+          "resource": {"$ref": "#/components/schemas/ResourceSummary"},
+          "rank_no": {"type": "integer", "minimum": 1},
+          "group_id": {"type": ["integer", "null"], "minimum": 1},
+          "reason_summary": {"type": "string", "minLength": 1},
+          "evidence_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "unavailable_now": {"type": "boolean"}
+        }
+      },
+      "ResourceSummary": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["resource_id", "resource_type", "title", "authors", "availability_status"],
+        "properties": {
+          "resource_id": {"type": "integer", "minimum": 1},
+          "resource_type": {"$ref": "#/components/schemas/ResourceType"},
+          "title": {"type": "string", "minLength": 1},
+          "authors": {"type": "array", "items": {"type": "string"}},
+          "publication_year": {"type": ["integer", "null"], "minimum": 1},
+          "availability_status": {"type": "string", "enum": ["AVAILABLE_BORROW", "AVAILABLE_ONLINE", "REFERENCE_ONLY", "TEMPORARILY_UNAVAILABLE", "REMOVED"]}
+        }
+      },
+      "ExplanationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["item_id", "explanation_version", "explanation_level", "text", "evidence", "provider", "validator_status", "created_at"],
+        "properties": {
+          "item_id": {"type": "integer", "minimum": 1},
+          "explanation_version": {"type": "integer", "minimum": 1},
+          "explanation_level": {"type": "string", "enum": ["SUMMARY", "EVIDENCE", "LIMITED"]},
+          "text": {"type": "string", "minLength": 1},
+          "evidence": {"type": "array", "minItems": 1, "items": {"$ref": "#/components/schemas/EvidenceRef"}},
+          "provider": {"type": "string", "enum": ["TEMPLATE", "MOCK_LLM", "EXTERNAL_LLM"]},
+          "validator_status": {"type": "string", "enum": ["PASSED", "FALLBACK_TEMPLATE", "REJECTED"]},
+          "created_at": {"type": "string", "format": "date-time"},
+          "scores": {"$ref": "#/components/schemas/ScoreBreakdown"}
+        }
+      },
+      "EvidenceRef": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["type", "ref", "summary"],
+        "properties": {
+          "type": {"type": "string", "minLength": 1},
+          "ref": {"type": "string", "minLength": 1},
+          "summary": {"type": "string", "minLength": 1}
+        }
+      },
+      "ScoreBreakdown": {
+        "type": "object",
+        "additionalProperties": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "required": ["final_score"],
+        "properties": {
+          "final_score": {"type": "number", "minimum": 0, "maximum": 1},
+          "profile_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "semantic_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "kg_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "intent_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "recall_fusion_score": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "exposure_penalty": {"type": "number", "minimum": 0},
+          "negative_penalty": {"type": "number", "minimum": 0}
+        }
+      },
+      "ImpressionBatchRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["impressions"],
+        "properties": {
+          "impressions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {"$ref": "#/components/schemas/ImpressionInput"}
+          }
+        }
+      },
+      "ImpressionInput": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["impression_uuid", "recommendation_item_id", "position", "rendered_at", "visible_ms", "max_visible_ratio"],
+        "properties": {
+          "impression_uuid": {"type": "string", "format": "uuid"},
+          "recommendation_item_id": {"type": "integer", "minimum": 1},
+          "position": {"type": "integer", "minimum": 1},
+          "rendered_at": {"type": "string", "format": "date-time"},
+          "visible_started_at": {"type": ["string", "null"], "format": "date-time"},
+          "visible_ms": {"type": "integer", "minimum": 0},
+          "max_visible_ratio": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "ImpressionBatchResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["accepted_count", "replayed_count", "rejected_count", "results"],
+        "properties": {
+          "accepted_count": {"type": "integer", "minimum": 0},
+          "replayed_count": {"type": "integer", "minimum": 0},
+          "rejected_count": {"type": "integer", "minimum": 0},
+          "results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["impression_uuid", "status", "is_valid_exposure"],
+              "properties": {
+                "impression_uuid": {"type": "string", "format": "uuid"},
+                "status": {"type": "string", "enum": ["ACCEPTED", "REPLAYED", "REJECTED"]},
+                "is_valid_exposure": {"type": "boolean"},
+                "error_code": {"type": ["string", "null"]}
+              }
+            }
+          }
+        }
+      },
+      "FeedbackRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feedback_uuid", "feedback_type"],
+        "properties": {
+          "feedback_uuid": {"type": "string", "format": "uuid"},
+          "impression_uuid": {"type": ["string", "null"], "format": "uuid"},
+          "feedback_type": {"type": "string", "enum": ["FAVORITE", "BORROW", "REJECT", "NOT_INTERESTED", "RATE"]},
+          "reason_code": {"oneOf": [{"$ref": "#/components/schemas/NegativeReasonCode"}, {"type": "null"}]},
+          "rating": {"type": ["integer", "null"], "minimum": 1, "maximum": 5},
+          "content": {"type": ["string", "null"], "maxLength": 2000}
+        }
+      },
+      "BehaviorEventRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_uuid", "session_id", "event_type", "occurred_at"],
+        "properties": {
+          "event_uuid": {"type": "string", "format": "uuid"},
+          "session_id": {"type": "string", "format": "uuid"},
+          "task_id": {"type": ["string", "null"], "format": "uuid"},
+          "event_type": {"type": "string", "enum": ["SEARCH", "VIEW_RESOURCE", "VIEW_EXPLANATION", "CLICK_RECOMMENDATION", "ACCESS_PAPER_FULLTEXT"]},
+          "resource_id": {"type": ["integer", "null"], "minimum": 1},
+          "recommendation_item_id": {"type": ["integer", "null"], "minimum": 1},
+          "impression_uuid": {"type": ["string", "null"], "format": "uuid"},
+          "query_text": {"type": ["string", "null"], "maxLength": 2000},
+          "dwell_ms": {"type": ["integer", "null"], "minimum": 0},
+          "occurred_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "FeedbackReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["feedback_uuid", "feedback_id", "status", "behavior_event_id", "resource_state", "profile_update_status", "profile_version_before", "profile_version_after"],
+        "properties": {
+          "feedback_uuid": {"type": "string", "format": "uuid"},
+          "feedback_id": {"type": "integer", "minimum": 1},
+          "status": {"type": "string", "enum": ["ACCEPTED", "APPLIED", "REPLAYED"]},
+          "behavior_event_id": {"type": "integer", "minimum": 1},
+          "resource_state": {"oneOf": [{"$ref": "#/components/schemas/ResourceState"}, {"type": "null"}]},
+          "profile_update_status": {"type": "string", "enum": ["APPLIED", "PENDING", "NOT_REQUIRED"]},
+          "profile_version_before": {"type": ["integer", "null"], "minimum": 1},
+          "profile_version_after": {"type": ["integer", "null"], "minimum": 1}
+        }
+      },
+      "ResourceState": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["state_type", "suppress_until"],
+        "properties": {
+          "state_type": {"type": "string", "enum": ["READ", "FAVORITED", "BORROWED", "HIDDEN", "NOT_NOW", "DUPLICATE_SUPPRESS"]},
+          "suppress_until": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "BehaviorEventReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["event_uuid", "event_id", "status", "profile_update_status"],
+        "properties": {
+          "event_uuid": {"type": "string", "format": "uuid"},
+          "event_id": {"type": "integer", "minimum": 1},
+          "status": {"type": "string", "enum": ["ACCEPTED", "APPLIED", "REPLAYED"]},
+          "profile_update_status": {"type": "string", "enum": ["APPLIED", "PENDING", "NOT_REQUIRED"]}
+        }
+      },
+      "ProfileResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["user_id", "snapshot_mode", "evaluation_at", "profile_version", "profile_confidence", "topic_focus_strength", "recent_focus", "reading_stage", "reading_stage_confidence", "interests", "negative_preferences", "personalization_enabled", "formula_version", "max_source_event_at"],
+        "properties": {
+          "user_id": {"type": "integer", "minimum": 1},
+          "snapshot_mode": {"type": "string", "enum": ["MATERIALIZED_CURRENT", "REPLAY_AS_OF"]},
+          "evaluation_at": {"type": "string", "format": "date-time"},
+          "profile_version": {"type": "integer", "minimum": 1},
+          "profile_confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "topic_focus_strength": {"type": "number", "minimum": 0, "maximum": 1},
+          "recent_focus": {"oneOf": [{"$ref": "#/components/schemas/ProfileTag"}, {"type": "null"}]},
+          "reading_stage": {"type": ["string", "null"], "enum": ["BEGINNER", "INTERMEDIATE", "ADVANCED", "RESEARCH", null]},
+          "reading_stage_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "interests": {"type": "array", "items": {"$ref": "#/components/schemas/InterestWeight"}},
+          "negative_preferences": {"type": "array", "items": {"$ref": "#/components/schemas/NegativePreference"}},
+          "personalization_enabled": {"type": "boolean"},
+          "formula_version": {"type": "string", "minLength": 1},
+          "max_source_event_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "ProfileTag": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tag_id", "name"],
+        "properties": {
+          "tag_id": {"type": "integer", "minimum": 1},
+          "name": {"type": "string", "minLength": 1}
+        }
+      },
+      "InterestWeight": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tag_id", "name", "positive_weight"],
+        "properties": {
+          "tag_id": {"type": "integer", "minimum": 1},
+          "name": {"type": "string", "minLength": 1},
+          "positive_weight": {"type": "number", "minimum": 0, "maximum": 1}
+        }
+      },
+      "NegativePreference": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tag_id", "name", "reason_code", "negative_weight"],
+        "properties": {
+          "tag_id": {"type": "integer", "minimum": 1},
+          "name": {"type": "string", "minLength": 1},
+          "reason_code": {"$ref": "#/components/schemas/NegativeReasonCode"},
+          "negative_weight": {"type": "number", "minimum": 0, "maximum": 1},
+          "expires_at": {"type": ["string", "null"], "format": "date-time"}
+        }
+      },
+      "ProfileRefreshRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["mode", "formula_version", "reason"],
+        "properties": {
+          "mode": {"type": "string", "enum": ["INCREMENTAL_RECONCILE", "FULL_REPLAY_CURRENT", "REPLAY_AS_OF"]},
+          "as_of_time": {"type": ["string", "null"], "format": "date-time"},
+          "formula_version": {"type": "string", "minLength": 1},
+          "reason": {"type": "string", "minLength": 1, "maxLength": 500}
+        }
+      },
+      "ProfileRefreshResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["refresh_id", "status", "mode", "profile_version_before", "requested_at"],
+        "properties": {
+          "refresh_id": {"type": "string", "format": "uuid"},
+          "status": {"type": "string", "enum": ["APPLIED", "PENDING", "REPLAYED"]},
+          "mode": {"type": "string", "enum": ["INCREMENTAL_RECONCILE", "FULL_REPLAY_CURRENT", "REPLAY_AS_OF"]},
+          "profile_version_before": {"type": ["integer", "null"], "minimum": 1},
+          "requested_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "DebugDocument": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["task_id", "schema_version", "payload"],
+        "properties": {
+          "task_id": {"type": "string", "format": "uuid"},
+          "schema_version": {"type": "string", "minLength": 1},
+          "payload": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "VersionBundle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["config_bundle", "policy", "ranking", "behavior_formula", "dataset"],
+        "properties": {
+          "config_bundle": {"type": "string", "minLength": 1},
+          "policy": {"type": "string", "minLength": 1},
+          "ranking": {"type": "string", "minLength": 1},
+          "behavior_formula": {"type": "string", "minLength": 1},
+          "embedding": {"type": "string", "minLength": 1},
+          "graph": {"type": "string", "minLength": 1},
+          "prompt": {"type": "string", "minLength": 1},
+          "dataset": {"type": "string", "minLength": 1}
+        }
+      },
+      "ResourceType": {"type": "string", "enum": ["BOOK", "PAPER"]},
+      "TriggerScene": {"type": "string", "enum": ["HOME", "SEARCH_AFTER", "RESOURCE_DETAIL", "FEEDBACK_REFRESH", "EXPLANATION"]},
+      "OutputType": {"type": "string", "enum": ["PERSONALIZED_FEED", "TOPIC_RESOURCES", "BOOKLIST", "READING_PATH"]},
+      "TaskStatus": {
+        "type": "string",
+        "enum": ["CREATED", "UNDERSTANDING", "PROBING", "DECIDING", "WAITING_CLARIFICATION", "RECALLING", "RANKING", "REPLANNING", "EXPLAINING", "PERSISTING", "COMPLETED", "DEGRADED_COMPLETED", "FAILED"]
+      },
+      "NegativeReasonCode": {"type": "string", "enum": ["TOPIC_NOT_INTERESTED", "ALREADY_READ", "TOO_BASIC", "TOO_ADVANCED", "LOW_QUALITY", "NOT_NOW", "REPEATED", "OTHER"]},
+      "ErrorCode": {
+        "type": "string",
+        "enum": ["INVALID_JSON", "UNKNOWN_FIELD", "AUTHENTICATION_REQUIRED", "RESOURCE_ACCESS_FORBIDDEN", "SCORE_VIEW_FORBIDDEN", "DEBUG_API_DISABLED", "NOT_FOUND", "REQUEST_ID_MISMATCH", "REQUEST_ID_CONFLICT", "IDEMPOTENCY_KEY_REUSED", "STALE_CONTEXT_VERSION", "TASK_STATE_CONFLICT", "INVALID_SCENE_SOURCE", "AS_OF_TIME_FORBIDDEN", "FUTURE_EVALUATION_TIME", "LIMIT_OUT_OF_RANGE", "LIMIT_TOO_SMALL_FOR_BOOKLIST", "LIMIT_TOO_SMALL_FOR_READING_PATH", "MISSING_EXPLANATION_TARGET", "INVALID_IMPRESSION_REFERENCE", "DERIVED_EVENT_NOT_ALLOWED", "INVALID_FEEDBACK_REASON", "RATING_OUT_OF_RANGE", "RESOURCE_TYPE_MISMATCH", "CORE_STORAGE_UNAVAILABLE", "UNSAFE_DATABASE_PRIVILEGES", "CONFIG_BUNDLE_INVALID", "REQUEST_DEADLINE_EXCEEDED"]
+      },
+      "WarningCode": {
+        "type": "string",
+        "enum": ["VECTOR_CHANNEL_UNAVAILABLE", "KG_CHANNEL_UNAVAILABLE", "LLM_FALLBACK_USED", "PARTIAL_METADATA_COVERAGE", "REPLAN_EXHAUSTED", "INSUFFICIENT_RESOURCE_COVERAGE", "RULE_INTENT_FALLBACK", "TEMPLATE_EXPLANATION", "SESSION_ONLY_PROFILE", "RRF_RANKING_FALLBACK", "LIMITED_EVIDENCE", "FEEDBACK_PENDING", "ORPHAN_CLICK_WARNING"]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["error", "request_id", "trace_id"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["code", "message", "details", "retryable"],
+            "properties": {
+              "code": {"$ref": "#/components/schemas/ErrorCode"},
+              "message": {"type": "string", "minLength": 1},
+              "details": {"type": "object", "additionalProperties": true},
+              "retryable": {"type": "boolean"}
+            }
+          },
+          "request_id": {"type": "string", "format": "uuid"},
+          "trace_id": {"type": "string", "format": "uuid"}
+        }
+      }
+    }
+  },
+  "security": [{"bearerAuth": []}]
+}

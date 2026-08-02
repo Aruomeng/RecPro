@@ -1,0 +1,160 @@
+{
+  "config_bundle_version": "rec-1.0.0",
+  "sub_versions": {
+    "policy": "policy-v1",
+    "ranking": "ranking-v1",
+    "behavior_formula": "behavior-v1",
+    "prompt": "prompt-v1"
+  },
+  "probe": {
+    "per_channel_k": 10,
+    "metadata_min": 0.4
+  },
+  "limits": {
+    "default_final_items": 10,
+    "max_final_items": 20,
+    "hydration_candidate_limit": 200,
+    "min_items_by_output": {
+      "PERSONALIZED_FEED": 5,
+      "TOPIC_RESOURCES": 5,
+      "BOOKLIST": 8,
+      "READING_PATH": 6
+    }
+  },
+  "policy": {
+    "profile_guided_threshold": 0.45,
+    "topic_focus_infer_threshold": 0.65,
+    "evidence_degraded_threshold": 0.35,
+    "evidence_detailed_threshold": 0.65,
+    "item_evidence_summary_threshold": 0.35,
+    "item_evidence_detailed_threshold": 0.55,
+    "negative_feedback_adjustment_count": 2,
+    "hysteresis_margin": 0.05,
+    "min_output_type_rounds": 2,
+    "feedback_window_days": 30,
+    "topic_focus_window_days": 30
+  },
+  "formula_constants": {
+    "profile_confidence": {
+      "volume": 0.5,
+      "source_diversity": 0.2,
+      "stability": 0.2,
+      "declared_metadata": 0.1,
+      "volume_scale": 8.0
+    },
+    "topic_focus_sample_scale": 6.0,
+    "probe_match": {"semantic": 0.5, "profile": 0.35, "intent": 0.15},
+    "run_evidence": {
+      "profile": 0.25,
+      "intent": 0.2,
+      "metadata": 0.2,
+      "channel_count": 0.15,
+      "vector_coverage": 0.1,
+      "kg_coverage": 0.1
+    },
+    "item_evidence": {
+      "metadata_quality": 0.4,
+      "feature_coverage": 0.2,
+      "channel_agreement": 0.2,
+      "reference_coverage": 0.2
+    },
+    "pre_plan_pipeline_health": {
+      "IntentUnderstandingAgent": 0.3,
+      "UserProfileAgent": 0.3,
+      "ResourceSemanticAgent": 0.4
+    },
+    "intent_score": {"topic": 0.6, "resource_type": 0.25, "constraint": 0.15},
+    "feedback_score": {
+      "positive_tag": 0.5,
+      "favorite_similarity": 0.25,
+      "borrow_or_high_rating_similarity": 0.25
+    },
+    "mmr_similarity": {"tag_similarity": 0.7, "same_primary_author": 0.3},
+    "valid_impression": {"min_visible_ratio": 0.5, "min_visible_ms": 1000}
+  },
+  "rrf": {
+    "k0": 60,
+    "general": {
+      "PROFILE": 0.35,
+      "KEYWORD": 0.1,
+      "VECTOR": 0.15,
+      "GRAPH": 0.1,
+      "TRENDING": 0.2,
+      "FEEDBACK": 0.1
+    },
+    "explicit": {
+      "PROFILE": 0.15,
+      "KEYWORD": 0.25,
+      "VECTOR": 0.25,
+      "GRAPH": 0.2,
+      "TRENDING": 0.05,
+      "FEEDBACK": 0.1
+    }
+  },
+  "ranking": {
+    "book": {
+      "profile_score": 0.28,
+      "semantic_score": 0.24,
+      "kg_score": 0.14,
+      "intent_score": 0.07,
+      "feedback_score": 0.12,
+      "popularity_score": 0.07,
+      "freshness_score": 0.04,
+      "recall_fusion_score": 0.04
+    },
+    "paper": {
+      "profile_score": 0.22,
+      "semantic_score": 0.32,
+      "kg_score": 0.12,
+      "intent_score": 0.07,
+      "feedback_score": 0.09,
+      "popularity_score": 0.04,
+      "freshness_score": 0.1,
+      "recall_fusion_score": 0.04
+    }
+  },
+  "diversity": {
+    "mmr_lambda": 0.8,
+    "max_same_author": 2,
+    "max_same_primary_tag": 4,
+    "general_book_paper_ratio": [0.6, 0.4]
+  },
+  "behavior": {
+    "SEARCH": {"score": 1.0, "half_life_days": 14},
+    "VIEW_RESOURCE": {"score": 0.5, "half_life_days": 14},
+    "VIEW_EXPLANATION": {"score": 0.4, "half_life_days": 14},
+    "CLICK_RECOMMENDATION": {"score": 1.2, "half_life_days": 21},
+    "FAVORITE_RESOURCE": {"score": 2.0, "half_life_days": 60},
+    "BORROW_BOOK": {"score": 3.0, "half_life_days": 120},
+    "ACCESS_PAPER_FULLTEXT": {"score": 3.0, "half_life_days": 120},
+    "RATE_HIGH": {"score": 2.0, "half_life_days": 60},
+    "RATE_NEUTRAL": {"score": 0.0, "half_life_days": null},
+    "REJECT_RECOMMENDATION": {"score": -1.5, "half_life_days": 30},
+    "NOT_INTERESTED": {"score": -3.0, "half_life_days": 45},
+    "RATE_LOW": {"score": -2.0, "half_life_days": 45},
+    "RECOMMENDATION_IMPRESSION": {"score": 0.0, "half_life_days": null}
+  },
+  "penalties": {
+    "exposure_window_days": 30,
+    "exposure_free_count": 0,
+    "exposure_step": 0.03,
+    "exposure_max": 0.18,
+    "negative_max": 0.35,
+    "negative_hard_filter_weight": 0.85,
+    "negative_hard_filter_similarity": 0.8
+  },
+  "freshness": {
+    "book_half_life_days": 1825,
+    "paper_half_life_days": 730,
+    "classic_floor": 0.4
+  },
+  "popularity": {
+    "window_days": 30,
+    "click_weight": 1.0,
+    "favorite_weight": 2.0,
+    "borrow_weight": 3.0,
+    "normalization": "LOG_P95_BY_RESOURCE_TYPE"
+  },
+  "timeouts_ms": {"mysql": 2000, "chroma": 2000, "neo4j": 2000, "llm": 5000},
+  "circuit_breaker": {"failure_threshold": 3, "open_seconds": 60}
+}

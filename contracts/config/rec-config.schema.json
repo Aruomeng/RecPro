@@ -1,0 +1,406 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/config/rec-config.schema.json",
+  "title": "RecommendationConfigBundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "config_bundle_version",
+    "sub_versions",
+    "probe",
+    "limits",
+    "policy",
+    "formula_constants",
+    "rrf",
+    "ranking",
+    "diversity",
+    "behavior",
+    "penalties",
+    "freshness",
+    "popularity",
+    "timeouts_ms",
+    "circuit_breaker"
+  ],
+  "properties": {
+    "config_bundle_version": {"type": "string", "minLength": 1},
+    "sub_versions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy", "ranking", "behavior_formula", "prompt"],
+      "properties": {
+        "policy": {"type": "string", "minLength": 1},
+        "ranking": {"type": "string", "minLength": 1},
+        "behavior_formula": {"type": "string", "minLength": 1},
+        "prompt": {"type": "string", "minLength": 1}
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_channel_k", "metadata_min"],
+      "properties": {
+        "per_channel_k": {"type": "integer", "minimum": 1},
+        "metadata_min": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "limits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "default_final_items",
+        "max_final_items",
+        "hydration_candidate_limit",
+        "min_items_by_output"
+      ],
+      "properties": {
+        "default_final_items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "max_final_items": {"type": "integer", "minimum": 1, "maximum": 20},
+        "hydration_candidate_limit": {"type": "integer", "minimum": 1},
+        "min_items_by_output": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["PERSONALIZED_FEED", "TOPIC_RESOURCES", "BOOKLIST", "READING_PATH"],
+          "properties": {
+            "PERSONALIZED_FEED": {"type": "integer", "minimum": 1},
+            "TOPIC_RESOURCES": {"type": "integer", "minimum": 1},
+            "BOOKLIST": {"type": "integer", "minimum": 1},
+            "READING_PATH": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "policy": {"$ref": "#/$defs/policyConfig"},
+    "formula_constants": {"$ref": "#/$defs/formulaConstants"},
+    "rrf": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["k0", "general", "explicit"],
+      "properties": {
+        "k0": {"type": "integer", "minimum": 1},
+        "general": {"$ref": "#/$defs/channelWeights"},
+        "explicit": {"$ref": "#/$defs/channelWeights"}
+      }
+    },
+    "ranking": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["book", "paper"],
+      "properties": {
+        "book": {"$ref": "#/$defs/featureWeights"},
+        "paper": {"$ref": "#/$defs/featureWeights"}
+      }
+    },
+    "diversity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mmr_lambda", "max_same_author", "max_same_primary_tag", "general_book_paper_ratio"],
+      "properties": {
+        "mmr_lambda": {"$ref": "#/$defs/unitInterval"},
+        "max_same_author": {"type": "integer", "minimum": 1},
+        "max_same_primary_tag": {"type": "integer", "minimum": 1},
+        "general_book_paper_ratio": {
+          "type": "array",
+          "prefixItems": [
+            {"$ref": "#/$defs/unitInterval"},
+            {"$ref": "#/$defs/unitInterval"}
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "SEARCH",
+        "VIEW_RESOURCE",
+        "VIEW_EXPLANATION",
+        "CLICK_RECOMMENDATION",
+        "FAVORITE_RESOURCE",
+        "BORROW_BOOK",
+        "ACCESS_PAPER_FULLTEXT",
+        "RATE_HIGH",
+        "RATE_NEUTRAL",
+        "REJECT_RECOMMENDATION",
+        "NOT_INTERESTED",
+        "RATE_LOW",
+        "RECOMMENDATION_IMPRESSION"
+      ],
+      "properties": {
+        "SEARCH": {"$ref": "#/$defs/behaviorWeight"},
+        "VIEW_RESOURCE": {"$ref": "#/$defs/behaviorWeight"},
+        "VIEW_EXPLANATION": {"$ref": "#/$defs/behaviorWeight"},
+        "CLICK_RECOMMENDATION": {"$ref": "#/$defs/behaviorWeight"},
+        "FAVORITE_RESOURCE": {"$ref": "#/$defs/behaviorWeight"},
+        "BORROW_BOOK": {"$ref": "#/$defs/behaviorWeight"},
+        "ACCESS_PAPER_FULLTEXT": {"$ref": "#/$defs/behaviorWeight"},
+        "RATE_HIGH": {"$ref": "#/$defs/behaviorWeight"},
+        "RATE_NEUTRAL": {"$ref": "#/$defs/behaviorWeight"},
+        "REJECT_RECOMMENDATION": {"$ref": "#/$defs/behaviorWeight"},
+        "NOT_INTERESTED": {"$ref": "#/$defs/behaviorWeight"},
+        "RATE_LOW": {"$ref": "#/$defs/behaviorWeight"},
+        "RECOMMENDATION_IMPRESSION": {"$ref": "#/$defs/behaviorWeight"}
+      }
+    },
+    "penalties": {"$ref": "#/$defs/penaltyConfig"},
+    "freshness": {"$ref": "#/$defs/freshnessConfig"},
+    "popularity": {"$ref": "#/$defs/popularityConfig"},
+    "timeouts_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mysql", "chroma", "neo4j", "llm"],
+      "properties": {
+        "mysql": {"type": "integer", "minimum": 1},
+        "chroma": {"type": "integer", "minimum": 1},
+        "neo4j": {"type": "integer", "minimum": 1},
+        "llm": {"type": "integer", "minimum": 1}
+      }
+    },
+    "circuit_breaker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failure_threshold", "open_seconds"],
+      "properties": {
+        "failure_threshold": {"type": "integer", "minimum": 1},
+        "open_seconds": {"type": "integer", "minimum": 1}
+      }
+    }
+  },
+  "$defs": {
+    "unitInterval": {"type": "number", "minimum": 0, "maximum": 1},
+    "positiveNumber": {"type": "number", "exclusiveMinimum": 0},
+    "policyConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_guided_threshold",
+        "topic_focus_infer_threshold",
+        "evidence_degraded_threshold",
+        "evidence_detailed_threshold",
+        "item_evidence_summary_threshold",
+        "item_evidence_detailed_threshold",
+        "negative_feedback_adjustment_count",
+        "hysteresis_margin",
+        "min_output_type_rounds",
+        "feedback_window_days",
+        "topic_focus_window_days"
+      ],
+      "properties": {
+        "profile_guided_threshold": {"$ref": "#/$defs/unitInterval"},
+        "topic_focus_infer_threshold": {"$ref": "#/$defs/unitInterval"},
+        "evidence_degraded_threshold": {"$ref": "#/$defs/unitInterval"},
+        "evidence_detailed_threshold": {"$ref": "#/$defs/unitInterval"},
+        "item_evidence_summary_threshold": {"$ref": "#/$defs/unitInterval"},
+        "item_evidence_detailed_threshold": {"$ref": "#/$defs/unitInterval"},
+        "negative_feedback_adjustment_count": {"type": "integer", "minimum": 1},
+        "hysteresis_margin": {"$ref": "#/$defs/unitInterval"},
+        "min_output_type_rounds": {"type": "integer", "minimum": 1},
+        "feedback_window_days": {"type": "integer", "minimum": 1},
+        "topic_focus_window_days": {"type": "integer", "minimum": 1}
+      }
+    },
+    "formulaConstants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_confidence",
+        "topic_focus_sample_scale",
+        "probe_match",
+        "run_evidence",
+        "item_evidence",
+        "pre_plan_pipeline_health",
+        "intent_score",
+        "feedback_score",
+        "mmr_similarity",
+        "valid_impression"
+      ],
+      "properties": {
+        "profile_confidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["volume", "source_diversity", "stability", "declared_metadata", "volume_scale"],
+          "properties": {
+            "volume": {"$ref": "#/$defs/unitInterval"},
+            "source_diversity": {"$ref": "#/$defs/unitInterval"},
+            "stability": {"$ref": "#/$defs/unitInterval"},
+            "declared_metadata": {"$ref": "#/$defs/unitInterval"},
+            "volume_scale": {"$ref": "#/$defs/positiveNumber"}
+          }
+        },
+        "topic_focus_sample_scale": {"$ref": "#/$defs/positiveNumber"},
+        "probe_match": {"$ref": "#/$defs/probeMatchWeights"},
+        "run_evidence": {"$ref": "#/$defs/runEvidenceWeights"},
+        "item_evidence": {"$ref": "#/$defs/itemEvidenceWeights"},
+        "pre_plan_pipeline_health": {"$ref": "#/$defs/pipelineHealthWeights"},
+        "intent_score": {"$ref": "#/$defs/intentScoreWeights"},
+        "feedback_score": {"$ref": "#/$defs/feedbackScoreWeights"},
+        "mmr_similarity": {"$ref": "#/$defs/mmrWeights"},
+        "valid_impression": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min_visible_ratio", "min_visible_ms"],
+          "properties": {
+            "min_visible_ratio": {"$ref": "#/$defs/unitInterval"},
+            "min_visible_ms": {"type": "integer", "minimum": 0}
+          }
+        }
+      }
+    },
+    "penaltyConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["exposure_window_days", "exposure_free_count", "exposure_step", "exposure_max", "negative_max", "negative_hard_filter_weight", "negative_hard_filter_similarity"],
+      "properties": {
+        "exposure_window_days": {"type": "integer", "minimum": 1},
+        "exposure_free_count": {"type": "integer", "minimum": 0},
+        "exposure_step": {"$ref": "#/$defs/unitInterval"},
+        "exposure_max": {"$ref": "#/$defs/unitInterval"},
+        "negative_max": {"$ref": "#/$defs/unitInterval"},
+        "negative_hard_filter_weight": {"$ref": "#/$defs/unitInterval"},
+        "negative_hard_filter_similarity": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "freshnessConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["book_half_life_days", "paper_half_life_days", "classic_floor"],
+      "properties": {
+        "book_half_life_days": {"$ref": "#/$defs/positiveNumber"},
+        "paper_half_life_days": {"$ref": "#/$defs/positiveNumber"},
+        "classic_floor": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "popularityConfig": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["window_days", "click_weight", "favorite_weight", "borrow_weight", "normalization"],
+      "properties": {
+        "window_days": {"type": "integer", "minimum": 1},
+        "click_weight": {"type": "number", "minimum": 0},
+        "favorite_weight": {"type": "number", "minimum": 0},
+        "borrow_weight": {"type": "number", "minimum": 0},
+        "normalization": {"type": "string", "const": "LOG_P95_BY_RESOURCE_TYPE"}
+      }
+    },
+    "probeMatchWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["semantic", "profile", "intent"],
+      "properties": {
+        "semantic": {"$ref": "#/$defs/unitInterval"},
+        "profile": {"$ref": "#/$defs/unitInterval"},
+        "intent": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "runEvidenceWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "intent", "metadata", "channel_count", "vector_coverage", "kg_coverage"],
+      "properties": {
+        "profile": {"$ref": "#/$defs/unitInterval"},
+        "intent": {"$ref": "#/$defs/unitInterval"},
+        "metadata": {"$ref": "#/$defs/unitInterval"},
+        "channel_count": {"$ref": "#/$defs/unitInterval"},
+        "vector_coverage": {"$ref": "#/$defs/unitInterval"},
+        "kg_coverage": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "itemEvidenceWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metadata_quality", "feature_coverage", "channel_agreement", "reference_coverage"],
+      "properties": {
+        "metadata_quality": {"$ref": "#/$defs/unitInterval"},
+        "feature_coverage": {"$ref": "#/$defs/unitInterval"},
+        "channel_agreement": {"$ref": "#/$defs/unitInterval"},
+        "reference_coverage": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "pipelineHealthWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["IntentUnderstandingAgent", "UserProfileAgent", "ResourceSemanticAgent"],
+      "properties": {
+        "IntentUnderstandingAgent": {"$ref": "#/$defs/unitInterval"},
+        "UserProfileAgent": {"$ref": "#/$defs/unitInterval"},
+        "ResourceSemanticAgent": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "intentScoreWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "resource_type", "constraint"],
+      "properties": {
+        "topic": {"$ref": "#/$defs/unitInterval"},
+        "resource_type": {"$ref": "#/$defs/unitInterval"},
+        "constraint": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "feedbackScoreWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["positive_tag", "favorite_similarity", "borrow_or_high_rating_similarity"],
+      "properties": {
+        "positive_tag": {"$ref": "#/$defs/unitInterval"},
+        "favorite_similarity": {"$ref": "#/$defs/unitInterval"},
+        "borrow_or_high_rating_similarity": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "mmrWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag_similarity", "same_primary_author"],
+      "properties": {
+        "tag_similarity": {"$ref": "#/$defs/unitInterval"},
+        "same_primary_author": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "channelWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["PROFILE", "KEYWORD", "VECTOR", "GRAPH", "TRENDING", "FEEDBACK"],
+      "properties": {
+        "PROFILE": {"$ref": "#/$defs/unitInterval"},
+        "KEYWORD": {"$ref": "#/$defs/unitInterval"},
+        "VECTOR": {"$ref": "#/$defs/unitInterval"},
+        "GRAPH": {"$ref": "#/$defs/unitInterval"},
+        "TRENDING": {"$ref": "#/$defs/unitInterval"},
+        "FEEDBACK": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "featureWeights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile_score",
+        "semantic_score",
+        "kg_score",
+        "intent_score",
+        "feedback_score",
+        "popularity_score",
+        "freshness_score",
+        "recall_fusion_score"
+      ],
+      "properties": {
+        "profile_score": {"$ref": "#/$defs/unitInterval"},
+        "semantic_score": {"$ref": "#/$defs/unitInterval"},
+        "kg_score": {"$ref": "#/$defs/unitInterval"},
+        "intent_score": {"$ref": "#/$defs/unitInterval"},
+        "feedback_score": {"$ref": "#/$defs/unitInterval"},
+        "popularity_score": {"$ref": "#/$defs/unitInterval"},
+        "freshness_score": {"$ref": "#/$defs/unitInterval"},
+        "recall_fusion_score": {"$ref": "#/$defs/unitInterval"}
+      }
+    },
+    "behaviorWeight": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score", "half_life_days"],
+      "properties": {
+        "score": {"type": "number"},
+        "half_life_days": {"type": ["number", "null"], "exclusiveMinimum": 0}
+      }
+    }
+  }
+}
