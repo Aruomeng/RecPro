@@ -30,7 +30,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 GIT_COMMIT_PATTERN = re.compile(r"^[a-f0-9]{40}$")
 EXPECTED_SERVICES = ("mysql", "neo4j", "backend", "worker", "frontend")
-HEALTHY_SERVICES = frozenset({"mysql", "neo4j", "backend", "frontend"})
+HEALTHY_SERVICES = frozenset(EXPECTED_SERVICES)
 SENSITIVE_ASSIGNMENT_PATTERN = re.compile(
     r"(?i)\b(password|secret|token|api[_-]?key)\s*=\s*[^\s;]+"
 )
@@ -801,9 +801,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--deadline-seconds",
         type=int,
-        choices=range(30, 301),
+        choices=range(30, 601),
         default=120,
-        metavar="30..300",
+        metavar="30..600",
     )
     return parser
 

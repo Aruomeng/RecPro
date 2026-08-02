@@ -65,7 +65,7 @@ class RuntimeVerifierContractTests(unittest.TestCase):
         states = {
             name: {
                 "status": "running",
-                "health": "healthy" if name != "worker" else None,
+                "health": "healthy",
                 "restart_count": 0,
             }
             for name in EXPECTED_SERVICES
@@ -82,6 +82,16 @@ class RuntimeVerifierContractTests(unittest.TestCase):
                 invalid[service_name][field] = unsafe_value
                 with self.assertRaises(ValueError):
                     validate_service_states(invalid)
+
+    def test_slow_clean_initialization_can_use_bounded_ten_minute_deadline(self) -> None:
+        args = build_parser().parse_args(
+            ["--run-id", "g1-slow-init", "--deadline-seconds", "600"]
+        )
+        self.assertEqual(600, args.deadline_seconds)
+        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+            build_parser().parse_args(
+                ["--run-id", "g1-too-slow", "--deadline-seconds", "601"]
+            )
 
     def test_health_comparison_ignores_only_observation_time(self) -> None:
         first = {"status": "UP", "time": "first", "service": "recpro-backend"}
