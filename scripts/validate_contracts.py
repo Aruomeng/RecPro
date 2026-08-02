@@ -17,6 +17,10 @@ if __package__ in {None, ""}:
 from jsonschema import Draft202012Validator, FormatChecker
 from jsonschema.exceptions import SchemaError, ValidationError
 
+from backend.app.shared_kernel.config_bundle import (
+    load_strict_json,
+    validate_config_bundle_semantics,
+)
 from backend.app.shared_kernel.contracts.enums import (
     AdaptationState,
     AgentMessageStatus,
@@ -133,8 +137,8 @@ def load_json_documents(
     for path in sorted(contract_root.rglob("*.json")):
         relative = _relative(path, root)
         try:
-            documents[relative] = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+            documents[relative] = load_strict_json(path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
             issues.append(_issue("INVALID_JSON", relative, str(exc)))
 
     missing = sorted(REQUIRED_DOCUMENTS - documents.keys())
@@ -238,8 +242,8 @@ def extract_change_plan_policy_example(
         ]
 
     try:
-        return json.loads(block.group("body")), []
-    except json.JSONDecodeError as exc:
+        return load_strict_json(block.group("body")), []
+    except ValueError as exc:
         return None, [
             _issue(
                 "CHANGE_PLAN_POLICY_EXAMPLE_INVALID_JSON",
@@ -627,34 +631,6 @@ def validate_api_error_code_parity(root: Path) -> list[ContractIssue]:
     ]
 
 
-def _number(value: Any) -> float | None:
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        return None
-    return float(value)
-
-
-def _require_sum_one(
-    values: Any,
-    path: str,
-    label: str,
-    issues: list[ContractIssue],
-) -> None:
-    if isinstance(values, Mapping):
-        members = list(values.values())
-    elif isinstance(values, list):
-        members = values
-    else:
-        issues.append(_issue("WEIGHT_CONTAINER_INVALID", path, f"{label} is not a collection"))
-        return
-    numeric = [_number(value) for value in members]
-    if any(value is None for value in numeric):
-        issues.append(_issue("WEIGHT_NOT_NUMERIC", path, f"{label} contains non-numeric values"))
-        return
-    total = sum(value for value in numeric if value is not None)
-    if abs(total - 1.0) > 1e-9:
-        issues.append(_issue("WEIGHT_SUM_INVALID", path, f"{label} sums to {total:.12g}, expected 1"))
-
-
 def validate_config_bundle(
     config: Any,
     schema: Any,
@@ -670,125 +646,10 @@ def validate_config_bundle(
         location = ".".join(str(part) for part in exc.absolute_path) or "<root>"
         issues.append(_issue("CONFIG_SCHEMA_VIOLATION", path, f"{location}: {exc.message}"))
 
-    try:
-        for resource_type in ("book", "paper"):
-            _require_sum_one(config["ranking"][resource_type], path, f"ranking.{resource_type}", issues)
-        for intent_mode in ("general", "explicit"):
-            _require_sum_one(config["rrf"][intent_mode], path, f"rrf.{intent_mode}", issues)
-        ratio = config["diversity"]["general_book_paper_ratio"]
-        _require_sum_one(ratio, path, "diversity.general_book_paper_ratio", issues)
-
-        formula = config["formula_constants"]
-        profile_confidence = {
-            key: formula["profile_confidence"][key]
-            for key in ("volume", "source_diversity", "stability", "declared_metadata")
-        }
-        _require_sum_one(
-            profile_confidence,
-            path,
-            "formula_constants.profile_confidence",
-            issues,
-        )
-        for formula_name in (
-            "probe_match",
-            "run_evidence",
-            "item_evidence",
-            "pre_plan_pipeline_health",
-            "intent_score",
-            "feedback_score",
-            "mmr_similarity",
-        ):
-            _require_sum_one(
-                formula[formula_name],
-                path,
-                f"formula_constants.{formula_name}",
-                issues,
-            )
-
-        policy = config["policy"]
-        if policy["evidence_degraded_threshold"] > policy["evidence_detailed_threshold"]:
-            issues.append(
-                _issue(
-                    "POLICY_THRESHOLD_ORDER_INVALID",
-                    path,
-                    "evidence_degraded_threshold exceeds evidence_detailed_threshold",
-                )
-            )
-        if (
-            policy["item_evidence_summary_threshold"]
-            > policy["item_evidence_detailed_threshold"]
-        ):
-            issues.append(
-                _issue(
-                    "POLICY_THRESHOLD_ORDER_INVALID",
-                    path,
-                    "item evidence summary threshold exceeds detailed threshold",
-                )
-            )
-
-        limits = config["limits"]
-        default_limit = limits["default_final_items"]
-        maximum_limit = limits["max_final_items"]
-        hydration_limit = limits["hydration_candidate_limit"]
-        if default_limit > maximum_limit:
-            issues.append(_issue("DEFAULT_LIMIT_EXCEEDS_MAX", path, "default limit exceeds maximum"))
-        if maximum_limit > 20:
-            issues.append(_issue("MAX_LIMIT_EXCEEDS_PROTOCOL", path, "maximum must not exceed 20"))
-        if hydration_limit < maximum_limit:
-            issues.append(_issue("HYDRATION_LIMIT_TOO_SMALL", path, "hydration limit is below maximum output"))
-        for output_type, minimum in limits["min_items_by_output"].items():
-            if minimum > maximum_limit:
-                issues.append(
-                    _issue(
-                        "OUTPUT_MINIMUM_EXCEEDS_MAX",
-                        path,
-                        f"{output_type} minimum exceeds maximum output",
-                    )
-                )
-
-        for event_type, rule in config["behavior"].items():
-            score = rule["score"]
-            half_life = rule["half_life_days"]
-            if score == 0 and half_life is not None:
-                issues.append(
-                    _issue(
-                        "ZERO_SCORE_HALF_LIFE_INVALID",
-                        path,
-                        f"behavior.{event_type} must use null half_life_days",
-                    )
-                )
-            if score != 0 and (not isinstance(half_life, (int, float)) or half_life <= 0):
-                issues.append(
-                    _issue(
-                        "ACTIVE_SCORE_HALF_LIFE_INVALID",
-                        path,
-                        f"behavior.{event_type} must use a positive half_life_days",
-                    )
-                )
-        penalties = config["penalties"]
-        if penalties["exposure_step"] > penalties["exposure_max"]:
-            issues.append(
-                _issue(
-                    "PENALTY_STEP_EXCEEDS_MAX",
-                    path,
-                    "penalties.exposure_step exceeds exposure_max",
-                )
-            )
-        popularity_weights = (
-            config["popularity"]["click_weight"],
-            config["popularity"]["favorite_weight"],
-            config["popularity"]["borrow_weight"],
-        )
-        if not any(weight > 0 for weight in popularity_weights):
-            issues.append(
-                _issue(
-                    "POPULARITY_WEIGHTS_ALL_ZERO",
-                    path,
-                    "at least one popularity weight must be positive",
-                )
-            )
-    except (KeyError, TypeError) as exc:
-        issues.append(_issue("CONFIG_SEMANTIC_FIELD_MISSING", path, str(exc)))
+    issues.extend(
+        _issue(issue.code, path, issue.detail)
+        for issue in validate_config_bundle_semantics(config)
+    )
     return issues
 
 

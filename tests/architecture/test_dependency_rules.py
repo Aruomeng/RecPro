@@ -193,6 +193,20 @@ class DependencyRulesTest(unittest.TestCase):
         )
         self.assertEqual([], check_source("backend/app/api/v1/tasks.py", source))
 
+    def test_api_can_import_only_the_shared_structured_logger(self) -> None:
+        self.assertEqual(
+            [],
+            check_source(
+                "backend/app/api/middleware.py",
+                "from backend.app.logging import get_logger\n",
+            ),
+        )
+        violations = check_source(
+            "backend/app/api/middleware.py",
+            "from backend.app.unbounded_helpers import helper\n",
+        )
+        self.assertEqual("API_ORM_DEPENDENCY", violations[0].code)
+
     def test_application_cannot_import_own_adapter(self) -> None:
         source = "from backend.app.catalog.adapters.mysql import ResourceRepository\n"
         violations = check_source(

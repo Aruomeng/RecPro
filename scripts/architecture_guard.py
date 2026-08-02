@@ -96,7 +96,13 @@ def _is_allowed_api_import(imported: str) -> bool:
         return True
     if any(
         _matches_module(imported, prefix)
-        for prefix in ("backend.app.api", "backend.app.shared_kernel")
+        for prefix in (
+            "backend.app.api",
+            "backend.app.shared_kernel",
+            # HTTP adapters may emit through the process-wide structured logger;
+            # this exact module exposes no persistence or business implementation.
+            "backend.app.logging",
+        )
     ):
         return True
     parts = imported.split(".")

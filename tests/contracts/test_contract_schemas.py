@@ -74,6 +74,18 @@ class RepositoryContractTest(unittest.TestCase):
         codes = {issue.code for issue in validate_config_bundle(invalid, schema)}
         self.assertIn("CONFIG_SCHEMA_VIOLATION", codes)
 
+    def test_non_finite_numbers_are_rejected_by_shared_semantics(self) -> None:
+        config_path = ROOT / "contracts/config/examples/rec-1.0.0.json"
+        schema_path = ROOT / "contracts/config/rec-config.schema.json"
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+        schema = json.loads(schema_path.read_text(encoding="utf-8"))
+        invalid = deepcopy(config)
+        invalid["probe"]["metadata_min"] = float("nan")
+
+        codes = {issue.code for issue in validate_config_bundle(invalid, schema)}
+
+        self.assertIn("CONFIG_NON_FINITE_NUMBER", codes)
+
     def test_penalty_wrong_type_is_rejected(self) -> None:
         config_path = ROOT / "contracts/config/examples/rec-1.0.0.json"
         schema_path = ROOT / "contracts/config/rec-config.schema.json"
