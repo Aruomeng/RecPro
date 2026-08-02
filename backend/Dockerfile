@@ -6,6 +6,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /srv/recpro
 
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libc6-dev
+
 COPY backend/requirements-g1.lock /opt/recpro/requirements-g1.lock
 RUN python -m pip install --no-cache-dir --require-hashes \
     -r /opt/recpro/requirements-g1.lock
