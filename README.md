@@ -4,15 +4,16 @@ LibraMAS 是一个面向智慧图书馆知识资源推荐的研究生论文原�
 
 ## 当前状态
 
-`G0：安全与规格基线` 已在本地通过统一验收。当前仓库已经具备零删除门禁、模块依赖门禁、无框架运行时契约、JSON Schema、OpenAPI 草案、实验协议和自动化测试；`G1：可启动工程骨架` 尚未开始。
+`G0：安全与规格基线` 已完成。`G1：可启动工程骨架` 的代码与本地门禁已经实现，包含 FastAPI 健康切片、Worker、Vue 状态页、隔离 Compose 编排、最小权限 MySQL 探针和追加式验收证据。由于当前主机没有 Docker，真实五服务双次启停和三卷持久性验收仍为 `RUNTIME_PENDING`，因此 G1 Gate 保持 `IN_PROGRESS`，不虚报完成。
 
-G0 冻结的是工程边界，不代表推荐服务已经可启动。首个真实推荐闭环按计划在 G3 形成。
+G1 只诚实提供 `/api/v1/health/live` 与 `/api/v1/health/ready`；`can_recommend` 固定为 `false`。首个真实推荐闭环按计划在 G3 形成。
 
 ## 核心文档
 
 - [可运行版实施文档](docs/LibraMAS_纯推荐模块实施文档_可运行版.md)
 - [安全低耦合实施计划](docs/LibraMAS_系统实施计划_安全低耦合版.md)
 - [实施状态与交接记录](docs/LibraMAS_实施状态与交接记录.md)
+- [G1 可启动工程骨架本地验收清单](docs/G1_RUNNABLE_SKELETON_MANIFEST.md)
 - [安全与零删除政策](docs/SAFETY_POLICY.md)
 - [模块化单体 ADR](docs/adr/0001-modular-monolith.md)
 - [核心数据字典](docs/data_dictionary.md)
@@ -35,25 +36,54 @@ G0 冻结的是工程边界，不代表推荐服务已经可启动。首个真�
 
 采用模块化单体与端口适配器：Catalog、Profile、Recommendation、Feedback 等业务域保持高内聚；Agent通过结构化消息和Orchestrator协作，不直接访问数据库或互相调用。
 
-## G0 验证
+## 本地验证
 
-需要 Python 3.11，以及 `backend/pyproject.toml` 中的 `g0` 可选依赖。执行：
+需要 Python 3.11。Python 依赖拆分为 G0 门禁、G1 运行时和 G1 测试三个哈希锁；应在全新的虚拟环境中安装：
 
 ```bash
-python3 -m pip install --require-hashes -r backend/requirements-g0.lock
-make verify-g0
+python3.11 -m venv .venv-g1-release-001
+.venv-g1-release-001/bin/python -m pip install --require-hashes \
+  -r backend/requirements-g0.lock \
+  -r backend/requirements-g1.lock \
+  -r backend/requirements-g1-test.lock
+make verify-g0 PYTHON=.venv-g1-release-001/bin/python
+make test-g1-python PYTHON=.venv-g1-release-001/bin/python
 ```
 
-该命令依次验证文件/数据零删除规则、模块依赖方向、Markdown 结构化示例、本地链接、Schema/OpenAPI/枚举一致性和 G0 单元测试。命令不连接数据库，也不修改业务数据。
+前端依赖必须在全新克隆或新的隔离目录中执行 `npm ci --ignore-scripts`。测试和构建命令为：
 
-## G0 目录
+```bash
+npm --prefix frontend run test
+BUILD_RUN_ID=g1-local-20260802-001 make frontend-build
+```
+
+构建只写入新的 `frontend/dist/<run-id>`；若目标已存在则失败，不覆盖旧产物。以上本地门禁不连接数据库，也不修改业务数据。
+
+## 隔离运行时
+
+复制环境模板只能通过 create-only bootstrap 完成；已有目标不会被覆盖：
+
+```bash
+make bootstrap
+# 编辑被 Git 忽略的 .env.compose，使用新的项目名和三个互不相同的本地密码
+RUN_ID=g1-20260802-001 make verify-g1-runtime
+# 首次验收通过并保留停止后的容器与卷后，日常使用：
+make start
+make status
+make stop
+```
+
+首次运行时验收必须先于该项目名的任何手工 `make start`，因为它只允许此前不存在的 Compose 项目、网络和三个命名卷。它检查五个服务、前后端健康接口、最小权限持久化标记以及两次安全停止/启动的一致性，并把证据追加到新的 `artifacts/verification/g1/<run-id>`。停止只使用 `docker compose stop`；不得执行删容器、删卷或数据库清理命令。
+
+## 当前目录
 
 ```text
-backend/app/shared_kernel/contracts/  无框架 Python 契约
+backend/app/                          领域契约、健康应用切片及基础设施适配器
 contracts/                            Agent、配置、安全和 OpenAPI Schema
-docs/                                 架构、数据、API、实验与安全规范
-scripts/                              安全、架构、文档和契约门禁
-tests/                                G0 自动化测试
+frontend/                             G1 只读状态页及追加式构建脚本
+infra/                                新卷专用的最小权限初始化入口
+scripts/                              安全、架构、环境与验收门禁
+tests/                                G0/G1 自动化测试
 ```
 
 ## 版本管理

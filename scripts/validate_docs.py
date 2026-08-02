@@ -12,6 +12,8 @@ from typing import Iterable, Sequence
 
 import yaml
 
+from backend.app.shared_kernel.config_bundle import load_strict_json
+
 
 FENCE_PATTERN = re.compile(r"^\s*```\s*([A-Za-z0-9_-]*)\s*$")
 LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
@@ -76,10 +78,10 @@ def validate_structured_blocks(
     for block in blocks:
         try:
             if block.language == "json":
-                json.loads(block.content)
+                load_strict_json(block.content)
             else:
                 list(yaml.safe_load_all(block.content))
-        except (json.JSONDecodeError, yaml.YAMLError) as exc:
+        except (ValueError, yaml.YAMLError) as exc:
             issues.append(
                 DocumentationIssue(
                     code="INVALID_STRUCTURED_EXAMPLE",
@@ -126,12 +128,24 @@ def validate_local_links(path: Path, root: Path, text: str) -> list[Documentatio
     return issues
 
 
+def should_validate_markdown(relative_path: Path) -> bool:
+    parts = relative_path.parts
+    return not (
+        any(part in {".git", "node_modules"} for part in parts)
+        or (
+            parts
+            and (parts[0] == ".venv" or parts[0].startswith(".venv-"))
+        )
+        or parts[:2] == ("frontend", "dist")
+    )
+
+
 def validate_repository(root: Path) -> tuple[list[DocumentationIssue], int, int]:
     issues: list[DocumentationIssue] = []
     markdown_files = 0
     structured_blocks = 0
     for path in sorted(root.rglob("*.md")):
-        if any(part in {".git", "node_modules"} for part in path.parts):
+        if not should_validate_markdown(path.relative_to(root)):
             continue
         markdown_files += 1
         relative = path.relative_to(root).as_posix()

@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.3
+> 状态版本：1.5
 > 更新时间：2026-08-02
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -18,8 +18,8 @@
   - 架构采用模块化单体与端口适配器，保持低耦合、高内聚。
 - `environment`：
   - 工作区：`/Users/tianyuhang/Documents/RecPro`
-  - Git 分支：`codex/g0-safety-baseline`；G0 主提交：`cb926d910e8253a8b88c30ecdd656e51b1789594`；远程：`https://github.com/Aruomeng/RecPro.git`。
-  - G0 已有安全/架构/契约代码，但尚无可启动 HTTP 服务、数据库迁移或前端。
+  - Git 分支：`codex/g1-runnable-skeleton`；G0 主提交：`cb926d910e8253a8b88c30ecdd656e51b1789594`；G0 交接提交：`e1c4bae03659ef43ebb81c6a6472e74ce189eef5`；远程：`https://github.com/Aruomeng/RecPro.git`。
+  - G1 最终本地验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0；本机没有 Docker 和 `gh`，因此容器级启动、停止、持久卷复启验收与远程发布不能在本机伪报通过。
   - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
   - 当前未连接或修改任何业务数据库。
 - `decisions`：
@@ -41,13 +41,18 @@
   - 已建立安全、架构、文档、Schema/枚举一致性门禁和 GitHub Actions 工作流。
   - `make verify-g0` 已通过：安全扫描 28 个可执行文件、架构扫描 8 个后端文件、13 个 Markdown/42 个结构化示例、8 个 JSON 契约和 125 个自动化测试均无失败。
   - G0 全量工作集已由详细本地提交 `cb926d910e8253a8b88c30ecdd656e51b1789594` 版本化，提交后逐历史零删除检查通过。
+  - 已完成 G1 后端健康切片：只提供 live/ready，配置 Bundle 执行严格 JSON、固定 Schema 哈希、JSON Schema 与跨字段语义校验；MySQL readiness 校验数据库身份、项目探针、字符集、最小读写能力和危险授权；MockLLM 与 Worker 骨架不产生推荐结果。
+  - 已完成 G1 Vue 只读状态页、严格 API 响应校验、请求超时/取消、追加式构建/预览和非 root Nginx 容器；领域、API、展示和组件边界保持单向依赖。
+  - 已完成五服务隔离 Compose、新卷专用最小权限初始化、create-only 配置引导、严格环境校验及双次安全停止/复启验收器；验收器不包含删容器、删卷或删数据操作。
+  - G1 实现已拆分为后端 `5c2eb55063ab8f01af2de925993440b27d584c2c`、前端 `c9e780e0a2a76b7c75d9b12108551bb1132769e0`、编排 `6be3e27274f752e9e86ba4039aeb4dccd68285d2` 三个详细提交。
+  - G1 本地门禁已通过：当前 G0 回归 131 项、G1 Python 100 项、前端 33 项、编排定向 47 项；全新 Python/Node 隔离安装、`pip check`、npm 审计、类型检查、生产构建和桌面/移动浏览器验收均通过。
 - `open_issues`：
-  - G1 尚未开始；当前不能声称 Web 服务或推荐系统可运行。
-  - Python 已验证为 3.11.4；Node、MySQL、Neo4j具体版本需在G1环境探测后冻结。
+  - G1 本地实现与静态门禁已经通过，但真实 Compose 运行态尚未通过，因此 Gate 保持 `IN_PROGRESS / LOCAL_PASS, RUNTIME_PENDING`；在 G3 前不能声称推荐系统可用。
+  - 本机缺少 Docker，G1 的真实 Compose 双次启停与持久状态验收需要在具备 Docker Compose 的隔离新环境补跑；不得连接既有数据库替代该验收。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
   - 本机缺少 `gh` 命令，因此尚未把本地提交推送到远程或创建 Draft PR；不得绕过认证流程发布。
-- `next_step`：先向用户汇报 G0 证据和远程发布阻塞；得到后续指示后进入 G1 可启动工程骨架。
+- `next_step`：在具备 Docker Compose 的隔离新环境，以从未使用过的项目名执行一次 `verify-g1-runtime`；通过五服务双次启停与三卷持久性验收后才能关闭 G1，关闭前不进入 G2。
 
 ---
 
@@ -56,8 +61,8 @@
 | Gate | 状态 | 完成证据 | 备注 |
 |---|---|---|---|
 | 计划制定 | COMPLETED | `docs/LibraMAS_系统实施计划_安全低耦合版.md` | 本轮完成 |
-| G0 安全与规格基线 | COMPLETED | `make verify-g0`：125 tests；安全/架构/文档/契约均 PASS | 本轮完成；未连接数据库 |
-| G1 可启动工程骨架 | NOT_STARTED | — | 依赖G0 |
+| G0 安全与规格基线 | COMPLETED | 原始 Gate 125 tests；当前回归 131 tests；安全/架构/文档/契约均 PASS | 未连接数据库 |
+| G1 可启动工程骨架 | IN_PROGRESS | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地代码、264 项测试、隔离构建与浏览器验收 PASS | `LOCAL_PASS, RUNTIME_PENDING`；Docker 容器验收待隔离运行环境 |
 | G2 数据与持久化 | NOT_STARTED | — | 依赖G1 |
 | G3 MySQL-only推荐闭环 | NOT_STARTED | — | 依赖G2 |
 | G4 动态多智能体闭环 | NOT_STARTED | — | 依赖G3 |
@@ -74,11 +79,15 @@
 
 ## Working Set
 
-- `current_subtask`：G0 本地版本化与交接已完成；G1 可启动工程骨架尚未开始。
-- `current_evidence`：主提交 `cb926d910e8253a8b88c30ecdd656e51b1789594`；`make verify-g0` 全部通过；125 个测试；安全违规0、架构违规0、文档问题0、契约问题0；基线提交后的逐提交文件删除/改名检查为0；数据库连接/写入/删除均为0。
+- `current_subtask`：G1 可启动工程骨架本地交接已完成；等待隔离 Docker 运行态验收，不进入 G2。
+- `current_evidence`：后端、前端、编排三个详细提交；G0 131 项、G1 Python 100 项和前端 33 项测试通过；全新锁安装、类型检查、追加式生产构建、桌面/移动浏览器验收通过；完整摘要见 `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`。数据库连接、读取、写入、删除仍均为0。
 - `active_files_or_commands`：
   - `Makefile`
-  - `backend/app/shared_kernel/contracts/`
+  - `backend/app/`
+  - `frontend/`
+  - `compose.yaml`
+  - `.env.host.example`
+  - `.env.compose.example`
   - `contracts/`
   - `scripts/`
   - `tests/`
@@ -90,8 +99,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：主实施文档顶部已增加安全勘误，但 HTTP 服务和数据基础设施尚未实现；本机缺少 `gh`，本轮提交不能推送至远程。
-- `next_action`：向用户汇报 G0 产出、验证证据和远程发布阻塞；下一实施 Gate 为 G1 可启动工程骨架。
+- `immediate_risk`：本机缺少 Docker，不能执行真实 Compose 与持久卷复启测试；本机也缺少 `gh`，本轮提交不能推送至远程。
+- `next_action`：在具备 Docker Compose 的隔离新环境使用全新项目名运行 `RUN_ID=<新的唯一值> make verify-g1-runtime`；不得先手工启动该项目，也不得连接既有数据库替代验收。
 
 ---
 
@@ -99,7 +108,9 @@
 
 | 申请编号 | 状态 | 目标 | 用户批准 | 执行结果 |
 |---|---|---|---|---|
-| — | 无申请 | — | — | 本项目尚未执行任何删除操作 |
+| G1-INC-20260802-001 | 已发生安全偏差；已遏制 | 移除 Git ignored 生成物 `frontend/dist/assets/index-BI6Zj5t6.js`；重写 `frontend/dist/index.html` 与 `frontend/dist/assets/index--TNcMmyO.css` | 未获预先批准；Vite 首次生产构建的默认 `emptyOutDir=true` 触发 | 旧 JS 生成物被构建器移除并由 `index-CKdk1LLM.js` 替代；源码/Git 文件/数据库删除均为0；已固定 `build.emptyOutDir=false`，禁止后续自动清空输出目录 |
+
+该偏差不属于已批准删除，也不得作为未来删除先例。旧生成物无独立备份，不能声称字节级恢复；其输入源码仍完整，当前产物可由锁定工具链复现。数据库删除与受版本管理文件删除仍为0。
 
 ---
 
@@ -123,6 +134,30 @@ Gate：G0 安全与规格基线
 配置/数据/索引版本：config=rec-1.0.0；数据与索引未创建。
 未解决风险：HTTP服务、MySQL、Neo4j、Chroma和前端尚未实现；本机缺少gh，远程推送暂停。
 下一步唯一动作：用户确认G0后进入G1，先做只读环境探测与可启动健康检查垂直切片。
+```
+
+---
+
+## G1 阶段本地交接记录
+
+```text
+交接ID：G1-LOCAL-20260802-001
+Gate：G1 可启动工程骨架
+状态：IN_PROGRESS / LOCAL_PASS, RUNTIME_PENDING
+时间：2026-08-02（Asia/Shanghai）
+目标：形成只报告真实状态、推荐能力默认关闭、可在全新隔离运行时验证的五服务工程骨架。
+新增文件：FastAPI 健康切片、Worker/MockLLM、Vue 状态页、Dockerfile、Compose、环境模板、新卷初始化、bootstrap/runtime verifier、G1 测试与本地验收清单。
+修改文件及原版本保存位置：README、Makefile、G0 门禁与契约文档；原版本位于 G0 交接提交 e1c4bae03659ef43ebb81c6a6472e74ce189eef5。
+新增数据库对象和行数：0；未运行 Docker，未连接任何数据库。Compose 初始化脚本只会在未来全新卷首次创建时建立 1 张平台探针表和 1 行项目标记。
+受控UPDATE对象和审计ID：0；不适用。
+文件删除数量：Git 受跟踪文件 0；首次 Vite 默认构建自动删除 1 个被忽略的旧生成物，事故编号 G1-INC-20260802-001，已改为追加式构建且未再发生。
+数据库物理删除数量：0。
+执行命令：三锁 --require-hashes 安装；make verify-g0；make test-g1-python；pip check；全新 npm ci；Vitest；vue-tsc；追加式 Vite build；本地只读 mock 健康接口浏览器验收；Git 差异/删除/历史安全审计。
+测试结果：G0 131 tests OK；G1 Python 100 tests OK；frontend 33 tests OK；编排定向 47 tests OK；安全、架构、文档、契约、类型检查、依赖审计和浏览器验收 PASS。
+验证证据目录：docs/G1_RUNNABLE_SKELETON_MANIFEST.md；运行态 artifact 尚不存在且不得伪造。
+配置/数据/索引版本：config=rec-1.0.0；配置 Schema SHA-256=2783a75736fe21d39f2ef3101fa9f9849f1ac3757d0a05c50d656b5169ab6bd1；数据与索引未创建。
+未解决风险：本机无 Docker，真实五服务双次启停、最小权限 MySQL 和三卷持久性均为 RUNTIME_PENDING；本机无 gh，三个实现提交尚未推送。
+下一步唯一动作：在具备 Docker Compose 的隔离新环境，以全新项目名执行 verify-g1-runtime；通过前不得关闭 G1 或进入 G2。
 ```
 
 ---

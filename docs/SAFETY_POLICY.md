@@ -187,6 +187,7 @@ root、admin、DBA 或宿主机高权限凭证不得进入应用 `.env`、Compos
 - 用户撤回、资源停用和画像纠错写入新事件或新版本；查询按当前有效版本过滤。
 - 失败迁移用新 revision 前向修复；备份恢复到新的数据库或 Schema，禁止覆盖源环境。
 - readiness 检查连接目标身份、字符集、Schema revision 和授权；发现删除或管理权限即失败关闭写流量。
+- G1 尚无业务 Schema revision，只允许用新卷上的平台探针表验证实例身份与持久性；G2 必须先引入不可变 revision 记录并纳入 readiness，G3 才能开放推荐流量。
 
 ### 5.3 Chroma
 

@@ -221,12 +221,15 @@ dataset
 检查：
 
 - 配置 Bundle 可解析且哈希匹配；
-- MySQL 可连接且 Schema 版本兼容；
+- MySQL 可连接且 Schema 版本兼容；G1 尚无业务 Schema，只校验新卷平台探针、目标身份、字符集和授权，G2 引入不可变 revision 后必须追加兼容性校验；
 - 运行账号不具备物理删除、清空、结构移除或授权扩张能力；
 - 至少一个召回通道可用；
 - Chroma、Neo4j 和 LLM 的状态可观察。
 
-可服务但部分降级时仍返回 `200`：
+G1 即使所有已实现依赖都安全，也只返回 `DEGRADED` 且
+`can_recommend=false`；推荐链路、Chroma 与 Neo4j 明确显示 `DISABLED`，LLM
+显示 `MOCK`。下列 `can_recommend=true` 的降级响应是 G3 及以后实现真实
+MySQL-only 推荐链后的目标示例，不适用于 G1：
 
 ```json
 {
@@ -945,12 +948,21 @@ API-20 所有POST响应声明Idempotency-Replayed且至少声明409
 API-21 所有非2xx响应引用统一ErrorResponse
 API-22 X-Demo-User-Id只出现在user/owner端点且不能授予research_admin
 API-23 VersionBundle必填config_bundle、policy、ranking、behavior_formula和dataset
-API-24 operationId保持15个且符合<domain>_<action>_v1
+API-24 最终15路由的operationId保持唯一且符合<domain>_<action>_v1
 ```
 
 ## 16. OpenAPI 生成规则
 
-G1 实现时由 FastAPI Pydantic 模型生成 `/openapi.json`，但生成结果必须通过以下门禁：
+运行时由 FastAPI/Pydantic 模型生成 `/openapi.json`，并按 Gate 逐步扩展。G1
+只注册已经真实实现的两个健康路由；不得为了满足最终路由数量而注册返回占位结果的
+推荐、反馈、画像或调试端点。冻结的 15 路由是 G3—G7 的累计目标，并在 G8 全量复验。
+
+G1 生成结果必须恰好包含 `GET /health/live` 与 `GET /health/ready`，且二者的
+`operationId`、追踪 Header、错误响应和严格模型与本节规则一致。后续 Gate 对已实现
+路由立即应用相同门禁；API-24 的完整 15 路由数量门禁从全部路由实现后启用，不追溯
+要求 G1 提供虚假空实现。
+
+最终生成结果必须通过以下门禁：
 
 1. 15 个公开路由都带唯一 `operationId`，格式为 `<domain>_<action>_v1`。
 2. 每个 operation 的每个响应声明 `X-Request-Id` 和 `X-Trace-Id`。
