@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.2
+> 状态版本：1.3
 > 更新时间：2026-08-02
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -18,7 +18,7 @@
   - 架构采用模块化单体与端口适配器，保持低耦合、高内聚。
 - `environment`：
   - 工作区：`/Users/tianyuhang/Documents/RecPro`
-  - Git 分支：`codex/g0-safety-baseline`；远程：`https://github.com/Aruomeng/RecPro.git`。
+  - Git 分支：`codex/g0-safety-baseline`；G0 主提交：`cb926d910e8253a8b88c30ecdd656e51b1789594`；远程：`https://github.com/Aruomeng/RecPro.git`。
   - G0 已有安全/架构/契约代码，但尚无可启动 HTTP 服务、数据库迁移或前端。
   - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
   - 当前未连接或修改任何业务数据库。
@@ -40,6 +40,7 @@
   - 已冻结 A01—A25 的首次实现 Gate、最终复验 Gate 和证据要求。
   - 已建立安全、架构、文档、Schema/枚举一致性门禁和 GitHub Actions 工作流。
   - `make verify-g0` 已通过：安全扫描 28 个可执行文件、架构扫描 8 个后端文件、13 个 Markdown/42 个结构化示例、8 个 JSON 契约和 125 个自动化测试均无失败。
+  - G0 全量工作集已由详细本地提交 `cb926d910e8253a8b88c30ecdd656e51b1789594` 版本化，提交后逐历史零删除检查通过。
 - `open_issues`：
   - G1 尚未开始；当前不能声称 Web 服务或推荐系统可运行。
   - Python 已验证为 3.11.4；Node、MySQL、Neo4j具体版本需在G1环境探测后冻结。
@@ -73,8 +74,8 @@
 
 ## Working Set
 
-- `current_subtask`：将已通过终审门禁的 G0 全量工作集创建详细本地 Git 提交并交接；G1 未开始。
-- `current_evidence`：`make verify-g0` 全部通过；125 个测试；安全违规0、架构违规0、文档问题0、契约问题0；基线提交后的逐提交文件删除/改名检查为0；数据库连接/写入/删除均为0。
+- `current_subtask`：G0 本地版本化与交接已完成；G1 可启动工程骨架尚未开始。
+- `current_evidence`：主提交 `cb926d910e8253a8b88c30ecdd656e51b1789594`；`make verify-g0` 全部通过；125 个测试；安全违规0、架构违规0、文档问题0、契约问题0；基线提交后的逐提交文件删除/改名检查为0；数据库连接/写入/删除均为0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/shared_kernel/contracts/`
@@ -90,7 +91,7 @@
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：主实施文档顶部已增加安全勘误，但 HTTP 服务和数据基础设施尚未实现；本机缺少 `gh`，本轮提交不能推送至远程。
-- `next_action`：向用户汇报 G0 产出、验证证据和远程发布阻塞；不提前实施 G1。
+- `next_action`：向用户汇报 G0 产出、验证证据和远程发布阻塞；下一实施 Gate 为 G1 可启动工程骨架。
 
 ---
 
@@ -118,7 +119,7 @@ Gate：G0 安全与规格基线
 数据库物理删除数量：0。
 执行命令：make verify-g0；git diff --check；Git状态/差异/哈希只读检查。
 测试结果：125 tests OK；安全、架构、文档、契约四类报告均 PASS。
-验证证据：命令输出、本交接记录、docs/G0_BASELINE_MANIFEST.md 和本文件所在 Git 提交。
+验证证据：命令输出、本交接记录、docs/G0_BASELINE_MANIFEST.md 和主提交 cb926d910e8253a8b88c30ecdd656e51b1789594。
 配置/数据/索引版本：config=rec-1.0.0；数据与索引未创建。
 未解决风险：HTTP服务、MySQL、Neo4j、Chroma和前端尚未实现；本机缺少gh，远程推送暂停。
 下一步唯一动作：用户确认G0后进入G1，先做只读环境探测与可启动健康检查垂直切片。
