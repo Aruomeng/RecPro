@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.5
+> 状态版本：1.6
 > 更新时间：2026-08-02
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -19,9 +19,9 @@
 - `environment`：
   - 工作区：`/Users/tianyuhang/Documents/RecPro`
   - Git 分支：`codex/g1-runnable-skeleton`；G0 主提交：`cb926d910e8253a8b88c30ecdd656e51b1789594`；G0 交接提交：`e1c4bae03659ef43ebb81c6a6472e74ce189eef5`；远程：`https://github.com/Aruomeng/RecPro.git`。
-  - G1 最终本地验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0；本机没有 Docker 和 `gh`，因此容器级启动、停止、持久卷复启验收与远程发布不能在本机伪报通过。
+  - G1 最终验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0、Docker 29.3.1、Docker Compose 5.1.1、GitHub CLI 2.97.0。Docker Desktop 位于 `/Applications/编程/Docker.app`，当前需显式加入其资源目录到 PATH；`gh` 已安装但尚未认证。
   - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
-  - 当前未连接或修改任何业务数据库。
+  - 当前未连接或修改任何既有业务数据库；G1 只在全新隔离 Compose 卷中创建平台探针表和唯一标记行，用于验证安全复启。
 - `decisions`：
   - 用户最新零删除要求优先于旧实施文档中的reset、destroy和clear语义。
   - `demo-reset`替换为新 `fixture_generation/test_run_id`。
@@ -45,14 +45,14 @@
   - 已完成 G1 Vue 只读状态页、严格 API 响应校验、请求超时/取消、追加式构建/预览和非 root Nginx 容器；领域、API、展示和组件边界保持单向依赖。
   - 已完成五服务隔离 Compose、新卷专用最小权限初始化、create-only 配置引导、严格环境校验及双次安全停止/复启验收器；验收器不包含删容器、删卷或删数据操作。
   - G1 实现已拆分为后端 `5c2eb55063ab8f01af2de925993440b27d584c2c`、前端 `c9e780e0a2a76b7c75d9b12108551bb1132769e0`、编排 `6be3e27274f752e9e86ba4039aeb4dccd68285d2` 三个详细提交。
-  - G1 本地门禁已通过：当前 G0 回归 131 项、G1 Python 100 项、前端 33 项、编排定向 47 项；全新 Python/Node 隔离安装、`pip check`、npm 审计、类型检查、生产构建和桌面/移动浏览器验收均通过。
+  - G1 本地门禁已通过：当前 G0 回归 131 项、G1 Python 102 项、前端 33 项、编排定向 47 项；全新 Python/Node 隔离安装、`pip check`、npm 审计、类型检查、生产构建和桌面/移动浏览器验收均通过。
+  - G1 真实运行态验收已通过：证据 run `g1-runtime-20260802-014` 绑定提交 `6f7d6581d5087ce02b26542f8d3ce20df5e52b98`；五个服务两轮均 healthy、restart_count=0，三卷身份不变，探针计数重启前后均为 1，验证器数据库动作仅 4 次 SELECT，删除、UPDATE、DDL、验证器写入和破坏性动作均为 0。
 - `open_issues`：
-  - G1 本地实现与静态门禁已经通过，但真实 Compose 运行态尚未通过，因此 Gate 保持 `IN_PROGRESS / LOCAL_PASS, RUNTIME_PENDING`；在 G3 前不能声称推荐系统可用。
-  - 本机缺少 Docker，G1 的真实 Compose 双次启停与持久状态验收需要在具备 Docker Compose 的隔离新环境补跑；不得连接既有数据库替代该验收。
+  - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
-  - 本机缺少 `gh` 命令，因此尚未把本地提交推送到远程或创建 Draft PR；不得绕过认证流程发布。
-- `next_step`：在具备 Docker Compose 的隔离新环境，以从未使用过的项目名执行一次 `verify-g1-runtime`；通过五服务双次启停与三卷持久性验收后才能关闭 G1，关闭前不进入 G2。
+  - `gh` 已安装但尚未登录 GitHub，因此本地提交尚未推送或创建 Draft PR；不得绕过认证流程发布。
+- `next_step`：完成 GitHub CLI 认证并推送 `codex/g1-runnable-skeleton`；随后进入 G2 前先冻结演示数据与论文评价数据的来源、许可证和版本清单。
 
 ---
 
@@ -62,7 +62,7 @@
 |---|---|---|---|
 | 计划制定 | COMPLETED | `docs/LibraMAS_系统实施计划_安全低耦合版.md` | 本轮完成 |
 | G0 安全与规格基线 | COMPLETED | 原始 Gate 125 tests；当前回归 131 tests；安全/架构/文档/契约均 PASS | 未连接数据库 |
-| G1 可启动工程骨架 | IN_PROGRESS | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地代码、264 项测试、隔离构建与浏览器验收 PASS | `LOCAL_PASS, RUNTIME_PENDING`；Docker 容器验收待隔离运行环境 |
+| G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
 | G2 数据与持久化 | NOT_STARTED | — | 依赖G1 |
 | G3 MySQL-only推荐闭环 | NOT_STARTED | — | 依赖G2 |
 | G4 动态多智能体闭环 | NOT_STARTED | — | 依赖G3 |
@@ -79,8 +79,8 @@
 
 ## Working Set
 
-- `current_subtask`：G1 可启动工程骨架本地交接已完成；等待隔离 Docker 运行态验收，不进入 G2。
-- `current_evidence`：后端、前端、编排三个详细提交；G0 131 项、G1 Python 100 项和前端 33 项测试通过；全新锁安装、类型检查、追加式生产构建、桌面/移动浏览器验收通过；完整摘要见 `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`。数据库连接、读取、写入、删除仍均为0。
+- `current_subtask`：G1 可启动工程骨架已关闭；等待 GitHub 认证后发布本分支，再进入 G2 数据与持久化阶段。
+- `current_evidence`：G0 131 项、G1 Python 102 项和前端 33 项测试通过；运行态 run `g1-runtime-20260802-014` 在全新隔离项目上完成双次启停，五服务两轮均 healthy，三卷身份不变，探针计数保持 1。既有业务数据库接触次数为 0；隔离验证器仅执行 4 次 SELECT，物理删除为 0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -99,8 +99,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：本机缺少 Docker，不能执行真实 Compose 与持久卷复启测试；本机也缺少 `gh`，本轮提交不能推送至远程。
-- `next_action`：在具备 Docker Compose 的隔离新环境使用全新项目名运行 `RUN_ID=<新的唯一值> make verify-g1-runtime`；不得先手工启动该项目，也不得连接既有数据库替代验收。
+- `immediate_risk`：Docker 与本地 Gate 已通过；当前仅 `gh` 未认证，无法可靠推送远程或创建 Draft PR。
+- `next_action`：执行 `gh auth login` 完成用户授权后推送当前分支；不需要也不允许清理为本轮隔离验收创建的容器、网络或卷。
 
 ---
 
@@ -158,6 +158,30 @@ Gate：G1 可启动工程骨架
 配置/数据/索引版本：config=rec-1.0.0；配置 Schema SHA-256=2783a75736fe21d39f2ef3101fa9f9849f1ac3757d0a05c50d656b5169ab6bd1；数据与索引未创建。
 未解决风险：本机无 Docker，真实五服务双次启停、最小权限 MySQL 和三卷持久性均为 RUNTIME_PENDING；本机无 gh，三个实现提交尚未推送。
 下一步唯一动作：在具备 Docker Compose 的隔离新环境，以全新项目名执行 verify-g1-runtime；通过前不得关闭 G1 或进入 G2。
+```
+
+---
+
+## G1 阶段运行态完成记录
+
+```text
+交接ID：G1-RUNTIME-20260802-014
+Gate：G1 可启动工程骨架
+状态：COMPLETED / LOCAL_PASS, RUNTIME_PASS
+时间：2026-08-02（Asia/Shanghai）
+目标：在全新隔离 Compose 项目中验证五服务真实启动、双次安全停止/复启、最小权限探针读取和命名卷持久性。
+新增文件：无受版本管理新增文件；追加式证据位于 artifacts/verification/g1/g1-runtime-20260802-014。
+修改文件及原版本保存位置：Compose worker 健康契约、运行验证器 Docker Compose v5/慢初始化/本机代理兼容性及对应测试；原版本均可由 Git 提交历史恢复。
+新增数据库对象和行数：仅全新隔离 MySQL 卷初始化 1 张 recpro_runtime_probe 表和 1 行项目标记；未连接任何既有业务数据库。
+受控UPDATE对象和审计ID：0；验证器 UPDATE=0。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：Docker/Compose 健康检查；make test-g1-python；make verify-g0；python -m scripts.verify_g1_runtime --run-id g1-runtime-20260802-014 --deadline-seconds 600；Git 差异与删除项审计。
+测试结果：G0 131 tests OK；G1 Python 102 tests OK；五服务两轮均 healthy 且 restart_count=0；三卷 Name/CreatedAt 前后一致；探针 total_rows=1、matching_probe_rows=1 前后一致。
+验证证据目录：artifacts/verification/g1/g1-runtime-20260802-014；manifest 绑定 git commit 6f7d6581d5087ce02b26542f8d3ce20df5e52b98；destructive_actions=0。
+配置/数据/索引版本：config=rec-1.0.0；隔离探针项目 recpro-g1-tianyuhang-20260802f；业务数据与推荐索引未创建。
+未解决风险：推荐链路仍按 G1 边界禁用；gh 2.97.0 已安装但尚未认证，远程发布待用户授权。
+下一步唯一动作：完成 gh auth login 并推送当前分支；随后按 G2 Gate 冻结数据来源、许可证和版本清单。
 ```
 
 ---
