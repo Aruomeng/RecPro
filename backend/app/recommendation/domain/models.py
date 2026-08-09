@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Mapping
+from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,6 +23,33 @@ class RecommendationRequest:
     limit: int
     evaluation_at: datetime
     output_type: str = "TOPIC_RESOURCES"
+
+
+@dataclass(frozen=True, slots=True)
+class RecommendationTaskCommand:
+    """Transport-neutral command handed from HTTP or a worker to the use case."""
+
+    request_id: UUID
+    session_id: UUID
+    user_id: int
+    scene: str
+    input_text: str | None
+    resource_types: tuple[str, ...]
+    output_type: str | None
+    source_resource_id: int | None
+    source_item_id: int | None
+    evaluation_at: datetime | None
+    constraints: Mapping[str, Any]
+    limit: int
+
+
+@dataclass(frozen=True, slots=True)
+class RecommendationTaskResult:
+    """Application result; HTTP adapters decide how to serialize it."""
+
+    status_code: int
+    replayed: bool
+    payload: Mapping[str, Any]
 
 
 @dataclass(frozen=True, slots=True)

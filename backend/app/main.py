@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.errors import register_exception_handlers
 from backend.app.api.health import create_health_router
 from backend.app.api.middleware import RequestContextMiddleware
+from backend.app.api.recommendation import create_recommendation_router
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
     CONFIG_BUNDLE_SCHEMA_SHA256,
@@ -30,6 +31,8 @@ def create_app(
     readiness_probe: ReadinessProbe | None = None,
     config_bundle_probe: ReadinessProbe | None = None,
     configuration_state: ConfigurationState | None = None,
+    recommendation_service: object | None = None,
+    recommendation_api_enabled: bool = False,
 ) -> FastAPI:
     state = configuration_state or (
         ConfigurationState(settings=settings, is_valid=True)
@@ -86,6 +89,15 @@ def create_app(
             app_version=runtime.app_version,
         )
     )
+    if recommendation_service is not None:
+        application.include_router(
+            create_recommendation_router(
+                service=recommendation_service,
+                app_env=runtime.app_env,
+                demo_identity_enabled=runtime.app_env == "demo",
+                pipeline_enabled=recommendation_api_enabled,
+            )
+        )
     return application
 
 

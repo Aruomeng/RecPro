@@ -7,6 +7,8 @@ from backend.app.recommendation.domain.models import (
     RecommendationExecution,
     RecommendationItemResult,
     RecommendationRequest,
+    RecommendationTaskCommand,
+    RecommendationTaskResult,
 )
 
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "RecommendationExecution",
     "RecommendationItemResult",
     "RecommendationRequest",
+    "RecommendationTaskCommand",
+    "RecommendationTaskResult",
 ]

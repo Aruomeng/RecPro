@@ -15,6 +15,11 @@ from backend.app.recommendation.domain.public import (
 )
 from backend.app.recommendation.explanation.service import render_explanation
 from backend.app.recommendation.ranking.service import rank_candidates
+from backend.app.recommendation.domain.public import (
+    RecommendationTaskCommand,
+    RecommendationTaskResult,
+)
+from backend.app.recommendation.ports.public import RecommendationTaskService
 
 
 CHANNEL_WEIGHTS = {"PROFILE": 0.35, "KEYWORD": 0.25, "TRENDING": 0.20}
