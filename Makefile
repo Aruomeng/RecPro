@@ -15,13 +15,14 @@ G3_AS_OF ?=
 G4_RUN_ID ?=
 G4_AGENT_RUN_ID ?=
 G4_PORT_RUN_ID ?=
+G4_COMPOSITION_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
 	test-g2 test-g3 test-g4 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local \
-	migrate-g2 seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports compose-config \
+	migrate-g2 seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition compose-config \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -107,6 +108,10 @@ verify-g4-agent-logs:
 verify-g4-real-ports:
 	@test -n "$(G4_PORT_RUN_ID)" || { echo "G4_PORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_real_ports_runtime --run-id "$(G4_PORT_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+
+verify-g4-composition:
+	@test -n "$(G4_COMPOSITION_RUN_ID)" || { echo "G4_COMPOSITION_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_composition_runtime --run-id "$(G4_COMPOSITION_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 migrate-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }

@@ -57,6 +57,7 @@
   - G4 Agent 执行日志持久化小步已通过：新增 append-only message/result/artifact/最终编排结果表、事务端口和 MySQL 适配器；隔离 MySQL 验证同一事务提交、幂等重放不增行、回滚不留行。
   - G4 真实只读端口小步已通过：新增 ProfileSnapshotReader 与 MySQL 画像投影适配器，Catalog/Profile/Semantic/Recall Agent 只依赖端口；显式组合根接入真实只读查询，固定 `evaluation_at`，并以最多两次无退避重试和 deadline fail-closed 处理依赖异常。
   - G4 真实端口隔离运行态已通过：7 次 Agent dispatch 完成，画像 event_count=4、Catalog resource_count=5、candidate_count=5；运行前后六张资源/画像事实表行数一致，端口路径 INSERT/UPDATE/DELETE 均为 0。
+  - G4 显式 Demo/Research 组合根与持久化 service 已通过：根级 builder 才能装配 MySQL adapters，默认 FastAPI 不调用；持久化 service 要求冻结 `evaluation_at/deadline_at`，同一事务追加 7 message、7 result、1 trace artifact、1 final orchestration result，异常回滚且不提交。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -65,7 +66,8 @@
   - G3 前端集成、正式环境 Token 验证器的外部部署配置和默认 Compose API 仍未启用；默认运行配置仍保持 `can_recommend=false`，不能宣称系统已对外提供推荐服务。
   - Docker CLI 的 `/usr/local/bin/docker` 是失效链接；实际 Docker Desktop 位于 `/Applications/编程/Docker.app`，本次已用绝对路径完成隔离 MySQL 验证，未删除容器、卷或数据。
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
-- `next_step`：把 `build_port_orchestrator` 接入显式 Demo/研究组合根，并把 Agent 日志与任务最终结果接入同一 orchestration service；完成后再进入 G5 反馈画像闭环。
+  - 持久化 service 的数据库重启恢复读取、HTTP/API 正式接入和 Worker 级重试尚未实现；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
+- `next_step`：冻结 G4 组合根/事务证据并进入 G5 反馈事件与画像闭环；先定义只追加曝光/点击/收藏事实端口，再接入可重放画像更新。
 
 ---
 
@@ -78,7 +80,7 @@
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`；22 项 G3 测试 | CLI、opt-in API、正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；前端集成和正式 Token 部署配置待 Gate 评审 |
-| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；21 项 G4 测试 | Registry、结构化消息、Orchestrator 四路径、真实 Catalog/Profile 只读端口和 bounded retry PASS；同事务日志重放 delta=0、回滚 delta=0；正式 HTTP 组合根、持久化 service 接入和历史画像重算待完成 |
+| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
@@ -92,8 +94,8 @@
 
 ## Working Set
 
-- `current_subtask`：G4 真实 Catalog/Profile 只读组合根、deadline/有限重试边界；G3 正式认证部署参数仍保持独立待审。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 21 项和前端 33 项测试通过（累计 322 项）；安全扫描 182 个文件、架构扫描 77 个文件通过；G3 API/Clarification 与 G4 Agent 日志、真实端口隔离 MySQL 运行态 PASS，全程 destructive_actions=0。
+- `current_subtask`：G4 显式 Demo/Research 组合根与持久化 orchestration service 已完成；下一阶段转入 G5 反馈事件与画像闭环，G3 正式认证部署参数仍保持独立待审。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 28 项和前端 33 项测试通过（累计 329 项）；安全扫描 187 个文件、架构扫描 79 个文件通过；G4 三次隔离 MySQL 运行态与事务回滚/重放证据 PASS，全程 destructive_actions=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -112,8 +114,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4 HTTP 仍是显式注入的 demo/test 组合根，未进入默认生产配置；推荐结果仍只适用于合成演示，不得用于正式论文评价；真实 Profile 目前是当前投影读取。
-- `next_action`：建立显式 Demo/研究 composition root，把真实端口 Orchestrator 与 `persist_orchestration` 置于同一 application service，再为 G5 反馈事件闭环设定 Gate；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4 HTTP 仍是显式注入的 demo/test 组合根，未进入默认生产配置；推荐结果仍只适用于合成演示，不得用于正式论文评价；真实 Profile 目前是当前投影读取，恢复读取和 Worker 重试待补。
+- `next_action`：进入 G5 反馈事件/画像闭环，先以 append-only 行为事实端口、幂等事件键和安全 replay 验证为唯一小步；任何默认环境仍不得自动开启推荐。
 
 ---
 
@@ -430,6 +432,28 @@ Gate：G4 动态多智能体闭环（真实只读端口/韧性小步）
 配置/数据/索引版本：profile=profile-mysql-v1；semantic=semantic-mysql-v1；recall=recall-mysql-v1；retry=max_attempts-2；evaluation_at=explicit。
 未解决风险：真实 Orchestrator/API 组合根尚未接入正式 HTTP；Catalog/Profile 仍是当前投影读取而非历史重算；超时后的跨 Agent 持久化恢复和 Worker 重试待下一小步；G3 正式 Token 部署参数仍待审查。
 下一步唯一动作：将 `build_port_orchestrator` 接入显式 Demo/研究组合根，并把 Agent 日志与任务最终结果接入同一 orchestration service；默认 API 仍保持关闭。
+```
+
+## G4 显式 Demo/Research 组合根与持久化编排记录
+
+```text
+交接ID：G4-COMPOSITION-20260809-001
+Gate：G4 动态多智能体闭环（显式组合根/事务编排小步）
+状态：CONTRACT_PASS, LOCAL_RUNTIME_PASS, MYSQL_RUNTIME_PASS / IN_PROGRESS
+时间：2026-08-09（Asia/Shanghai）
+目标：把真实端口 Orchestrator、Agent 日志和 trace artifact 放入独立 application service，由根级 Demo/Research builder 显式装配；默认 FastAPI 不自动启用。
+新增文件：backend/app/composition.py；backend/app/recommendation/application/persistent_orchestration.py；scripts/verify_g4_composition_runtime.py；tests/g4/test_persistent_orchestration.py；tests/g4/test_composition_root_contract.py。
+修改文件及原版本保存位置：Makefile 增加 verify-g4-composition；实施状态记录更新；原版本由 Git 提交历史保留。
+新增数据库对象和行数：0；复用既有 G4 四张事实表；首次组合运行追加 7 条 Agent message、7 条 Agent result、1 条 ORCHESTRATION_TRACE artifact、1 条 final orchestration result；重复调用 delta=0。
+受控UPDATE对象和审计ID：0；service 只执行 Catalog/Profile SELECT、G4 INSERT IGNORE 与身份读取，事务由 service 单点 commit/rollback 管理。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m unittest discover -s tests/g4 -t tests -p 'test_*.py'`；`make PYTHON=.venv-g1-release-py311/bin/python G4_COMPOSITION_RUN_ID=g4-composition-20260809-001 verify-g4-composition`；`python scripts/architecture_guard.py --root .`；`python scripts/safety_scan.py --root .`。
+测试结果：G4 28 项 PASS；持久化成功提交、append 失败回滚、冻结时间边界、内容寻址 artifact 和 Demo/Research 环境门禁均 PASS；隔离 MySQL status=PASS、7 dispatches、首次 delta=7/7/1/1、重放 delta=0；六张资源/画像保护表不变；安全扫描 187 文件 PASS；架构扫描 79 文件 PASS；`destructive_actions=0`。
+验证证据目录：`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`。
+配置/数据/索引版本：composition=research-v1；orchestrator=g4-orchestrator-v1；artifact=g4-orchestration-trace-v1；retry=max_attempts-2；evaluation_at/deadline=explicit。
+未解决风险：正式 HTTP/Worker 尚未接入该 service；数据库重启后的持久化结果恢复读取、跨请求幂等 replay 和历史画像重算待后续 Gate；G3 正式 Token 部署参数仍待审查。
+下一步唯一动作：进入 G5，新增 append-only 反馈事件端口和幂等行为事实写入，再以固定 as-of replay 验证画像更新；默认 API 仍保持关闭。
 ```
 
 ## 阶段交接模板
