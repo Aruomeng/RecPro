@@ -187,3 +187,15 @@ class AgentResult(Generic[PayloadT]):
                 raise ValueError("FAILED must not include a business payload")
             if not self.error_code:
                 raise ValueError("FAILED must include error_code")
+
+
+@dataclass(frozen=True, slots=True)
+class AgentDispatch:
+    """Immutable message/result pair emitted by one Orchestrator dispatch."""
+
+    message: AgentMessage
+    result: AgentResult[dict[str, Any]]
+
+    def __post_init__(self) -> None:
+        if self.result.input_message_id != self.message.message_id:
+            raise ValueError("AgentResult must reference its input AgentMessage")

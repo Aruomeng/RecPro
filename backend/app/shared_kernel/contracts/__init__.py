@@ -1,6 +1,6 @@
 """Versioned framework-independent contracts frozen during G0."""
 
-from .agent import AgentMessage, AgentResult, ArtifactRef
+from .agent import AgentDispatch, AgentMessage, AgentResult, ArtifactRef
 from .enums import (
     AdaptationState,
     AgentMessageStatus,
@@ -47,6 +47,7 @@ from .state import can_transition
 __all__ = [
     "AdaptationState",
     "AgentMessageStatus",
+    "AgentDispatch",
     "AgentMessage",
     "AgentResult",
     "AgentResultStatus",

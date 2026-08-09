@@ -8,7 +8,7 @@ from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from backend.app.recommendation.agents.registry import AgentRegistry
-from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
+from backend.app.shared_kernel.contracts.agent import AgentDispatch, AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.enums import MessageType, TaskStatus
 from backend.app.shared_kernel.contracts.state import can_transition
 
@@ -56,6 +56,7 @@ class OrchestrationResult:
     payload: dict[str, object]
     transitions: tuple[dict[str, object], ...]
     trace: tuple[dict[str, object], ...]
+    dispatches: tuple[AgentDispatch, ...] = ()
 
 
 class OrchestrationDeadlineExceeded(TimeoutError):
@@ -77,6 +78,7 @@ class RecommendationOrchestrator:
         constraints = dict(request.constraints or {})
         trace: list[dict[str, object]] = []
         transitions: list[dict[str, object]] = []
+        dispatches: list[AgentDispatch] = []
         results: dict[str, AgentResult[dict[str, object]]] = {}
         current = TaskStatus.CREATED
         replan_count = 0
@@ -122,6 +124,7 @@ class RecommendationOrchestrator:
             )
             result = await self._registry.dispatch(message)
             results[receiver] = result
+            dispatches.append(AgentDispatch(message=message, result=result))
             step = len(trace) + 1
             trace.append(
                 {
@@ -190,14 +193,15 @@ class RecommendationOrchestrator:
                 "agent_results": self._public_results(results),
             }
             return OrchestrationResult(
-                request.task_id,
-                request.trace_id,
-                current,
-                request.context_version,
-                replan_count,
-                payload,
-                tuple(transitions),
-                tuple(trace),
+                task_id=request.task_id,
+                trace_id=request.trace_id,
+                status=current,
+                context_version=request.context_version,
+                replan_count=replan_count,
+                payload=payload,
+                transitions=tuple(transitions),
+                trace=tuple(trace),
+                dispatches=tuple(dispatches),
             )
 
         transition(TaskStatus.RECALLING, "G4_RULE_RECALL")
@@ -290,14 +294,15 @@ class RecommendationOrchestrator:
             "agent_results": self._public_results(results),
         }
         return OrchestrationResult(
-            request.task_id,
-            request.trace_id,
-            current,
-            request.context_version,
-            replan_count,
-            payload,
-            tuple(transitions),
-            tuple(trace),
+            task_id=request.task_id,
+            trace_id=request.trace_id,
+            status=current,
+            context_version=request.context_version,
+            replan_count=replan_count,
+            payload=payload,
+            transitions=tuple(transitions),
+            trace=tuple(trace),
+            dispatches=tuple(dispatches),
         )
 
     @staticmethod

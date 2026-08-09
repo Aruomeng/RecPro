@@ -1,8 +1,8 @@
 # LibraMAS 核心数据字典
 
-> 文档版本：1.0.0
-> 状态：G0 冻结草案
-> 日期：2026-08-02
+> 文档版本：1.1.0
+> 状态：G4 Agent 执行事实草案
+> 日期：2026-08-09
 > 适用范围：MySQL 事实层、领域 DTO、Agent 契约和实验重放
 > 架构依据：`docs/adr/0001-modular-monolith.md`
 > 安全依据：`docs/LibraMAS_系统实施计划_安全低耦合版.md`
@@ -684,6 +684,19 @@ context、policy 和 trace 文档，敏感输入默认只返回摘要或哈希�
 | `created_at` | DATETIME(3) | 否 | 与状态变化同事务写入 |
 
 约束：`(aggregate_type, aggregate_id, version_after)` 唯一。若审计事实写入失败，对应状态更新必须整体失败；不能出现“状态已变但没有迁移证据”。
+
+### 9.2 G4 Agent 执行事实
+
+以下四张表均为追加式事实，外键使用 `RESTRICT`，由调用方把消息、结果、产物和最终编排结果放在同一事务中提交。重复提交必须保持内容一致；冲突身份必须失败，不能覆盖旧事实。
+
+| 表 | 关键字段 | 语义 |
+|---|---|---|
+| `recommendation_agent_message` | `message_id`、`task_id`、`idempotency_key`、`attempt` | Orchestrator 发出的结构化消息；保存路由、上下文版本、截止时间和 JSON Payload |
+| `recommendation_agent_result` | `result_id`、`message_id`、`agent_name`、`status` | Agent 对消息的结构化结果；保存置信度、证据引用、警告、回退和工具调用摘要 |
+| `recommendation_agent_artifact` | `artifact_id`、`content_hash`、`artifact_type` | 内容寻址的证据/产物引用；只保存 SHA-256 与元数据，不在此表覆盖内容 |
+| `recommendation_orchestration_result` | `task_id`、`context_version`、`status`、`replan_count` | G4 Orchestrator 的最终状态、转移、Trace 和公开 Payload 快照 |
+
+G4 第一实现使用 `g4-orchestrator-v1` 与八个规则 Agent 版本。当前运行态仍是显式隔离验证；未接入默认 API、外部 LLM、向量库或图数据库。
 
 ## 10. 核心 DTO 字典
 

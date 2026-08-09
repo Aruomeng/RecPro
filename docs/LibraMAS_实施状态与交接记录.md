@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：2.3
+> 状态版本：2.4
 > 更新时间：2026-08-09
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -54,13 +54,15 @@
   - G3 受控调试与澄清分支已完成：新增正式 Bearer 身份注入边界、research-admin Debug context/trace/policy HTTP、澄清问题与答案的版本化追加表；普通用户和 Demo 身份不能提升为 `research_admin`。
   - G3 澄清运行态已通过：隔离 MySQL 上验证 `WAITING_CLARIFICATION -> context_version=2 -> COMPLETED`、澄清幂等重放、任务状态、Trace、上下文和策略查询；新增事实全部为 INSERT，destructive_actions=0。
   - G4 第一垂直切片已启动并通过：新增进程内 Agent Registry、结构化 AgentMessage/AgentResult dispatch 边界和唯一 Orchestrator；确定性规则 Agents 已覆盖 DIRECT、GUIDED 早停、DEGRADED 和最多一次 REPLANNING 四条路径。
+  - G4 Agent 执行日志持久化小步已通过：新增 append-only message/result/artifact/最终编排结果表、事务端口和 MySQL 适配器；隔离 MySQL 验证同一事务提交、幂等重放不增行、回滚不留行。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
   - `gh` 已安装但尚未登录 GitHub；Git HTTPS 凭据已成功推送 `codex/g1-runnable-skeleton`，Draft PR 仍需 `gh` 认证或在 GitHub 网页创建。
   - G3 前端集成、正式环境 Token 验证器的外部部署配置和默认 Compose API 仍未启用；默认运行配置仍保持 `can_recommend=false`，不能宣称系统已对外提供推荐服务。
-- `next_step`：扩展 G4 的 Agent 状态持久化、真实 MySQL/可选通道适配和故障恢复，再进入 G5 反馈画像闭环。
+  - Docker CLI 的 `/usr/local/bin/docker` 是失效链接；实际 Docker Desktop 位于 `/Applications/编程/Docker.app`，本次已用绝对路径完成隔离 MySQL 验证，未删除容器、卷或数据。
+- `next_step`：完成 G4 Orchestrator 与真实 Catalog/Profile 端口的显式组合根接入，并补齐超时/失败重试证据，再进入 G5 反馈画像闭环。
 
 ---
 
@@ -73,7 +75,7 @@
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`；22 项 G3 测试 | CLI、opt-in API、正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；前端集成和正式 Token 部署配置待 Gate 评审 |
-| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；5 项 G4 测试 | Registry、结构化消息、Orchestrator、DIRECT/GUIDED/DEGRADED/REPLANNING 四路径 PASS；Agent 日志持久化、正式 DB 编排适配和外部通道待完成 |
+| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；11 项 G4 测试 | Registry、结构化消息、Orchestrator 四路径 PASS；MySQL message/result/artifact/最终编排结果同事务提交、重放 delta=0、回滚 delta=0；真实 Catalog/Profile 端口、超时重试和正式 DB 组合根待完成 |
 | G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
@@ -88,7 +90,7 @@
 ## Working Set
 
 - `current_subtask`：G4 Agent Registry、Orchestrator 动态分支与 Agent 日志持久化；G3 正式认证部署参数仍保持独立待审。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 5 项和前端 33 项测试通过（累计 306 项）；安全扫描 168 个文件、架构扫描 70 个文件通过；G3 API/Clarification 真实 MySQL 运行态 PASS，G4 规则编排四路径 PASS，全程 destructive_actions=0。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 11 项和前端 33 项测试通过（累计 312 项）；安全扫描 174 个文件、架构扫描 72 个文件通过；G3 API/Clarification 与 G4 Agent 日志真实 MySQL 运行态 PASS，全程 destructive_actions=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -108,7 +110,7 @@
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：G3 MySQL API 仍是显式注入的 demo/test 组合根，未进入默认生产配置；推荐结果仍只适用于合成演示，不得用于正式论文评价。
-- `next_action`：为 G4 Orchestrator 增加 append-only Agent message/result/artifact 日志适配，并在不启用外部通道的情况下完成持久化运行态门禁；任何默认环境仍不得自动开启推荐。
+- `next_action`：把 G4 Orchestrator 通过显式组合根接到真实 Catalog/Profile 只读端口，随后验证 deadline 超时与失败重试；任何默认环境仍不得自动开启推荐。
 
 ---
 
@@ -380,6 +382,29 @@ Gate：G4 动态多智能体闭环（第一垂直切片）
 配置/数据/索引版本：orchestrator=g4-orchestrator-v1；Agents=intent-rule-v1/profile-rule-v1/semantic-rule-v1/policy-rule-v1/recall-rule-v1/ranking-rule-v1/explanation-rule-v1/feedback-rule-v1；外部能力写入 0。
 未解决风险：Agent message/result/artifact 尚未持久化到 MySQL；真实 Catalog/Profile 端口尚未由 Orchestrator 调用；deadline 超时、失败重试和正式 API 接入待下一小步；G3 正式 Token 验证器部署参数仍待审查。
 下一步唯一动作：增加 append-only Agent 执行日志端口和 MySQL 适配，在隔离环境验证日志与主任务结果同事务提交，再扩展真实 Catalog/Recall Agent。
+```
+
+## G4 Agent 执行日志与同事务提交记录
+
+```text
+交接ID：G4-AGENT-LOG-20260809-002
+Gate：G4 动态多智能体闭环（执行事实持久化小步）
+状态：CONTRACT_PASS, LOCAL_RUNTIME_PASS, MYSQL_RUNTIME_PASS / IN_PROGRESS
+时间：2026-08-09（Asia/Shanghai）
+目标：把 Orchestrator 的 message、result、artifact 和最终编排结果置于调用方事务内追加，证明幂等重放不增行且回滚不留行。
+新增文件：backend/app/recommendation/ports/agent_logging.py；backend/app/recommendation/adapters/agent_logging_mysql.py；infra/mysql/migrations/005_g4_agent_execution.sql；scripts/migrate_g4_agent_logs.py；scripts/verify_g4_agent_logs_runtime.py；tests/g4/test_agent_logging_contract.py。
+修改文件及原版本保存位置：shared_kernel AgentDispatch 契约、Orchestrator dispatches、application persist_orchestration、Makefile、data_dictionary.md、实施状态记录；原版本由 Git 提交历史保留。
+新增数据库对象和行数：新增 4 张前向表；成功隔离运行新增 7 条 Agent message、7 条 Agent result、1 条 artifact、1 条 orchestration result；重放增量 0，回滚残留 0。
+受控UPDATE对象和审计ID：0；日志适配器仅使用 INSERT IGNORE + 内容一致性读取，事务提交/回滚由调用方拥有。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`make PYTHON=.venv-g1-release-py311/bin/python G4_AGENT_RUN_ID=g4-agent-migration-20260809-001 migrate-g4-agent-logs`；`make PYTHON=.venv-g1-release-py311/bin/python G4_AGENT_RUN_ID=g4-agent-runtime-20260809-002 verify-g4-agent-logs`；`make PYTHON=.venv-g1-release-py311/bin/python test-g4`；`python scripts/architecture_guard.py --root .`；`python scripts/safety_scan.py --root .`。
+测试结果：G4 测试 11 项 PASS；MySQL migration statement_count=5；commit delta=7/7/1/1；replay delta=0；rollback delta=0；SQL inserts=16、updates=0、deletes=0；安全扫描 174 文件 PASS；架构扫描 72 文件 PASS；`destructive_actions=0`。
+验证证据目录：`artifacts/verification/g4/g4-agent-migration-20260809-001/agent-migration.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`。
+配置/数据/索引版本：migration=g4-agent-execution-v1；orchestrator=g4-orchestrator-v1；Agent log schema=message/result/artifact/final-v1；外部通道写入 0。
+异常与处置：首次 runtime 尝试在 DATETIME(3) 身份比较处发现微秒精度不一致，修正为毫秒规范化后使用新 run-id 重跑通过；首次尝试只追加隔离 G3 任务事实，未删除文件、表、卷或任何数据。
+未解决风险：真实 Catalog/Profile 端口尚未由 Orchestrator 调用；deadline 超时、失败重试和正式 API 组合根待下一小步；Docker CLI 默认 PATH 链接需由环境维护，当前使用 `/Applications/编程/Docker.app/Contents/Resources/bin/docker` 验证。
+下一步唯一动作：补齐 Orchestrator 到真实只读 Catalog/Profile 端口的显式组合根，并验证超时/失败重试的追加事实与恢复边界。
 ```
 
 ## 阶段交接模板
