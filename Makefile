@@ -8,13 +8,17 @@ BUILD_RUN_ID ?=
 G2_RUN_ID ?=
 G2_USER_ID ?=
 G2_AS_OF ?=
+G3_RUN_ID ?=
+G3_USER_ID ?= 1001
+G3_INPUT_TEXT ?= 多智能体推荐系统论文与图书
+G3_AS_OF ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
-	test-g2 g2-tools-install verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local \
-	migrate-g2 seed-g2 replay-g2 verify-g2-runtime compose-config \
+	test-g2 test-g3 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local \
+	migrate-g2 seed-g2 replay-g2 verify-g2-runtime migrate-g3 g3-demo verify-g3-runtime compose-config \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -46,8 +50,18 @@ test-g1-python:
 test-g2:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g2 -t tests -p 'test_*.py'
 
+test-g3:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g3 -t tests -p 'test_*.py'
+
 g2-tools-install:
 	$(PYTHON) -m pip install --require-hashes -r backend/requirements-g2-tools.lock
+
+g2-dataset-report:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g2_dataset_report
+
+plan-g2-indexes:
+	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.plan_g2_indexes --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
 
 frontend-test:
 	$(NPM) --prefix frontend run test
@@ -68,23 +82,40 @@ verify-g1: verify-g1-local verify-g1-runtime
 
 verify-g2-local: verify-g0 test-g1-python test-g2
 
+verify-g3-local: verify-g2-local test-g3
+
 migrate-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/migrate_g2.py --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.migrate_g2 --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
 
 seed-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/seed_g2.py --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.seed_g2 --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
 
 replay-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	@test -n "$(G2_USER_ID)" || { echo "G2_USER_ID is required"; exit 2; }
 	@test -n "$(G2_AS_OF)" || { echo "G2_AS_OF is required and must be an ISO-8601 UTC time"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/replay_g2_profile.py --run-id "$(G2_RUN_ID)" --user-id "$(G2_USER_ID)" --as-of "$(G2_AS_OF)" --env-file "$(COMPOSE_ENV_FILE)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.replay_g2_profile --run-id "$(G2_RUN_ID)" --user-id "$(G2_USER_ID)" --as-of "$(G2_AS_OF)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g2-runtime:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g2_runtime --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+
+migrate-g3:
+	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.migrate_g3 --run-id "$(G3_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+
+g3-demo:
+	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(G3_USER_ID)" || { echo "G3_USER_ID is required"; exit 2; }
+	@test -n "$(G3_INPUT_TEXT)" || { echo "G3_INPUT_TEXT is required"; exit 2; }
+	@test -n "$(G3_AS_OF)" || { echo "G3_AS_OF is required and must be an ISO-8601 UTC time"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_g3_demo --run-id "$(G3_RUN_ID)" --user-id "$(G3_USER_ID)" --input-text "$(G3_INPUT_TEXT)" --evaluation-at "$(G3_AS_OF)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+
+verify-g3-runtime:
+	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g3_runtime --run-id "$(G3_RUN_ID)" --user-id "$(G3_USER_ID)" --input-text "$(G3_INPUT_TEXT)" --env-file "$(COMPOSE_ENV_FILE)"
 
 compose-config:
 	RECPRO_MYSQL_PASSWORD=validation-runtime-001 \

@@ -1,0 +1,1 @@
+"""Pure recommendation domain values."""
