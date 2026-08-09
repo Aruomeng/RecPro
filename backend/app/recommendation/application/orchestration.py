@@ -11,7 +11,15 @@ from backend.app.recommendation.agents.orchestrator import (
     RecommendationOrchestrator,
 )
 from backend.app.recommendation.agents.registry import AgentRegistry
+from backend.app.recommendation.agents.real_agents import (
+    CatalogCandidateRecallAgent,
+    CatalogResourceSemanticAgent,
+    MySQLProfileAgent,
+)
+from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
+from backend.app.catalog.ports.public import CatalogRepository
+from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
 
 
@@ -21,6 +29,33 @@ def build_rule_orchestrator() -> RecommendationOrchestrator:
     return RecommendationOrchestrator(
         AgentRegistry({agent.name: agent for agent in DEFAULT_RULE_AGENTS})
     )
+
+
+def build_port_orchestrator(
+    catalog: CatalogRepository,
+    profile: ProfileSnapshotReader,
+    *,
+    retry_policy: RetryPolicy = RetryPolicy(),
+) -> RecommendationOrchestrator:
+    """Compose read-only Catalog/Profile Agents without exposing adapters to HTTP."""
+
+    agents = {
+        agent.name: agent
+        for agent in DEFAULT_RULE_AGENTS
+        if agent.name not in {"UserProfileAgent", "ResourceSemanticAgent", "CandidateRecallAgent"}
+    }
+    agents.update(
+        {
+            "UserProfileAgent": MySQLProfileAgent(profile, retry_policy=retry_policy),
+            "ResourceSemanticAgent": CatalogResourceSemanticAgent(
+                catalog, retry_policy=retry_policy
+            ),
+            "CandidateRecallAgent": CatalogCandidateRecallAgent(
+                catalog, retry_policy=retry_policy
+            ),
+        }
+    )
+    return RecommendationOrchestrator(AgentRegistry(agents))
 
 
 async def persist_orchestration(
@@ -66,5 +101,6 @@ __all__ = [
     "OrchestrationResult",
     "RecommendationOrchestrator",
     "build_rule_orchestrator",
+    "build_port_orchestrator",
     "persist_orchestration",
 ]

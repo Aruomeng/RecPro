@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 import asyncmy
@@ -24,6 +24,12 @@ def _json_array(value: object) -> tuple[str, ...]:
     return tuple(str(item) for item in value)
 
 
+def _db_datetime(value: datetime) -> datetime:
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value
+    return value.astimezone(UTC).replace(tzinfo=None)
+
+
 class MySQLCatalogRepository(CatalogRepository):
     """Read-only resource and tag queries bound to one active connection."""
 
@@ -40,7 +46,7 @@ class MySQLCatalogRepository(CatalogRepository):
         parameters: list[object] = []
         if available_at is not None:
             predicates.append("available_from <= %s")
-            parameters.append(available_at)
+            parameters.append(_db_datetime(available_at))
         if resource_type is not None:
             predicates.append("resource_type = %s")
             parameters.append(resource_type)

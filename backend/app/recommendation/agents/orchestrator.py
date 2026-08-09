@@ -25,6 +25,7 @@ class OrchestrationRequest:
     limit: int = 5
     constraints: dict[str, Any] | None = None
     context_version: int = 1
+    evaluation_at: datetime | None = None
     deadline_at: datetime | None = None
 
     def __post_init__(self) -> None:
@@ -40,6 +41,10 @@ class OrchestrationRequest:
             raise ValueError("resource_types must be a tuple")
         if self.context_version < 1:
             raise ValueError("context_version must be positive")
+        if self.evaluation_at is not None and (
+            self.evaluation_at.tzinfo is None or self.evaluation_at.utcoffset() is None
+        ):
+            raise ValueError("evaluation_at must be timezone-aware")
         if self.deadline_at is not None and (
             self.deadline_at.tzinfo is None or self.deadline_at.utcoffset() is None
         ):
@@ -76,6 +81,7 @@ class RecommendationOrchestrator:
         if deadline <= now:
             raise OrchestrationDeadlineExceeded("orchestration deadline has elapsed")
         constraints = dict(request.constraints or {})
+        evaluation_at = request.evaluation_at or now
         trace: list[dict[str, object]] = []
         transitions: list[dict[str, object]] = []
         dispatches: list[AgentDispatch] = []
@@ -154,18 +160,27 @@ class RecommendationOrchestrator:
                 "resource_types": list(request.resource_types),
                 "output_type": request.output_type,
                 "scene": "HOME",
+                "evaluation_at": evaluation_at.isoformat(),
             },
         )
         transition(TaskStatus.PROBING, "G4_RULE_PROBE")
         profile = await dispatch(
             receiver="UserProfileAgent",
             message_type=MessageType.PROFILE_BUILD,
-            payload={"user_id": request.user_id, "constraints": constraints},
+            payload={
+                "user_id": request.user_id,
+                "constraints": constraints,
+                "evaluation_at": evaluation_at.isoformat(),
+            },
         )
         probe = await dispatch(
             receiver="ResourceSemanticAgent",
             message_type=MessageType.SEMANTIC_PROBE,
-            payload={"intent": intent, "constraints": constraints},
+            payload={
+                "intent": intent,
+                "constraints": constraints,
+                "evaluation_at": evaluation_at.isoformat(),
+            },
         )
         transition(TaskStatus.DECIDING, "G4_RULE_POLICY")
         policy = await dispatch(
@@ -177,6 +192,7 @@ class RecommendationOrchestrator:
                 "probe": probe,
                 "constraints": constraints,
                 "output_type": request.output_type,
+                "evaluation_at": evaluation_at.isoformat(),
             },
         )
         warnings = self._collect_warnings(results)
@@ -215,6 +231,7 @@ class RecommendationOrchestrator:
                 "constraints": constraints,
                 "limit": request.limit,
                 "replan_count": replan_count,
+                "evaluation_at": evaluation_at.isoformat(),
             },
         )
         transition(TaskStatus.RANKING, "G4_RULE_RANK")
@@ -240,6 +257,7 @@ class RecommendationOrchestrator:
                     "constraints": {**constraints, "force_replan": False},
                     "output_type": request.output_type,
                     "replan_count": replan_count,
+                    "evaluation_at": evaluation_at.isoformat(),
                 },
                 attempt=2,
             )
@@ -254,6 +272,7 @@ class RecommendationOrchestrator:
                     "constraints": {**constraints, "force_replan": False},
                     "limit": request.limit,
                     "replan_count": replan_count,
+                    "evaluation_at": evaluation_at.isoformat(),
                 },
                 attempt=2,
             )
