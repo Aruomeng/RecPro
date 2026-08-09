@@ -76,6 +76,34 @@ class FakeRecommendationService:
             },
         )
 
+    async def get_task(self, task_id, *, user_id: int) -> dict[str, object]:
+        return {
+            "task_id": str(task_id),
+            "trace_id": str(uuid4()),
+            "status": "COMPLETED",
+            "context_version": 1,
+            "record_id": 1,
+            "evaluation_at": "2026-08-09T00:00:00Z",
+            "started_at": "2026-08-09T00:00:00Z",
+            "finished_at": "2026-08-09T00:00:01Z",
+            "error_code": None,
+            "warnings": [],
+            "versions": {
+                "config_bundle": "rec-1.0.0",
+                "policy": "policy-g3-v1",
+                "ranking": "ranking-g3-v1",
+                "behavior_formula": "profile-g2-v1",
+                "dataset": "synthetic-demo-2026-08",
+            },
+        }
+
+    async def get_trace(self, task_id, *, user_id: int) -> dict[str, object]:
+        return {
+            "task_id": str(task_id),
+            "schema_version": "g3-trace-v1",
+            "payload": {"steps": []},
+        }
+
 
 def app_for(service: object, *, enabled: bool = True):
     settings = AppSettings(
@@ -109,6 +137,10 @@ class RecommendationAPITest(unittest.TestCase):
         with TestClient(app_for(service)) as client:
             first = client.post("/api/v1/recommendation-tasks", json=body, headers=headers)
             second = client.post("/api/v1/recommendation-tasks", json=body, headers=headers)
+            task = client.get(
+                f"/api/v1/recommendation-tasks/{first.json()['task_id']}",
+                headers={"X-Demo-User-Id": "7"},
+            )
 
         self.assertEqual(201, first.status_code)
         self.assertEqual("false", first.headers["Idempotency-Replayed"])
@@ -118,6 +150,8 @@ class RecommendationAPITest(unittest.TestCase):
         self.assertEqual(("BOOK", "PAPER"), service.calls[0].resource_types)
         self.assertEqual(str(request_id), first.json()["task_id"])
         self.assertIn("X-Trace-Id", first.headers)
+        self.assertEqual(200, task.status_code)
+        self.assertEqual("COMPLETED", task.json()["status"])
 
     def test_request_id_mismatch_is_rejected_before_service(self) -> None:
         service = FakeRecommendationService()
@@ -164,6 +198,21 @@ class RecommendationAPITest(unittest.TestCase):
         self.assertEqual(503, response.status_code)
         self.assertEqual("CORE_STORAGE_UNAVAILABLE", response.json()["error"]["code"])
         self.assertEqual([], service.calls)
+
+    def test_opt_in_post_cors_is_explicit(self) -> None:
+        service = FakeRecommendationService()
+        with TestClient(app_for(service)) as client:
+            response = client.options(
+                "/api/v1/recommendation-tasks",
+                headers={
+                    "Origin": "http://localhost:5173",
+                    "Access-Control-Request-Method": "POST",
+                    "Access-Control-Request-Headers": "Idempotency-Key, X-Demo-User-Id",
+                },
+            )
+
+        self.assertEqual(200, response.status_code)
+        self.assertIn("POST", response.headers.get("access-control-allow-methods", ""))
 
     def test_scene_and_output_limits_are_validated(self) -> None:
         service = FakeRecommendationService()

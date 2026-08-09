@@ -20,6 +20,7 @@ from backend.app.recommendation.domain.public import (
     RecommendationTaskResult,
 )
 from backend.app.recommendation.ports.public import RecommendationTaskService
+from backend.app.recommendation.ports.public import IdempotencyConflictError
 
 
 CHANNEL_WEIGHTS = {"PROFILE": 0.35, "KEYWORD": 0.25, "TRENDING": 0.20}

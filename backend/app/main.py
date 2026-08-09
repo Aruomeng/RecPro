@@ -75,12 +75,17 @@ def create_app(
     )
     application.state.configuration = state
     application.add_middleware(RequestContextMiddleware)
+    cors_methods = ["GET"]
+    cors_headers = ["X-Request-Id", "Content-Type"]
+    if recommendation_service is not None and recommendation_api_enabled:
+        cors_methods.append("POST")
+        cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(runtime.cors_origins),
         allow_credentials=True,
-        allow_methods=["GET"],
-        allow_headers=["X-Request-Id", "Content-Type"],
+        allow_methods=cors_methods,
+        allow_headers=cors_headers,
     )
     register_exception_handlers(application)
     application.include_router(

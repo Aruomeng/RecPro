@@ -19,6 +19,7 @@ from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
 from backend.app.api.models import ErrorResponse, StrictModel
 from backend.app.recommendation.application.public import (
+    IdempotencyConflictError,
     RecommendationTaskCommand,
     RecommendationTaskService,
 )
@@ -134,6 +135,20 @@ class RecommendationExecutionResponse(StrictModel):
     versions: VersionBundleResponse | None = None
 
 
+class RecommendationTaskStatusResponse(StrictModel):
+    task_id: UUID
+    trace_id: UUID
+    status: TaskStatus
+    context_version: int = Field(ge=1)
+    record_id: int | None = Field(default=None, ge=1)
+    evaluation_at: datetime
+    started_at: datetime
+    finished_at: datetime | None = None
+    error_code: str | None = None
+    warnings: list[WarningCode]
+    versions: VersionBundleResponse
+
+
 def _invalid_scene(message: str, *, scene: TriggerScene) -> PublicAPIError:
     return PublicAPIError(
         status_code=422,
@@ -203,6 +218,28 @@ def _resolve_demo_user(
     app_env: str,
     demo_identity_enabled: bool,
 ) -> int:
+    resolved_user_id = _require_demo_identity(
+        demo_user_id=demo_user_id,
+        app_env=app_env,
+        demo_identity_enabled=demo_identity_enabled,
+    )
+    if request.user_id is not None and request.user_id != resolved_user_id:
+        raise PublicAPIError(
+            status_code=403,
+            code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
+            message="The request user does not match the authenticated user.",
+            retryable=False,
+            details={},
+        )
+    return resolved_user_id
+
+
+def _require_demo_identity(
+    *,
+    demo_user_id: int | None,
+    app_env: str,
+    demo_identity_enabled: bool,
+) -> int:
     if app_env != "demo" or not demo_identity_enabled:
         raise PublicAPIError(
             status_code=401,
@@ -216,14 +253,6 @@ def _resolve_demo_user(
             status_code=401,
             code=ErrorCode.AUTHENTICATION_REQUIRED,
             message="X-Demo-User-Id is required for the local demo.",
-            retryable=False,
-            details={},
-        )
-    if request.user_id is not None and request.user_id != demo_user_id:
-        raise PublicAPIError(
-            status_code=403,
-            code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
-            message="The request user does not match the authenticated user.",
             retryable=False,
             details={},
         )
@@ -293,29 +322,83 @@ def create_recommendation_router(
             app_env=app_env,
             demo_identity_enabled=demo_identity_enabled,
         )
-        result = await service.create_task(
-            RecommendationTaskCommand(
-                request_id=request.request_id,
-                session_id=request.session_id,
-                user_id=user_id,
-                scene=request.scene.value,
-                input_text=request.input_text,
-                resource_types=tuple(item.value for item in request.requested_resource_types),
-                output_type=(
-                    request.requested_output_type.value
-                    if request.requested_output_type is not None
-                    else None
+        try:
+            result = await service.create_task(
+                RecommendationTaskCommand(
+                    request_id=request.request_id,
+                    session_id=request.session_id,
+                    user_id=user_id,
+                    scene=request.scene.value,
+                    input_text=request.input_text,
+                    resource_types=tuple(item.value for item in request.requested_resource_types),
+                    output_type=(
+                        request.requested_output_type.value
+                        if request.requested_output_type is not None
+                        else None
+                    ),
+                    source_resource_id=request.source_resource_id,
+                    source_item_id=request.source_item_id,
+                    evaluation_at=None,
+                    constraints=dict(request.constraints),
+                    limit=request.limit,
                 ),
-                source_resource_id=request.source_resource_id,
-                source_item_id=request.source_item_id,
-                evaluation_at=None,
-                constraints=dict(request.constraints),
-                limit=request.limit,
-            ),
-            idempotency_key=idempotency_key,
-        )
+                idempotency_key=idempotency_key,
+            )
+        except IdempotencyConflictError as exc:
+            raise PublicAPIError(
+                status_code=409,
+                code=ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                message="The idempotency key was already used with a different payload.",
+                retryable=False,
+                details={},
+            ) from exc
         response.status_code = result.status_code
         response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
         return RecommendationExecutionResponse.model_validate(result.payload)
+
+    @router.get(
+        "/recommendation-tasks/{task_id}",
+        response_model=RecommendationTaskStatusResponse,
+        response_model_exclude_none=True,
+        responses={
+            200: {"model": RecommendationTaskStatusResponse, "headers": CORRELATION_HEADERS},
+            401: {"model": ErrorResponse, "headers": CORRELATION_HEADERS},
+            403: {"model": ErrorResponse, "headers": CORRELATION_HEADERS},
+            404: {"model": ErrorResponse, "headers": CORRELATION_HEADERS},
+            422: {"model": ErrorResponse, "headers": CORRELATION_HEADERS},
+            503: {"model": ErrorResponse, "headers": CORRELATION_HEADERS},
+        },
+        openapi_extra={"parameters": [REQUEST_ID_PARAMETER]},
+        operation_id="recommendation_get_task_v1",
+        summary="Read recommendation task state",
+    )
+    async def get_task(
+        task_id: UUID,
+        demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
+    ) -> RecommendationTaskStatusResponse:
+        if not pipeline_enabled:
+            raise PublicAPIError(
+                status_code=503,
+                code=ErrorCode.CORE_STORAGE_UNAVAILABLE,
+                message="The recommendation pipeline is disabled in this runtime.",
+                retryable=False,
+                details={"recommendation_pipeline": "DISABLED"},
+            )
+        user_id = _require_demo_identity(
+            demo_user_id=demo_user_id,
+            app_env=app_env,
+            demo_identity_enabled=demo_identity_enabled,
+        )
+        try:
+            payload = await service.get_task(task_id, user_id=user_id)
+        except LookupError as exc:
+            raise PublicAPIError(
+                status_code=404,
+                code=ErrorCode.NOT_FOUND,
+                message="The requested recommendation task was not found.",
+                retryable=False,
+                details={},
+            ) from exc
+        return RecommendationTaskStatusResponse.model_validate(payload)
 
     return router
