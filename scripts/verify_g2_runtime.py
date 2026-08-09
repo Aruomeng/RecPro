@@ -111,9 +111,10 @@ async def execute(args: argparse.Namespace) -> int:
     issues = validate_compose(env_values)
     if issues:
         raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
-    root_password = env_values.get("RECPRO_MYSQL_ROOT_PASSWORD", "")
-    if not root_password:
-        raise ValueError("RECPRO_MYSQL_ROOT_PASSWORD is required for G2 verification")
+    migration_user = env_values.get("RECPRO_MYSQL_MIGRATION_USER", "")
+    migration_password = env_values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
+    if not migration_user or not migration_password:
+        raise ValueError("G2 migration credentials are required")
     migration_source = MIGRATION_PATH.read_text(encoding="utf-8")
     migration_statements = split_statements(migration_source)
     seed_bytes = SEED_PATH.read_bytes()
@@ -124,14 +125,15 @@ async def execute(args: argparse.Namespace) -> int:
     await apply_statements(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
         database=env_values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        admin_user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        admin_password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         statements=migration_statements,
     )
     connection = await asyncmy.connect(
         host="127.0.0.1",
         port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
-        user="root",
-        password=root_password,
+        user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         db=env_values["RECPRO_MYSQL_DATABASE"],
         connect_timeout=10,
         read_timeout=30,
@@ -146,7 +148,8 @@ async def execute(args: argparse.Namespace) -> int:
     first_seed = await insert_seed(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
         database=env_values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        migration_user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        migration_password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         seed=seed,
         env_values=env_values,
         source_hash=seed_hash,
@@ -154,7 +157,8 @@ async def execute(args: argparse.Namespace) -> int:
     second_seed = await insert_seed(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
         database=env_values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        migration_user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        migration_password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         seed=seed,
         env_values=env_values,
         source_hash=seed_hash,
@@ -162,7 +166,8 @@ async def execute(args: argparse.Namespace) -> int:
     first_profile = await apply_replay(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
         database=env_values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        migration_user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        migration_password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         user_id=1001,
         as_of=datetime(2025, 12, 31, 23, 59, 59, 999000),
         formula_version="profile-g2-v1",
@@ -170,7 +175,8 @@ async def execute(args: argparse.Namespace) -> int:
     second_profile = await apply_replay(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
         database=env_values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        migration_user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        migration_password=env_values["RECPRO_MYSQL_MIGRATION_PASSWORD"],
         user_id=1001,
         as_of=datetime(2025, 12, 31, 23, 59, 59, 999000),
         formula_version="profile-g2-v1",
@@ -178,8 +184,8 @@ async def execute(args: argparse.Namespace) -> int:
     connection = await asyncmy.connect(
         host="127.0.0.1",
         port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
-        user="root",
-        password=root_password,
+        user=env_values["RECPRO_MYSQL_MIGRATION_USER"],
+        password=migration_password,
         db=env_values["RECPRO_MYSQL_DATABASE"],
         connect_timeout=10,
         read_timeout=30,
@@ -245,7 +251,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(execute(args))
-    except (OSError, ValueError, RuntimeError, asyncmy.Error) as exc:
+    except (OSError, ValueError, RuntimeError, asyncmy.errors.Error) as exc:
         print(f"[FAIL] G2 runtime verification did not complete: {type(exc).__name__}")
         return 1
 

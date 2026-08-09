@@ -63,19 +63,21 @@ async def apply_statements(
     *,
     host_port: int,
     database: str,
-    root_password: str,
+    admin_user: str,
+    admin_password: str,
     statements: tuple[str, ...],
 ) -> None:
     connection = await asyncmy.connect(
         host="127.0.0.1",
         port=host_port,
-        user="root",
-        password=root_password,
+        user=admin_user,
+        password=admin_password,
         db=database,
         connect_timeout=10,
         read_timeout=30,
         charset="utf8mb4",
         autocommit=True,
+        init_command="SET sql_notes=0",
     )
     try:
         async with connection.cursor() as cursor:
@@ -102,9 +104,10 @@ async def execute(args: argparse.Namespace) -> int:
     issues = validate_compose(values)
     if issues:
         raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
-    root_password = values.get("RECPRO_MYSQL_ROOT_PASSWORD", "")
-    if not root_password:
-        raise ValueError("RECPRO_MYSQL_ROOT_PASSWORD is required for G2 migration")
+    admin_user = values.get("RECPRO_MYSQL_MIGRATION_USER", "")
+    admin_password = values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
+    if not admin_user or not admin_password:
+        raise ValueError("G2 migration credentials are required")
     source = migration_path.read_text(encoding="utf-8")
     statements = split_statements(source)
     source_hash = file_sha256(migration_path)
@@ -130,7 +133,8 @@ async def execute(args: argparse.Namespace) -> int:
     await apply_statements(
         host_port=int(values.get("RECPRO_MYSQL_HOST_PORT", "")),
         database=values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        admin_user=admin_user,
+        admin_password=admin_password,
         statements=statements,
     )
     write_evidence(
@@ -156,7 +160,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(execute(args))
-    except (OSError, ValueError, RuntimeError, asyncmy.Error) as exc:
+    except (OSError, ValueError, RuntimeError, asyncmy.errors.Error) as exc:
         print(f"[FAIL] G2 migration did not complete: {type(exc).__name__}")
         return 1
 

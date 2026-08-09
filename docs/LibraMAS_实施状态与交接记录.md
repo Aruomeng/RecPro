@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.7
+> 状态版本：1.8
 > 更新时间：2026-08-09
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -47,14 +47,14 @@
   - G1 实现已拆分为后端 `5c2eb55063ab8f01af2de925993440b27d584c2c`、前端 `c9e780e0a2a76b7c75d9b12108551bb1132769e0`、编排 `6be3e27274f752e9e86ba4039aeb4dccd68285d2` 三个详细提交。
   - G1 本地门禁已通过：当前 G0 回归 131 项、G1 Python 102 项、前端 33 项、编排定向 47 项；全新 Python/Node 隔离安装、`pip check`、npm 审计、类型检查、生产构建和桌面/移动浏览器验收均通过。
   - G1 真实运行态验收已通过：证据 run `g1-runtime-20260802-014` 绑定提交 `6f7d6581d5087ce02b26542f8d3ce20df5e52b98`；五个服务两轮均 healthy、restart_count=0，三卷身份不变，探针计数重启前后均为 1，验证器数据库动作仅 4 次 SELECT，删除、UPDATE、DDL、验证器写入和破坏性动作均为 0。
-  - G2 已开始：冻结前向迁移、Catalog/Tag、Behavior、声明画像历史/当前投影、Profile Outbox、配置版本和合成演示 seed；新增迁移、幂等 seed、as-of 画像重放和 G2 运行验证脚本，尚未连接新的 G2 数据库环境。
+  - G2 首个垂直切片已通过运行态验收：在全新 Compose 项目和全新 MySQL 卷中完成前向迁移、6资源/6标签/8行为合成 seed、seed 重复幂等、evaluation_at 画像重放重复幂等；外键删除规则全部为 RESTRICT/NO ACTION，破坏性动作 0。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
   - `gh` 已安装但尚未登录 GitHub；Git HTTPS 凭据已成功推送 `codex/g1-runnable-skeleton`，Draft PR 仍需 `gh` 认证或在 GitHub 网页创建。
-  - G2 运行态迁移、seed 幂等、画像重放和数据库约束证据尚未通过；当前只允许使用全新的 Compose 项目和数据卷。
-- `next_step`：在全新 Compose 项目中运行 G2 迁移、合成 seed 两次和 profile replay 两次，确认所有计数不减少且历史不被覆盖。
+  - G2 全量范围仍未完成：Repository/UoW、dataset manifest、Chroma/Neo4j 构建骨架和 G3 推荐 API 尚未实现；推荐能力仍保持 `can_recommend=false`。
+- `next_step`：补齐 G2 剩余数据适配器、质量清单和索引构建骨架；完成其门禁后再进入 G3。
 
 ---
 
@@ -65,7 +65,7 @@
 | 计划制定 | COMPLETED | `docs/LibraMAS_系统实施计划_安全低耦合版.md` | 本轮完成 |
 | G0 安全与规格基线 | COMPLETED | 原始 Gate 125 tests；当前回归 131 tests；安全/架构/文档/契约均 PASS | 未连接数据库 |
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
-| G2 数据与持久化 | IN_PROGRESS | `infra/mysql/migrations/001_g2_core.sql`、`scripts/seed_g2.py`、`scripts/replay_g2_profile.py`、G2 单元/契约测试 | 迁移与本地契约 PASS；等待全新 Docker 数据库运行态验收 |
+| G2 数据与持久化 | IN_PROGRESS | `artifacts/verification/g2/g2-runtime-20260809-008/runtime.json`；迁移、seed、replay 脚本及 8 项测试 | 首个垂直切片 CONTRACT_PASS / RUNTIME_PASS；剩余 Repository/UoW、质量清单、可选索引构建骨架待完成 |
 | G3 MySQL-only推荐闭环 | NOT_STARTED | — | 依赖G2 |
 | G4 动态多智能体闭环 | NOT_STARTED | — | 依赖G3 |
 | G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
@@ -81,8 +81,8 @@
 
 ## Working Set
 
-- `current_subtask`：G2 数据与持久化首个垂直切片实现中；先完成迁移/seed/replay 的新环境验收，不进入 G3。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 8 项和前端 33 项测试通过；安全扫描 107 个文件、架构扫描 35 个文件通过；G2 迁移文件仅含 CREATE TABLE/INSERT IGNORE，seed 仅 INSERT IGNORE，画像重放只更新当前投影并追加 replay/change log。
+- `current_subtask`：G2 剩余数据适配器、数据质量清单和可选索引构建骨架；G3 仍未开始。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 8 项和前端 33 项测试通过（累计 274 项）；安全扫描 107 个文件、架构扫描 35 个文件通过；全新空卷运行证据证明 6/6/12/8 条核心数据分别导入，seed 第二次 0 新增，profile replay 第二次 0 新增，12 个外键的非破坏删除规则为 0 unsafe。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -101,8 +101,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G2 尚未连接新数据库环境验证；不得复用或改写 G1 运行态卷。
-- `next_action`：生成新的唯一 Compose 项目名，启动 MySQL 后执行 `make verify-g2-runtime G2_RUN_ID=<new-id>`；失败时只保留证据并报告，不执行清理。
+- `immediate_risk`：G2 的可选索引和 Repository/UoW 尚未形成稳定端口；不得把当前 seed 误称为正式评价数据，也不得进入 G3 推荐闭环。
+- `next_action`：在不触碰现有卷的前提下实现 G2 剩余端口，补齐数据质量报告与构建状态机测试；完成后再申请 G3。
 
 ---
 
@@ -208,6 +208,30 @@ Gate：G2 数据与持久化
 配置/数据/索引版本：seed=g2-demo-v1；画像公式=profile-g2-v1；索引状态仅创建 PENDING 投影，不写入 Chroma/Neo4j。
 未解决风险：全新 Docker 数据库迁移、seed 两次幂等和 profile replay 两次幂等尚未验证；G3 推荐 API 不在本阶段范围。
 下一步唯一动作：使用新的 Compose 项目名执行 G2 runtime verifier；通过后再关闭 G2 并进入 G3。
+```
+
+---
+
+## G2 首个垂直切片运行记录
+
+```text
+交接ID：G2-RUNTIME-20260809-008
+Gate：G2 数据与持久化（首个垂直切片）
+状态：IN_PROGRESS / CONTRACT_PASS, RUNTIME_PASS
+时间：2026-08-09（Asia/Shanghai）
+目标：在全新 Compose 项目和全新 MySQL 卷上证明前向迁移、合成 seed、as-of 画像重放均可安全重复执行。
+新增文件：backend/requirements-g2-tools.in；backend/requirements-g2-tools.lock；其余 G2 文件见 G2 启动记录。
+修改文件及原版本保存位置：Compose 新增独立迁移账号；迁移/seed/replay/verify 使用最小迁移权限和精确 Decimal 绑定；原版本由 Git 提交历史保留。
+新增数据库对象和行数：新卷创建 20 张 G2 表；首次 seed 写入 6 个资源、6 个标签、12 个资源标签关系、6 个 PENDING 索引状态、8 个行为事实、8 个 Profile Outbox、2 个声明画像历史、1 个配置版本和 1 个 seed 标记；画像 replay 写入 1 个 profile replay run、4 条 change log、5 个正向标签投影和 2 个主题负偏好投影。
+受控UPDATE对象和审计ID：仅更新 user_profile、user_interest_tag、user_negative_preference 当前投影；profile_replay_run 以 (user_id, as_of, formula_version, input_hash) 幂等；本次运行无重复 UPDATE，destructive_actions=0。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`make PYTHON=.venv-g1-release-py311/bin/python verify-g0 test-g1-python test-g2`；`python -m scripts.verify_g2_runtime --run-id g2-runtime-20260809-008 --env-file .env.compose`；运行后仅执行 `docker compose stop mysql`，未删除容器、网络、卷或数据。
+测试结果：G0 67+28+36 项、G1 102 项、G2 8 项通过；安全扫描 107 个文件 PASS；架构扫描 35 个文件 PASS；文档/契约检查 PASS；G2 runtime PASS。
+验证证据目录：`artifacts/verification/g2/g2-runtime-20260809-008/runtime.json`；旧隔离卷重复运行证据为 `artifacts/verification/g2/g2-runtime-20260809-007/runtime.json`。
+配置/数据/索引版本：seed=g2-demo-v1；画像公式=profile-g2-v1；index state=6 条 PENDING；未写入 Chroma/Neo4j。
+未解决风险：G2 全量 Repository/UoW、dataset manifest、可选索引构建骨架仍待实现；合成数据不得用于正式论文评价。
+下一步唯一动作：补齐 G2 剩余适配器、数据质量清单和索引构建状态机，并为每项添加独立门禁证据；通过后再进入 G3。
 ```
 
 ---

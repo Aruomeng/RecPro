@@ -13,7 +13,7 @@ G2_AS_OF ?=
 	bootstrap bootstrap-check \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
-	test-g2 verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local \
+	test-g2 g2-tools-install verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local \
 	migrate-g2 seed-g2 replay-g2 verify-g2-runtime compose-config \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
@@ -45,6 +45,9 @@ test-g1-python:
 
 test-g2:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g2 -t tests -p 'test_*.py'
+
+g2-tools-install:
+	$(PYTHON) -m pip install --require-hashes -r backend/requirements-g2-tools.lock
 
 frontend-test:
 	$(NPM) --prefix frontend run test
@@ -85,6 +88,7 @@ verify-g2-runtime:
 
 compose-config:
 	RECPRO_MYSQL_PASSWORD=validation-runtime-001 \
+	RECPRO_MYSQL_MIGRATION_PASSWORD=validation-migration-004 \
 	RECPRO_MYSQL_ROOT_PASSWORD=validation-bootstrap-002 \
 	RECPRO_NEO4J_PASSWORD=validation-graph-003 \
 	$(COMPOSE) --env-file "$(COMPOSE_EXAMPLE_ENV_FILE)" config --quiet

@@ -7,6 +7,7 @@ import asyncio
 import json
 import re
 from datetime import UTC, datetime
+from decimal import Decimal, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -22,6 +23,13 @@ from scripts.validate_runtime_env import read_env, validate_compose
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
+DECIMAL_6 = Decimal("0.000001")
+
+
+def db_decimal(value: float | int) -> Decimal:
+    """Bind deterministic six-place values without binary-float truncation warnings."""
+
+    return Decimal(str(value)).quantize(DECIMAL_6, rounding=ROUND_HALF_UP)
 
 
 def parse_utc(value: str) -> datetime:
@@ -77,7 +85,8 @@ async def apply_replay(
     *,
     host_port: int,
     database: str,
-    root_password: str,
+    migration_user: str,
+    migration_password: str,
     user_id: int,
     as_of: datetime,
     formula_version: str,
@@ -85,8 +94,8 @@ async def apply_replay(
     connection = await asyncmy.connect(
         host="127.0.0.1",
         port=host_port,
-        user="root",
-        password=root_password,
+        user=migration_user,
+        password=migration_password,
         db=database,
         connect_timeout=10,
         read_timeout=30,
@@ -135,28 +144,28 @@ async def apply_replay(
                 "INSERT INTO user_profile "
                 "(user_id, profile_version, profile_confidence, recent_focus_tag_id, topic_focus_strength, "
                 "reading_stage, reading_stage_confidence, updated_at) VALUES (%s, %s, %s, %s, %s, NULL, 0, %s) "
-                "ON DUPLICATE KEY UPDATE profile_version = VALUES(profile_version), profile_confidence = VALUES(profile_confidence), "
-                "recent_focus_tag_id = VALUES(recent_focus_tag_id), topic_focus_strength = VALUES(topic_focus_strength), "
-                "reading_stage = VALUES(reading_stage), reading_stage_confidence = VALUES(reading_stage_confidence), updated_at = VALUES(updated_at)",
-                (user_id, profile_version, snapshot.profile_confidence, snapshot.recent_focus_tag_id, snapshot.topic_focus_strength, now),
+                "AS new ON DUPLICATE KEY UPDATE profile_version = new.profile_version, profile_confidence = new.profile_confidence, "
+                "recent_focus_tag_id = new.recent_focus_tag_id, topic_focus_strength = new.topic_focus_strength, "
+                "reading_stage = new.reading_stage, reading_stage_confidence = new.reading_stage_confidence, updated_at = new.updated_at",
+                (user_id, profile_version, db_decimal(snapshot.profile_confidence), snapshot.recent_focus_tag_id, db_decimal(snapshot.topic_focus_strength), now),
             )
             for signal in snapshot.interests:
                 await cursor.execute(
                     "INSERT INTO user_interest_tag "
                     "(user_id, tag_id, positive_weight, raw_positive_signal, source_count, last_event_at, profile_version) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, %s) ON DUPLICATE KEY UPDATE "
-                    "positive_weight = VALUES(positive_weight), raw_positive_signal = VALUES(raw_positive_signal), "
-                    "source_count = VALUES(source_count), last_event_at = VALUES(last_event_at), profile_version = VALUES(profile_version)",
-                    (user_id, signal.tag_id, signal.weight, signal.raw_signal, signal.source_count, signal.last_event_at, profile_version),
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s) AS new ON DUPLICATE KEY UPDATE "
+                    "positive_weight = new.positive_weight, raw_positive_signal = new.raw_positive_signal, "
+                    "source_count = new.source_count, last_event_at = new.last_event_at, profile_version = new.profile_version",
+                    (user_id, signal.tag_id, db_decimal(signal.weight), db_decimal(signal.raw_signal), signal.source_count, signal.last_event_at, profile_version),
                 )
             for signal in snapshot.negatives:
                 await cursor.execute(
                     "INSERT INTO user_negative_preference "
                     "(user_id, tag_id, reason_code, negative_weight, raw_negative_signal, source_count, expires_at, last_event_at, profile_version) "
-                    "VALUES (%s, %s, %s, %s, %s, %s, NULL, %s, %s) ON DUPLICATE KEY UPDATE "
-                    "negative_weight = VALUES(negative_weight), raw_negative_signal = VALUES(raw_negative_signal), "
-                    "source_count = VALUES(source_count), last_event_at = VALUES(last_event_at), profile_version = VALUES(profile_version)",
-                    (user_id, signal.tag_id, signal.reason_code, signal.weight, signal.raw_signal, signal.source_count, signal.last_event_at, profile_version),
+                    "VALUES (%s, %s, %s, %s, %s, %s, NULL, %s, %s) AS new ON DUPLICATE KEY UPDATE "
+                    "negative_weight = new.negative_weight, raw_negative_signal = new.raw_negative_signal, "
+                    "source_count = new.source_count, last_event_at = new.last_event_at, profile_version = new.profile_version",
+                    (user_id, signal.tag_id, signal.reason_code, db_decimal(signal.weight), db_decimal(signal.raw_signal), signal.source_count, signal.last_event_at, profile_version),
                 )
             for event in events:
                 delta = {
@@ -205,14 +214,16 @@ async def execute(args: argparse.Namespace) -> int:
     issues = validate_compose(values)
     if issues:
         raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
-    root_password = values.get("RECPRO_MYSQL_ROOT_PASSWORD", "")
-    if not root_password:
-        raise ValueError("RECPRO_MYSQL_ROOT_PASSWORD is required for profile replay")
+    migration_user = values.get("RECPRO_MYSQL_MIGRATION_USER", "")
+    migration_password = values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
+    if not migration_user or not migration_password:
+        raise ValueError("G2 migration credentials are required")
     as_of = parse_utc(args.as_of)
     result = await apply_replay(
         host_port=int(values["RECPRO_MYSQL_HOST_PORT"]),
         database=values["RECPRO_MYSQL_DATABASE"],
-        root_password=root_password,
+        migration_user=migration_user,
+        migration_password=migration_password,
         user_id=args.user_id,
         as_of=as_of,
         formula_version=args.formula_version,
@@ -228,7 +239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(execute(args))
-    except (OSError, ValueError, RuntimeError, asyncmy.Error) as exc:
+    except (OSError, ValueError, RuntimeError, asyncmy.errors.Error) as exc:
         print(f"[FAIL] G2 profile replay did not complete: {type(exc).__name__}")
         return 1
 

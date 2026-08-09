@@ -1,0 +1,10 @@
+# G2 operator-tool dependencies; intentionally separate from backend/worker runtime.
+cffi==2.0.0 \
+    --hash=sha256:2de9a304e27f7596cd03d16f1b7c72219bd944e99cc52b84d0145aefb07cbd3c
+    # via cryptography
+cryptography==47.0.0 \
+    --hash=sha256:160ad728f128972d362e714054f6ba0067cab7fb350c5202a9ae8ae4ce3ef1a0
+    # via -r backend/requirements-g2-tools.in
+pycparser==2.23 \
+    --hash=sha256:e5c6e8d3fbad53479cab09ac03729e0a9faf2bee3db8208a550daf5af81a5934
+    # via cffi

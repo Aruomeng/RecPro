@@ -170,6 +170,8 @@ class ComposeContractTest(unittest.TestCase):
         for values in (self.host_env, self.compose_env):
             self.assertEqual("recpro_runtime", values["RECPRO_MYSQL_USER"])
             self.assertEqual("", values["RECPRO_MYSQL_PASSWORD"])
+            self.assertEqual("recpro_migrator", values["RECPRO_MYSQL_MIGRATION_USER"])
+            self.assertEqual("", values["RECPRO_MYSQL_MIGRATION_PASSWORD"])
         self.assertEqual("", self.compose_env["RECPRO_MYSQL_ROOT_PASSWORD"])
         self.assertEqual("", self.compose_env["RECPRO_NEO4J_PASSWORD"])
 
@@ -213,6 +215,10 @@ class ComposeContractTest(unittest.TestCase):
         self.assertIn("VALUES ('${probe_id}')", self.mysql_init)
         self.assertIn("CREATE USER IF NOT EXISTS", self.mysql_init)
         self.assertIn("GRANT SELECT, INSERT ON", self.mysql_init)
+        self.assertIn(
+            "GRANT SELECT, INSERT, UPDATE, CREATE, REFERENCES, INDEX ON",
+            self.mysql_init,
+        )
         self.assertNotIn("GRANT SELECT, INSERT, " + "UPDATE ON", self.mysql_init)
         forbidden_sql = (
             "DE" + "LETE",

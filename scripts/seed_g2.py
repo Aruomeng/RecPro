@@ -8,6 +8,7 @@ import hashlib
 import json
 import re
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -55,11 +56,18 @@ def canonical_json(value: object) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
+def db_decimal(value: object) -> Decimal:
+    """Convert fixture numbers through text so MySQL receives exact decimals."""
+
+    return Decimal(str(value))
+
+
 async def insert_seed(
     *,
     host_port: int,
     database: str,
-    root_password: str,
+    migration_user: str,
+    migration_password: str,
     seed: dict[str, Any],
     env_values: dict[str, str],
     source_hash: str,
@@ -67,8 +75,8 @@ async def insert_seed(
     connection = await asyncmy.connect(
         host="127.0.0.1",
         port=host_port,
-        user="root",
-        password=root_password,
+        user=migration_user,
+        password=migration_password,
         db=database,
         connect_timeout=10,
         read_timeout=30,
@@ -131,7 +139,7 @@ async def insert_seed(
                         resource["availability_status"],
                         parse_utc(resource["available_from"]),
                         resource.get("access_url"),
-                        resource["metadata_quality"],
+                        db_decimal(resource["metadata_quality"]),
                         bool(resource.get("is_classic", False)),
                         1,
                         created_at,
@@ -169,7 +177,7 @@ async def insert_seed(
                     await cursor.execute(
                         "INSERT IGNORE INTO resource_tag "
                         "(resource_id, tag_id, weight, confidence, source, created_at) VALUES (%s, %s, %s, %s, %s, %s)",
-                        (resource_id, tag_ids[str(tag["normalized_name"])], tag["weight"], tag["confidence"], tag.get("source", "IMPORT"), created_at),
+                        (resource_id, tag_ids[str(tag["normalized_name"])], db_decimal(tag["weight"]), db_decimal(tag["confidence"]), tag.get("source", "IMPORT"), created_at),
                     )
 
             for profile in seed["declared_profiles"]:
@@ -206,7 +214,7 @@ async def insert_seed(
                     "INSERT IGNORE INTO user_behavior_event "
                     "(event_uuid, user_id, session_id, event_type, resource_id, rating, reason_code, occurred_at, created_at) "
                     "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                    (behavior["event_uuid"], int(behavior["user_id"]), behavior["session_id"], behavior["event_type"], resource_id, behavior.get("rating"), behavior.get("reason_code"), parse_utc(behavior["occurred_at"]), created_at),
+                    (behavior["event_uuid"], int(behavior["user_id"]), behavior["session_id"], behavior["event_type"], resource_id, db_decimal(behavior["rating"]) if behavior.get("rating") is not None else None, behavior.get("reason_code"), parse_utc(behavior["occurred_at"]), created_at),
                 )
                 await cursor.execute(
                     "SELECT id FROM user_behavior_event WHERE event_uuid = %s",
@@ -261,9 +269,10 @@ async def execute(args: argparse.Namespace) -> int:
     issues = validate_compose(env_values)
     if issues:
         raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
-    root_password = env_values.get("RECPRO_MYSQL_ROOT_PASSWORD", "")
-    if not root_password:
-        raise ValueError("RECPRO_MYSQL_ROOT_PASSWORD is required for G2 seed")
+    migration_user = env_values.get("RECPRO_MYSQL_MIGRATION_USER", "")
+    migration_password = env_values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
+    if not migration_user or not migration_password:
+        raise ValueError("G2 migration credentials are required")
     seed_path = args.seed_file.resolve()
     seed_bytes = seed_path.read_bytes()
     seed_source_hash = sha256_bytes(seed_bytes)
@@ -274,7 +283,7 @@ async def execute(args: argparse.Namespace) -> int:
         evidence_path.write_text(json.dumps({"schema_version": "g2-seed-evidence-v1", "run_id": run_id, "status": "DRY_RUN", "seed_version": seed["seed_version"], "seed_sha256": seed_source_hash, "resource_count": len(seed["resources"]), "tag_count": len(seed["tags"]), "behavior_count": len(seed["behaviors"]), "destructive_actions": 0, "applied": False}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(f"[PASS] G2 seed dry-run: {evidence_path}")
         return 0
-    result = await insert_seed(host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]), database=env_values["RECPRO_MYSQL_DATABASE"], root_password=root_password, seed=seed, env_values=env_values, source_hash=seed_source_hash)
+    result = await insert_seed(host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]), database=env_values["RECPRO_MYSQL_DATABASE"], migration_user=migration_user, migration_password=migration_password, seed=seed, env_values=env_values, source_hash=seed_source_hash)
     evidence_path.parent.mkdir(parents=True, exist_ok=False)
     evidence_path.write_text(json.dumps({"schema_version": "g2-seed-evidence-v1", "run_id": run_id, "status": "APPLIED" if result["applied"] else "IDEMPOTENT_NOOP", "seed_version": seed["seed_version"], "seed_sha256": seed_source_hash, **result, "destructive_actions": 0}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"[PASS] G2 seed result: {evidence_path}")
@@ -285,7 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return asyncio.run(execute(args))
-    except (OSError, ValueError, RuntimeError, asyncmy.Error) as exc:
+    except (OSError, ValueError, RuntimeError, asyncmy.errors.Error) as exc:
         print(f"[FAIL] G2 seed did not complete: {type(exc).__name__}")
         return 1
 

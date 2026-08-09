@@ -57,6 +57,8 @@ def validate_common(values: Mapping[str, str]) -> tuple[str, ...]:
         "RECPRO_MYSQL_DATABASE",
         "RECPRO_MYSQL_USER",
         "RECPRO_MYSQL_PASSWORD",
+        "RECPRO_MYSQL_MIGRATION_USER",
+        "RECPRO_MYSQL_MIGRATION_PASSWORD",
         "RECPRO_PERSISTENCE_PROBE_ID",
     }
     for key in _missing(values, required):
@@ -65,12 +67,20 @@ def validate_common(values: Mapping[str, str]) -> tuple[str, ...]:
     database = values.get("RECPRO_MYSQL_DATABASE", "")
     user = values.get("RECPRO_MYSQL_USER", "")
     password = values.get("RECPRO_MYSQL_PASSWORD", "")
+    migration_user = values.get("RECPRO_MYSQL_MIGRATION_USER", "")
+    migration_password = values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
     if database and not DATABASE_IDENTIFIER_PATTERN.fullmatch(database):
         issues.append("RECPRO_MYSQL_DATABASE has an unsafe identifier format")
     if user and not MYSQL_USER_PATTERN.fullmatch(user):
         issues.append("RECPRO_MYSQL_USER has an unsafe identifier format")
+    if migration_user and not MYSQL_USER_PATTERN.fullmatch(migration_user):
+        issues.append("RECPRO_MYSQL_MIGRATION_USER has an unsafe identifier format")
+    if migration_user and migration_user == user:
+        issues.append("RECPRO_MYSQL_MIGRATION_USER must differ from RECPRO_MYSQL_USER")
     if password and not LOCAL_SECRET_PATTERN.fullmatch(password):
         issues.append("RECPRO_MYSQL_PASSWORD does not meet the local secret format")
+    if migration_password and not LOCAL_SECRET_PATTERN.fullmatch(migration_password):
+        issues.append("RECPRO_MYSQL_MIGRATION_PASSWORD does not meet the local secret format")
 
     bundle_hash = values.get("RECPRO_CONFIG_BUNDLE_SHA256", "")
     if bundle_hash and not SHA256_PATTERN.fullmatch(bundle_hash):
@@ -138,13 +148,18 @@ def validate_compose(values: Mapping[str, str]) -> tuple[str, ...]:
     if neo4j_user and neo4j_user != "neo4j":
         issues.append("RECPRO_NEO4J_USER must be neo4j for the pinned Community image")
 
-    for key in ("RECPRO_MYSQL_ROOT_PASSWORD", "RECPRO_NEO4J_PASSWORD"):
+    for key in (
+        "RECPRO_MYSQL_ROOT_PASSWORD",
+        "RECPRO_MYSQL_MIGRATION_PASSWORD",
+        "RECPRO_NEO4J_PASSWORD",
+    ):
         value = values.get(key, "")
         if value and not LOCAL_SECRET_PATTERN.fullmatch(value):
             issues.append(f"{key} does not meet the local secret format")
 
     secret_values = [
         values.get("RECPRO_MYSQL_PASSWORD", ""),
+        values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", ""),
         values.get("RECPRO_MYSQL_ROOT_PASSWORD", ""),
         values.get("RECPRO_NEO4J_PASSWORD", ""),
     ]

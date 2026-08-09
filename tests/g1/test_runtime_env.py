@@ -16,6 +16,8 @@ def valid_values() -> dict[str, str]:
         "RECPRO_MYSQL_DATABASE": "recpro",
         "RECPRO_MYSQL_USER": "recpro_runtime",
         "RECPRO_MYSQL_PASSWORD": "runtime-secret-001",
+        "RECPRO_MYSQL_MIGRATION_USER": "recpro_migrator",
+        "RECPRO_MYSQL_MIGRATION_PASSWORD": "migration-secret-004",
         "RECPRO_PERSISTENCE_PROBE_ID": "libramas-g1-researcher42-instance07",
         "RECPRO_MYSQL_ROOT_PASSWORD": "bootstrap-secret-002",
         "RECPRO_MYSQL_HOST": "mysql",
