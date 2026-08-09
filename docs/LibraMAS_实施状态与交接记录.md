@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：1.8
+> 状态版本：2.0
 > 更新时间：2026-08-09
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -47,14 +47,16 @@
   - G1 实现已拆分为后端 `5c2eb55063ab8f01af2de925993440b27d584c2c`、前端 `c9e780e0a2a76b7c75d9b12108551bb1132769e0`、编排 `6be3e27274f752e9e86ba4039aeb4dccd68285d2` 三个详细提交。
   - G1 本地门禁已通过：当前 G0 回归 131 项、G1 Python 102 项、前端 33 项、编排定向 47 项；全新 Python/Node 隔离安装、`pip check`、npm 审计、类型检查、生产构建和桌面/移动浏览器验收均通过。
   - G1 真实运行态验收已通过：证据 run `g1-runtime-20260802-014` 绑定提交 `6f7d6581d5087ce02b26542f8d3ce20df5e52b98`；五个服务两轮均 healthy、restart_count=0，三卷身份不变，探针计数重启前后均为 1，验证器数据库动作仅 4 次 SELECT，删除、UPDATE、DDL、验证器写入和破坏性动作均为 0。
-  - G2 首个垂直切片已通过运行态验收：在全新 Compose 项目和全新 MySQL 卷中完成前向迁移、6资源/6标签/8行为合成 seed、seed 重复幂等、evaluation_at 画像重放重复幂等；外键删除规则全部为 RESTRICT/NO ACTION，破坏性动作 0。
+  - G2 已完成：新增 Catalog Repository/UoW 端口与 MySQL 适配器、确定性 dataset manifest/质量报告、VECTOR/GRAPH 版本化索引计划与 Outbox 骨架；全新卷运行证据覆盖迁移、seed、画像重放、索引计划两次幂等。
+  - G3 已开始：新增 MySQL-only 推荐前向迁移、规则意图、三路 MySQL 召回、RRF/有界 MMR、模板解释和可幂等 CLI 持久化演示；全新卷已产生 5 条带证据推荐项和 Trace。
+  - G3 API 首个垂直切片已完成：严格 DTO、场景/Limit 校验、演示身份、请求幂等键、统一错误映射和可注入 `RecommendationTaskService` 端口已接入；默认运行配置仍不挂载推荐路由。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
   - `gh` 已安装但尚未登录 GitHub；Git HTTPS 凭据已成功推送 `codex/g1-runnable-skeleton`，Draft PR 仍需 `gh` 认证或在 GitHub 网页创建。
-  - G2 全量范围仍未完成：Repository/UoW、dataset manifest、Chroma/Neo4j 构建骨架和 G3 推荐 API 尚未实现；推荐能力仍保持 `can_recommend=false`。
-- `next_step`：补齐 G2 剩余数据适配器、质量清单和索引构建骨架；完成其门禁后再进入 G3。
+  - G3 MySQL-backed API service、完整任务状态机、Debug Trace 查询和前端集成尚未完成；默认运行配置仍保持 `can_recommend=false`，不能宣称系统已对外提供推荐服务。
+- `next_step`：实现 MySQL-backed `RecommendationTaskService`，用状态机和 Trace 持久化接通 API，并在全新 Compose 项目做运行态门禁。
 
 ---
 
@@ -65,8 +67,8 @@
 | 计划制定 | COMPLETED | `docs/LibraMAS_系统实施计划_安全低耦合版.md` | 本轮完成 |
 | G0 安全与规格基线 | COMPLETED | 原始 Gate 125 tests；当前回归 131 tests；安全/架构/文档/契约均 PASS | 未连接数据库 |
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
-| G2 数据与持久化 | IN_PROGRESS | `artifacts/verification/g2/g2-runtime-20260809-008/runtime.json`；迁移、seed、replay 脚本及 8 项测试 | 首个垂直切片 CONTRACT_PASS / RUNTIME_PASS；剩余 Repository/UoW、质量清单、可选索引构建骨架待完成 |
-| G3 MySQL-only推荐闭环 | NOT_STARTED | — | 依赖G2 |
+| G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
+| G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`；10 项确定性服务/迁移/API 测试 | CLI 与 opt-in API 契约 PASS；MySQL API 适配、任务状态机和 Trace 查询待完成 |
 | G4 动态多智能体闭环 | NOT_STARTED | — | 依赖G3 |
 | G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
@@ -81,8 +83,8 @@
 
 ## Working Set
 
-- `current_subtask`：G2 剩余数据适配器、数据质量清单和可选索引构建骨架；G3 仍未开始。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 8 项和前端 33 项测试通过（累计 274 项）；安全扫描 107 个文件、架构扫描 35 个文件通过；全新空卷运行证据证明 6/6/12/8 条核心数据分别导入，seed 第二次 0 新增，profile replay 第二次 0 新增，12 个外键的非破坏删除规则为 0 unsafe。
+- `current_subtask`：G3 MySQL-backed API service、任务状态机和 Debug Trace 查询；不进入 G4 多智能体状态机。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 10 项和前端 33 项测试通过（累计 289 项）；安全扫描 140 个文件、架构扫描 59 个文件通过；G2 全新卷导入 6/6/12/8 条核心事实并创建 12 条索引计划，G3 全新卷写入 1 task、15 candidate、1 record、5 item、5 explanation、1 trace，重复请求不新增；opt-in API 测试验证新建/重放、身份、场景和 fail-closed。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -101,8 +103,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G2 的可选索引和 Repository/UoW 尚未形成稳定端口；不得把当前 seed 误称为正式评价数据，也不得进入 G3 推荐闭环。
-- `next_action`：在不触碰现有卷的前提下实现 G2 剩余端口，补齐数据质量报告与构建状态机测试；完成后再申请 G3。
+- `immediate_risk`：G3 HTTP 路由目前只在显式注入服务和测试旗标时启用，尚无 MySQL-backed API 适配；推荐结果仍只适用于合成演示，不得用于正式论文评价。
+- `next_action`：把 G3 CLI 的持久化事务抽成应用服务端口，补齐状态迁移、Trace 查询和全新 Compose 双次幂等运行态验证。
 
 ---
 
@@ -232,6 +234,78 @@ Gate：G2 数据与持久化（首个垂直切片）
 配置/数据/索引版本：seed=g2-demo-v1；画像公式=profile-g2-v1；index state=6 条 PENDING；未写入 Chroma/Neo4j。
 未解决风险：G2 全量 Repository/UoW、dataset manifest、可选索引构建骨架仍待实现；合成数据不得用于正式论文评价。
 下一步唯一动作：补齐 G2 剩余适配器、数据质量清单和索引构建状态机，并为每项添加独立门禁证据；通过后再进入 G3。
+```
+
+---
+
+## G2 阶段完成记录
+
+```text
+交接ID：G2-COMPLETE-20260809-012
+Gate：G2 数据与持久化
+状态：COMPLETED / CONTRACT_PASS, RUNTIME_PASS
+时间：2026-08-09（Asia/Shanghai）
+目标：完成事实层、版本化数据清单、Repository/UoW 端口和可选索引构建骨架。
+新增文件：backend/app/catalog/；scripts/build_g2_dataset_report.py；scripts/plan_g2_indexes.py；contracts/data/g2/dataset_manifest.json；contracts/data/g2/data-quality-report-v1.json；tests/g2/ 新增 5 项。
+修改文件及原版本保存位置：G2 verifier/Make 门禁纳入数据质量、索引计划和重复运行断言；原版本由 Git 提交历史保留。
+新增数据库对象和行数：全新卷 20 张 G2 表；6 资源、6 标签、12 标签边、8 行为、8 Profile Outbox、2 声明画像历史、12 索引构建计划、12 索引 Outbox、1 配置版本。
+受控UPDATE对象和审计ID：画像当前投影仅由既有 replay 规则更新；索引计划只 INSERT IGNORE；无物理删除。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m scripts.verify_g2_runtime --run-id g2-runtime-20260809-012 --env-file .env.compose`；运行后仅 `docker compose stop mysql`。
+测试结果：G0 131 项、G1 102 项、G2 13 项、前端 33 项通过；安全扫描 140 文件 PASS；架构扫描 56 文件 PASS；文档/契约 PASS；G2 runtime PASS。
+验证证据目录：`artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`。
+配置/数据/索引版本：seed=g2-demo-v1；manifest=g2-manifest-v1；index=g2-index-v1；外部 Chroma/Neo4j 写入 0。
+未解决风险：合成数据仅为演示；G3 HTTP/API 层未完成。
+下一步唯一动作：进入 G3 MySQL-only 推荐闭环 API 接入，不修改 G2 历史事实。
+```
+
+---
+
+## G3 阶段启动记录
+
+```text
+交接ID：G3-START-20260809-003
+Gate：G3 MySQL-only 推荐闭环
+状态：IN_PROGRESS / CONTRACT_PASS, CORE_RUNTIME_PASS
+时间：2026-08-09（Asia/Shanghai）
+目标：在不依赖 Chroma、Neo4j 和外部 LLM 的情况下，完成规则意图、MySQL 召回、RRF/MMR 排序、模板解释和结果 Trace 持久化。
+新增文件：infra/mysql/migrations/002_g3_recommendation.sql；scripts/migrate_g3.py；scripts/run_g3_demo.py；scripts/verify_g3_runtime.py；backend/app/recommendation/；tests/g3/。
+修改文件及原版本保存位置：Makefile 增加 G3 迁移、demo、runtime 门禁；原版本由 Git 提交历史保留。
+新增数据库对象和行数：全新卷创建 6 张推荐表；首次 demo 写入 1 task、15 candidate、1 record、5 item、5 explanation、1 trace。
+受控UPDATE对象和审计ID：推荐结果采用 task/request 唯一键；重复请求只读已有结果，不更新或删除历史记录。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m scripts.verify_g3_runtime --run-id g3-runtime-20260809-003 --env-file .env.compose`。
+测试结果：G3 6 项确定性/迁移测试 PASS；G3 runtime PASS；默认 HTTP 推荐能力仍关闭。
+验证证据目录：`artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`。
+配置/数据/索引版本：config=rec-1.0.0；policy=policy-g3-v1；ranking=ranking-g3-v1；dataset=synthetic-demo-2026-08；optional_store_writes=0。
+未解决风险：尚未接入 FastAPI、鉴权、任务状态机和前端；结果只适用于合成演示。
+下一步唯一动作：实现 G3 API DTO/端口/异常处理和 Debug Trace 查询，保持默认 fail-closed。
+```
+
+---
+
+## G3 API 阶段记录
+
+```text
+交接ID：G3-API-20260809-004
+Gate：G3 MySQL-only 推荐闭环（API 垂直切片）
+状态：IN_PROGRESS / API_CONTRACT_PASS, RUNTIME_PENDING
+时间：2026-08-09（Asia/Shanghai）
+目标：先冻结 HTTP 输入/输出边界、用户身份、场景组合和幂等规则，再接入真正的 MySQL 应用服务。
+新增文件：backend/app/api/recommendation.py；backend/app/recommendation/ports/；tests/g3/test_recommendation_api.py。
+修改文件及原版本保存位置：main composition root 增加显式注入的 opt-in router；Recommendation domain/application 增加 transport-neutral command/result/port；原版本由 Git 提交历史保留。
+新增数据库对象和行数：0；本切片未连接数据库。
+受控UPDATE对象和审计ID：0；API fake service 仅内存返回，不写库。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m unittest -v tests.g3.test_recommendation_api tests.g3.test_recommendation_service tests.g3.test_migration_contract`；G1 API 回归测试；`python scripts/architecture_guard.py --root .`。
+测试结果：G3 API 4 项、G3 核心/迁移 6 项 PASS；G1 API 回归 22 项 PASS；架构扫描 59 文件、0 violation；默认 app 未注入服务时推荐路由不存在，显式旗标关闭时返回 503。
+验证证据目录：测试输出与本交接记录；尚未生成 G3 API 运行态证据。
+配置/数据/索引版本：API contract=v1；pipeline default=DISABLED；无新增数据版本。
+未解决风险：尚无 MySQL-backed service、状态机、Trace 查询和真实 Compose API 验证；推荐结果仅适用于合成演示。
+下一步唯一动作：从现有 CLI 事务提取 MySQL 应用服务，接入状态迁移与 Trace 查询，随后用全新隔离卷做两次 API 幂等运行态验证。
 ```
 
 ---
