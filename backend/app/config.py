@@ -75,6 +75,7 @@ class AppSettings(BaseSettings):
 
     llm_provider: Literal["mock"] = "mock"
     recommendation_pipeline_enabled: Literal[False] = False
+    debug_api_enabled: bool = False
     cors_origins: tuple[str, ...] = ("http://localhost:5173",)
 
     @field_validator("config_bundle_path", mode="before")

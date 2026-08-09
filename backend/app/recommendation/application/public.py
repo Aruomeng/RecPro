@@ -19,8 +19,20 @@ from backend.app.recommendation.domain.public import (
     RecommendationTaskCommand,
     RecommendationTaskResult,
 )
-from backend.app.recommendation.ports.public import RecommendationTaskService
-from backend.app.recommendation.ports.public import IdempotencyConflictError
+from backend.app.recommendation.ports.public import (
+    IdempotencyConflictError,
+    RecommendationTaskService,
+    StaleContextVersionError,
+    TaskStateConflictError,
+)
+
+__all__ = [
+    "IdempotencyConflictError",
+    "RecommendationTaskService",
+    "StaleContextVersionError",
+    "TaskStateConflictError",
+    "execute_recommendation",
+]
 
 
 CHANNEL_WEIGHTS = {"PROFILE": 0.35, "KEYWORD": 0.25, "TRENDING": 0.20}

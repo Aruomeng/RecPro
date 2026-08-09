@@ -18,7 +18,7 @@ G3_AS_OF ?=
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
 	test-g2 test-g3 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local \
-	migrate-g2 seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition g3-demo verify-g3-runtime verify-g3-api-runtime compose-config \
+	migrate-g2 seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime compose-config \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -110,6 +110,10 @@ migrate-g3-transition:
 	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.migrate_g3_transition --run-id "$(G3_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
 
+migrate-g3-clarification:
+	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.migrate_g3_clarification --run-id "$(G3_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+
 g3-demo:
 	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	@test -n "$(G3_USER_ID)" || { echo "G3_USER_ID is required"; exit 2; }
@@ -124,6 +128,10 @@ verify-g3-runtime:
 verify-g3-api-runtime:
 	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g3_api_runtime --run-id "$(G3_RUN_ID)" --user-id "$(G3_USER_ID)" --input-text "$(G3_INPUT_TEXT)" --env-file "$(COMPOSE_ENV_FILE)"
+
+verify-g3-clarification-runtime:
+	@test -n "$(G3_RUN_ID)" || { echo "G3_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g3_clarification_runtime --run-id "$(G3_RUN_ID)" --user-id "$(G3_USER_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 compose-config:
 	RECPRO_MYSQL_PASSWORD=validation-runtime-001 \

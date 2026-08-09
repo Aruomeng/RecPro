@@ -6,6 +6,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.errors import register_exception_handlers
+from backend.app.api.auth import PrincipalResolver
+from backend.app.api.debug import create_debug_router
 from backend.app.api.health import create_health_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
@@ -33,6 +35,8 @@ def create_app(
     configuration_state: ConfigurationState | None = None,
     recommendation_service: object | None = None,
     recommendation_api_enabled: bool = False,
+    principal_resolver: PrincipalResolver | None = None,
+    debug_api_enabled: bool | None = None,
 ) -> FastAPI:
     state = configuration_state or (
         ConfigurationState(settings=settings, is_valid=True)
@@ -40,6 +44,11 @@ def create_app(
         else load_configuration()
     )
     runtime = state.settings
+    effective_debug_api_enabled = (
+        runtime.debug_api_enabled
+        if debug_api_enabled is None
+        else debug_api_enabled
+    )
     configure_logging(runtime.log_level)
 
     mysql_probe = readiness_probe or AsyncMySQLReadinessProbe(
@@ -80,6 +89,8 @@ def create_app(
     if recommendation_service is not None and recommendation_api_enabled:
         cors_methods.append("POST")
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
+    if principal_resolver is not None or effective_debug_api_enabled:
+        cors_headers.append("Authorization")
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(runtime.cors_origins),
@@ -101,8 +112,16 @@ def create_app(
                 app_env=runtime.app_env,
                 demo_identity_enabled=runtime.app_env == "demo",
                 pipeline_enabled=recommendation_api_enabled,
+                principal_resolver=principal_resolver,
             )
         )
+        if effective_debug_api_enabled:
+            application.include_router(
+                create_debug_router(
+                    service=recommendation_service,
+                    principal_resolver=principal_resolver,
+                )
+            )
     return application
 
 

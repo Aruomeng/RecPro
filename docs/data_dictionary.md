@@ -518,7 +518,23 @@ PROFILE.APPLY_DELTA / PROFILE.UPDATED
 
 唯一约束：`(task_id, decision_no)`。策略变化新增一行，不覆盖旧决策。
 
-### 7.5 Agent 可追踪表
+### 7.5 G3 澄清与 Debug 追加事实
+
+G3 MySQL-only 垂直切片使用以下前向表承载澄清和研究审计，不回写
+`recommendation_task` 根请求事实：
+
+| 表 | 用途 | 关键不变量 |
+|---|---|---|
+| `recommendation_task_context` | 每个任务的请求/问题/答案/响应上下文版本 | `(task_id, context_version)` 唯一；澄清幂等键在任务内唯一；只 INSERT |
+| `recommendation_clarification` | 每轮问题和原始答案事实 | `(task_id, context_version)` 唯一；答案不覆盖问题 |
+| `recommendation_policy_decision` | 按决策序号保存策略输入结果 | `(task_id, decision_no)` 唯一；策略变化追加新行 |
+| `recommendation_trace_revision` | 澄清后 Trace 版本 | `(task_id, context_version)` 唯一；旧 Trace 保留 |
+
+普通用户只能读取自己的任务状态；研究管理员 Debug API 读取经过角色校验的
+context、policy 和 trace 文档，敏感输入默认只返回摘要或哈希。上述表的外键均为
+`ON DELETE RESTRICT`，迁移为前向 `CREATE TABLE IF NOT EXISTS`，不提供删除接口。
+
+### 7.6 Agent 可追踪表
 
 #### `agent_message_log`
 

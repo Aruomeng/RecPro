@@ -15,6 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Response
 from pydantic import Field, field_validator
 
+from backend.app.api.auth import PrincipalResolver, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
 from backend.app.api.models import ErrorResponse, StrictModel
@@ -22,6 +23,8 @@ from backend.app.recommendation.application.public import (
     IdempotencyConflictError,
     RecommendationTaskCommand,
     RecommendationTaskService,
+    StaleContextVersionError,
+    TaskStateConflictError,
 )
 from backend.app.shared_kernel.contracts.enums import (
     AdaptationState,
@@ -33,6 +36,7 @@ from backend.app.shared_kernel.contracts.enums import (
     TaskStatus,
     TriggerScene,
 )
+from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from backend.app.shared_kernel.contracts.errors import ErrorCode, WarningCode
 
 
@@ -69,6 +73,25 @@ class RecommendationTaskCreateRequest(StrictModel):
         if len(value) != len(set(value)):
             raise ValueError("requested_resource_types must not contain duplicates")
         return value
+
+
+class ClarificationRequest(StrictModel):
+    context_version: int = Field(ge=1)
+    answers: dict[str, str] = Field(min_length=1)
+
+    @field_validator("answers")
+    @classmethod
+    def answers_are_non_blank(cls, value: dict[str, str]) -> dict[str, str]:
+        if any(not key.strip() or not item.strip() for key, item in value.items()):
+            raise ValueError("clarification answers must contain non-blank strings")
+        return value
+
+
+class ClarificationQuestionResponse(StrictModel):
+    slot: str = Field(min_length=1)
+    question: str = Field(min_length=1)
+    options: list[str] = Field(min_length=1)
+    required: bool
 
 
 class ResourceSummaryResponse(StrictModel):
@@ -130,7 +153,7 @@ class RecommendationExecutionResponse(StrictModel):
     decision: InteractionDecisionResponse
     groups: list[RecommendationGroupResponse] | None = None
     items: list[RecommendationItemResponse] | None = None
-    questions: list[dict[str, Any]] | None = None
+    questions: list[ClarificationQuestionResponse] | None = None
     warnings: list[WarningCode]
     versions: VersionBundleResponse | None = None
 
@@ -259,12 +282,40 @@ def _require_demo_identity(
     return demo_user_id
 
 
+async def _resolve_principal(
+    *,
+    request_user_id: int | None,
+    authorization: str | None,
+    demo_user_id: int | None,
+    app_env: str,
+    demo_identity_enabled: bool,
+    principal_resolver: PrincipalResolver | None,
+) -> AuthenticatedPrincipal:
+    principal = await resolve_user_principal(
+        authorization=authorization,
+        demo_user_id=demo_user_id,
+        app_env=app_env,
+        demo_identity_enabled=demo_identity_enabled,
+        resolver=principal_resolver,
+    )
+    if request_user_id is not None and request_user_id != principal.user_id:
+        raise PublicAPIError(
+            status_code=403,
+            code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
+            message="The request user does not match the authenticated user.",
+            retryable=False,
+            details={},
+        )
+    return principal
+
+
 def create_recommendation_router(
     *,
     service: RecommendationTaskService,
     app_env: str,
     demo_identity_enabled: bool = False,
     pipeline_enabled: bool = False,
+    principal_resolver: PrincipalResolver | None = None,
 ) -> APIRouter:
     """Build the opt-in task route around an application port."""
 
@@ -298,6 +349,7 @@ def create_recommendation_router(
         demo_user_id: int | None = Header(
             default=None, alias="X-Demo-User-Id", ge=1
         ),
+        authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> RecommendationExecutionResponse:
         if not pipeline_enabled:
             raise PublicAPIError(
@@ -316,18 +368,20 @@ def create_recommendation_router(
                 details={},
             )
         _validate_request_shape(request)
-        user_id = _resolve_demo_user(
-            request=request,
+        principal = await _resolve_principal(
+            request_user_id=request.user_id,
+            authorization=authorization,
             demo_user_id=demo_user_id,
             app_env=app_env,
             demo_identity_enabled=demo_identity_enabled,
+            principal_resolver=principal_resolver,
         )
         try:
             result = await service.create_task(
                 RecommendationTaskCommand(
                     request_id=request.request_id,
                     session_id=request.session_id,
-                    user_id=user_id,
+                    user_id=principal.user_id,
                     scene=request.scene.value,
                     input_text=request.input_text,
                     resource_types=tuple(item.value for item in request.requested_resource_types),
@@ -375,6 +429,7 @@ def create_recommendation_router(
     async def get_task(
         task_id: UUID,
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
+        authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> RecommendationTaskStatusResponse:
         if not pipeline_enabled:
             raise PublicAPIError(
@@ -384,13 +439,16 @@ def create_recommendation_router(
                 retryable=False,
                 details={"recommendation_pipeline": "DISABLED"},
             )
-        user_id = _require_demo_identity(
+        principal = await _resolve_principal(
+            request_user_id=None,
+            authorization=authorization,
             demo_user_id=demo_user_id,
             app_env=app_env,
             demo_identity_enabled=demo_identity_enabled,
+            principal_resolver=principal_resolver,
         )
         try:
-            payload = await service.get_task(task_id, user_id=user_id)
+            payload = await service.get_task(task_id, user_id=principal.user_id)
         except LookupError as exc:
             raise PublicAPIError(
                 status_code=404,
@@ -400,5 +458,112 @@ def create_recommendation_router(
                 details={},
             ) from exc
         return RecommendationTaskStatusResponse.model_validate(payload)
+
+    @router.post(
+        "/recommendation-tasks/{task_id}/clarifications",
+        response_model=RecommendationExecutionResponse,
+        response_model_exclude_none=True,
+        responses={
+            200: {"model": RecommendationExecutionResponse, "headers": IDEMPOTENCY_HEADERS},
+            400: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            401: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            403: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            404: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            409: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            422: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            429: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            503: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+            504: {"model": ErrorResponse, "headers": IDEMPOTENCY_HEADERS},
+        },
+        openapi_extra={"parameters": [REQUEST_ID_PARAMETER]},
+        operation_id="recommendation_submit_clarification_v1",
+        summary="Resume the same task with clarification answers",
+        status_code=200,
+    )
+    async def submit_clarification(
+        task_id: UUID,
+        request: ClarificationRequest,
+        response: Response,
+        idempotency_key: str = Header(
+            ..., alias="Idempotency-Key", min_length=8, max_length=255
+        ),
+        demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
+        authorization: str | None = Header(default=None, alias="Authorization"),
+    ) -> RecommendationExecutionResponse:
+        if not pipeline_enabled:
+            raise PublicAPIError(
+                status_code=503,
+                code=ErrorCode.CORE_STORAGE_UNAVAILABLE,
+                message="The recommendation pipeline is disabled in this runtime.",
+                retryable=False,
+                details={"recommendation_pipeline": "DISABLED"},
+            )
+        principal = await _resolve_principal(
+            request_user_id=None,
+            authorization=authorization,
+            demo_user_id=demo_user_id,
+            app_env=app_env,
+            demo_identity_enabled=demo_identity_enabled,
+            principal_resolver=principal_resolver,
+        )
+        submit = getattr(service, "submit_clarification", None)
+        if submit is None:
+            raise PublicAPIError(
+                status_code=503,
+                code=ErrorCode.CORE_STORAGE_UNAVAILABLE,
+                message="Clarification is not available in this runtime.",
+                retryable=True,
+                details={"clarification": "UNAVAILABLE"},
+            )
+        try:
+            result = await submit(
+                task_id,
+                context_version=request.context_version,
+                answers=dict(request.answers),
+                idempotency_key=idempotency_key,
+                user_id=principal.user_id,
+            )
+        except IdempotencyConflictError as exc:
+            raise PublicAPIError(
+                status_code=409,
+                code=ErrorCode.IDEMPOTENCY_KEY_REUSED,
+                message="The idempotency key was already used with different answers.",
+                retryable=False,
+                details={},
+            ) from exc
+        except StaleContextVersionError as exc:
+            raise PublicAPIError(
+                status_code=409,
+                code=ErrorCode.STALE_CONTEXT_VERSION,
+                message="The clarification context version is stale.",
+                retryable=False,
+                details={"context_version": request.context_version},
+            ) from exc
+        except TaskStateConflictError as exc:
+            raise PublicAPIError(
+                status_code=409,
+                code=ErrorCode.TASK_STATE_CONFLICT,
+                message="The task is not waiting for clarification.",
+                retryable=False,
+                details={},
+            ) from exc
+        except LookupError as exc:
+            raise PublicAPIError(
+                status_code=404,
+                code=ErrorCode.NOT_FOUND,
+                message="The requested recommendation task was not found.",
+                retryable=False,
+                details={},
+            ) from exc
+        except ValueError as exc:
+            raise PublicAPIError(
+                status_code=422,
+                code=ErrorCode.INVALID_JSON,
+                message="Clarification answers are invalid.",
+                retryable=False,
+                details={},
+            ) from exc
+        response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
+        return RecommendationExecutionResponse.model_validate(result.payload)
 
     return router

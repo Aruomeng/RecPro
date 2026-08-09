@@ -15,6 +15,8 @@ import asyncmy
 
 from scripts.migrate_g2 import apply_statements, split_statements
 from scripts.migrate_g3 import DEFAULT_MIGRATION
+from scripts.migrate_g3_clarification import DEFAULT_MIGRATION as CLARIFICATION_MIGRATION
+from scripts.migrate_g3_transition import DEFAULT_MIGRATION as TRANSITION_MIGRATION
 from scripts.run_g3_demo import run_demo
 from scripts.validate_runtime_env import read_env, validate_compose
 
@@ -66,6 +68,20 @@ async def execute(args: argparse.Namespace) -> int:
         admin_user=migration_user,
         admin_password=migration_password,
         statements=statements,
+    )
+    await apply_statements(
+        host_port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+        database=values["RECPRO_MYSQL_DATABASE"],
+        admin_user=migration_user,
+        admin_password=migration_password,
+        statements=split_statements(TRANSITION_MIGRATION.read_text(encoding="utf-8")),
+    )
+    await apply_statements(
+        host_port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+        database=values["RECPRO_MYSQL_DATABASE"],
+        admin_user=migration_user,
+        admin_password=migration_password,
+        statements=split_statements(CLARIFICATION_MIGRATION.read_text(encoding="utf-8")),
     )
     connection = await asyncmy.connect(
         host="127.0.0.1",
