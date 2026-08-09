@@ -1,0 +1,25 @@
+{
+  "schema_version": "g2-data-quality-report-v1",
+  "manifest_version": "g2-manifest-v1",
+  "seed_sha256": "e2044bedefefeb3f14efb3417ac2aa484cb82b45c46483ae4ec99116cefe1899",
+  "status": "PASS",
+  "checks": {
+    "resource_external_ids_unique": true,
+    "tag_normalized_names_unique": true,
+    "behavior_event_uuids_unique": true,
+    "behavior_resource_references_resolve": true,
+    "resource_tag_references_resolve": true,
+    "metadata_quality_in_range": true,
+    "tag_weights_in_range": true,
+    "topic_negative_reason_explicit": true,
+    "synthetic_license_declared": true
+  },
+  "issue_count": 0,
+  "checked_counts": {
+    "resources": 6,
+    "tags": 6,
+    "resource_tag_edges": 12,
+    "declared_profiles": 2,
+    "behaviors": 8
+  }
+}

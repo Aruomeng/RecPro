@@ -1,0 +1,49 @@
+"""Dependency-free catalog values used by application services and adapters."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceSummary:
+    id: int
+    resource_type: str
+    external_id: str
+    title: str
+    authors: tuple[str, ...]
+    abstract_text: str | None
+    keywords: tuple[str, ...]
+    category_code: str | None
+    publication_year: int | None
+    availability_status: str
+    available_from: datetime
+    access_url: str | None
+    metadata_quality: float
+    is_classic: bool
+    metadata_version: int
+    language: str | None
+    difficulty_level: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ResourceTagEvidence:
+    resource_id: int
+    tag_id: int
+    normalized_name: str
+    weight: float
+    confidence: float
+    source: str
+
+
+@dataclass(frozen=True, slots=True)
+class IndexBuildPlan:
+    build_id: str
+    resource_id: int
+    target: str
+    index_version: str
+    metadata_version: int
+    content_hash: str
+    namespace_name: str
+    status: str = "PLANNED"

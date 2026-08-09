@@ -14,6 +14,8 @@ from typing import Any, Sequence
 import asyncmy
 
 from scripts.migrate_g2 import apply_statements, split_statements
+from scripts.build_g2_dataset_report import build_reports
+from scripts.plan_g2_indexes import plan_and_apply
 from scripts.replay_g2_profile import apply_replay
 from scripts.seed_g2 import insert_seed, validate_seed
 from scripts.validate_runtime_env import read_env, validate_compose
@@ -29,6 +31,8 @@ COUNT_TABLES = (
     "tag_dictionary",
     "resource_tag",
     "resource_index_state",
+    "resource_index_build",
+    "resource_index_outbox",
     "user_behavior_event",
     "profile_update_outbox",
     "user_declared_profile_history",
@@ -120,6 +124,9 @@ async def execute(args: argparse.Namespace) -> int:
     seed_bytes = SEED_PATH.read_bytes()
     seed = validate_seed(json.loads(seed_bytes.decode("utf-8")))
     seed_hash = hashlib.sha256(seed_bytes).hexdigest()
+    manifest, quality_report = build_reports(seed, seed_path=SEED_PATH, seed_bytes=seed_bytes)
+    if manifest["seed_sha256"] != seed_hash or quality_report["status"] != "PASS":
+        raise ValueError("G2 dataset manifest or quality report is not valid")
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g2" / run_id
     evidence_dir.mkdir(parents=True, exist_ok=False)
     await apply_statements(
@@ -162,6 +169,22 @@ async def execute(args: argparse.Namespace) -> int:
         seed=seed,
         env_values=env_values,
         source_hash=seed_hash,
+    )
+    first_index = await plan_and_apply(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        migration_user=migration_user,
+        migration_password=migration_password,
+        index_version="g2-index-v1",
+        apply=True,
+    )
+    second_index = await plan_and_apply(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        migration_user=migration_user,
+        migration_password=migration_password,
+        index_version="g2-index-v1",
+        apply=True,
     )
     first_profile = await apply_replay(
         host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
@@ -206,6 +229,18 @@ async def execute(args: argparse.Namespace) -> int:
         raise ValueError("G2 tag seed count is incomplete")
     if after_seed["user_behavior_event"] < len(seed["behaviors"]):
         raise ValueError("G2 behavior seed count is incomplete")
+    expected_index_rows = len(seed["resources"]) * 2
+    if after_seed["resource_index_build"] < expected_index_rows:
+        raise ValueError("G2 index build plan is incomplete")
+    if after_seed["resource_index_outbox"] < expected_index_rows:
+        raise ValueError("G2 index outbox plan is incomplete")
+    if first_index["plan_count"] != expected_index_rows or second_index["plan_count"] != expected_index_rows:
+        raise ValueError("G2 index plan count changed on repeat")
+    expected_first_insert = expected_index_rows if before_seed["resource_index_build"] == 0 else 0
+    if first_index["inserted_build_count"] != expected_first_insert:
+        raise ValueError("G2 first index plan did not respect existing build state")
+    if second_index["inserted_build_count"] != 0 or second_index["inserted_outbox_count"] != 0:
+        raise ValueError("G2 repeated index plan was not idempotent")
     if profile_summary["positive_tag_count"] <= 0 or profile_summary["negative_tag_count"] <= 0:
         raise ValueError("G2 profile replay did not produce both positive and topic-negative signals")
     if first_profile["input_hash"] != second_profile["input_hash"]:
@@ -221,6 +256,10 @@ async def execute(args: argparse.Namespace) -> int:
         "after_seed_counts": after_seed,
         "seed_first": first_seed,
         "seed_second": second_seed,
+        "dataset_manifest": manifest,
+        "data_quality_report": quality_report,
+        "index_first": first_index,
+        "index_second": second_index,
         "profile_first": first_profile,
         "profile_second": second_profile,
         "profile_summary": profile_summary,
@@ -231,6 +270,8 @@ async def execute(args: argparse.Namespace) -> int:
             "insert_ignore": 1,
             "seed_insert_only": True,
             "profile_projection_updates": True,
+            "index_plan_insert_only": True,
+            "external_store_writes": 0,
             "deletes": 0,
         },
         "verified_at": datetime.now(UTC).isoformat(),

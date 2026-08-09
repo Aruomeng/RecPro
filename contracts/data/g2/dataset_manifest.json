@@ -1,0 +1,38 @@
+{
+  "schema_version": "g2-dataset-manifest-v1",
+  "manifest_version": "g2-manifest-v1",
+  "seed_file": "contracts/data/g2/seed-v1.json",
+  "seed_sha256": "e2044bedefefeb3f14efb3417ac2aa484cb82b45c46483ae4ec99116cefe1899",
+  "seed_version": "g2-demo-v1",
+  "dataset_version": "synthetic-demo-2026-08",
+  "source": {
+    "kind": "synthetic",
+    "name": "LibraMAS G2 deterministic demonstration fixture",
+    "license": "CC0-1.0-compatible synthetic data",
+    "generated_by": "RecPro repository fixture generator"
+  },
+  "counts": {
+    "resources": 6,
+    "tags": 6,
+    "resource_tag_edges": 12,
+    "declared_profiles": 2,
+    "behaviors": 8
+  },
+  "resource_type_counts": {
+    "BOOK": 3,
+    "PAPER": 3
+  },
+  "event_type_counts": {
+    "BORROW_BOOK": 1,
+    "FAVORITE_RESOURCE": 1,
+    "NOT_INTERESTED": 1,
+    "RATE_HIGH": 1,
+    "REJECT_RECOMMENDATION": 1,
+    "VIEW_RESOURCE": 3
+  },
+  "behavior_time_range": {
+    "min": "2025-01-10T10:00:00.000Z",
+    "max": "2026-01-10T10:00:00.000Z"
+  },
+  "content_digest": "31e5e845ff133f92a51800838c35fb373fe23d45ae0d9a904c7c19478627a58c"
+}
