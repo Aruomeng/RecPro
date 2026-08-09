@@ -5,12 +5,16 @@ COMPOSE_ENV_FILE ?= .env.compose
 COMPOSE_EXAMPLE_ENV_FILE ?= .env.compose.example
 RUN_ID ?=
 BUILD_RUN_ID ?=
+G2_RUN_ID ?=
+G2_USER_ID ?=
+G2_AS_OF ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
-	verify-g0 verify-g1-local verify-g1-runtime verify-g1 compose-config \
+	test-g2 verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local \
+	migrate-g2 seed-g2 replay-g2 verify-g2-runtime compose-config \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -39,6 +43,9 @@ test-g0:
 test-g1-python:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g1 -t tests -p 'test_*.py'
 
+test-g2:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g2 -t tests -p 'test_*.py'
+
 frontend-test:
 	$(NPM) --prefix frontend run test
 
@@ -55,6 +62,26 @@ verify-g1-runtime:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g1_runtime --run-id "$(RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g1: verify-g1-local verify-g1-runtime
+
+verify-g2-local: verify-g0 test-g1-python test-g2
+
+migrate-g2:
+	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/migrate_g2.py --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+
+seed-g2:
+	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/seed_g2.py --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --apply
+
+replay-g2:
+	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(G2_USER_ID)" || { echo "G2_USER_ID is required"; exit 2; }
+	@test -n "$(G2_AS_OF)" || { echo "G2_AS_OF is required and must be an ISO-8601 UTC time"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/replay_g2_profile.py --run-id "$(G2_RUN_ID)" --user-id "$(G2_USER_ID)" --as-of "$(G2_AS_OF)" --env-file "$(COMPOSE_ENV_FILE)"
+
+verify-g2-runtime:
+	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g2_runtime --run-id "$(G2_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 compose-config:
 	RECPRO_MYSQL_PASSWORD=validation-runtime-001 \

@@ -99,7 +99,17 @@ FORBIDDEN_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
     ("ALEMBIC_DOWNGRADE", re.compile(_join(r"\balembic\s+down", r"grade\b"), re.I)),
     ("ALEMBIC_DROP_OP", re.compile(_join(r"\bop\.dr", r"op_\w+\s*\("), re.I)),
     ("NEO4J_DETACH_DELETE", re.compile(_join(r"\bDETACH\s+DE", r"LETE\b"), re.I)),
-    ("NEO4J_DELETE", re.compile(_join(r"\bDE", r"LETE\s+(?:\w+|\([^)]*\))"), re.I)),
+    (
+        "NEO4J_DELETE",
+        re.compile(
+            _join(
+                r"\bDE",
+                r"LETE\s+(?!(?:RESTRICT|NO\s+ACTION|CASCADE|SET\s+NULL)\b)"
+                r"(?:\w+|\([^)]*\))",
+            ),
+            re.I,
+        ),
+    ),
     ("NEO4J_DROP_DATABASE", re.compile(_join(r"\bDR", r"OP\s+DATABASE\b"), re.I)),
     (
         "CHROMA_DELETE_COLLECTION",

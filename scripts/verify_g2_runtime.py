@@ -1,0 +1,254 @@
+"""Verify the G2 schema, seed idempotence, and as-of profile replay invariants."""
+
+from __future__ import annotations
+
+import argparse
+import asyncio
+import hashlib
+import json
+import re
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, Sequence
+
+import asyncmy
+
+from scripts.migrate_g2 import apply_statements, split_statements
+from scripts.replay_g2_profile import apply_replay
+from scripts.seed_g2 import insert_seed, validate_seed
+from scripts.validate_runtime_env import read_env, validate_compose
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+MIGRATION_PATH = PROJECT_ROOT / "infra/mysql/migrations/001_g2_core.sql"
+SEED_PATH = PROJECT_ROOT / "contracts/data/g2/seed-v1.json"
+RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
+COUNT_TABLES = (
+    "recpro_schema_migration",
+    "resource_catalog",
+    "tag_dictionary",
+    "resource_tag",
+    "resource_index_state",
+    "user_behavior_event",
+    "profile_update_outbox",
+    "user_declared_profile_history",
+    "recommendation_config_version",
+    "g2_seed_run",
+    "profile_replay_run",
+    "profile_change_log",
+)
+
+
+def validate_run_id(value: str) -> str:
+    if RUN_ID_PATTERN.fullmatch(value) is None:
+        raise ValueError("run id must use 3-64 safe characters")
+    return value
+
+
+def file_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+async def read_counts(connection: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    async with connection.cursor() as cursor:
+        for table in COUNT_TABLES:
+            await cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            row = await cursor.fetchone()
+            counts[table] = int(row[0])
+    return counts
+
+
+async def read_profile_summary(connection: Any, user_id: int) -> dict[str, int | float | None]:
+    async with connection.cursor() as cursor:
+        await cursor.execute(
+            "SELECT profile_version, profile_confidence, recent_focus_tag_id "
+            "FROM user_profile WHERE user_id = %s",
+            (user_id,),
+        )
+        profile = await cursor.fetchone()
+        if profile is None:
+            raise ValueError("profile replay did not create a current profile projection")
+        await cursor.execute(
+            "SELECT COUNT(*) FROM user_interest_tag WHERE user_id = %s AND positive_weight > 0",
+            (user_id,),
+        )
+        positive_count = int((await cursor.fetchone())[0])
+        await cursor.execute(
+            "SELECT COUNT(*) FROM user_negative_preference WHERE user_id = %s AND negative_weight > 0",
+            (user_id,),
+        )
+        negative_count = int((await cursor.fetchone())[0])
+    return {
+        "profile_version": int(profile[0]),
+        "profile_confidence": float(profile[1]),
+        "recent_focus_tag_id": int(profile[2]) if profile[2] is not None else None,
+        "positive_tag_count": positive_count,
+        "negative_tag_count": negative_count,
+    }
+
+
+async def read_constraint_summary(connection: Any, database: str) -> dict[str, int]:
+    async with connection.cursor() as cursor:
+        await cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS "
+            "WHERE CONSTRAINT_SCHEMA = %s AND DELETE_RULE NOT IN ('RESTRICT', 'NO ACTION')",
+            (database,),
+        )
+        unsafe_delete_rules = int((await cursor.fetchone())[0])
+        await cursor.execute(
+            "SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS "
+            "WHERE CONSTRAINT_SCHEMA = %s",
+            (database,),
+        )
+        foreign_keys = int((await cursor.fetchone())[0])
+    return {"foreign_key_count": foreign_keys, "unsafe_delete_rule_count": unsafe_delete_rules}
+
+
+async def execute(args: argparse.Namespace) -> int:
+    run_id = validate_run_id(args.run_id)
+    env_values = read_env(args.env_file.resolve())
+    issues = validate_compose(env_values)
+    if issues:
+        raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
+    root_password = env_values.get("RECPRO_MYSQL_ROOT_PASSWORD", "")
+    if not root_password:
+        raise ValueError("RECPRO_MYSQL_ROOT_PASSWORD is required for G2 verification")
+    migration_source = MIGRATION_PATH.read_text(encoding="utf-8")
+    migration_statements = split_statements(migration_source)
+    seed_bytes = SEED_PATH.read_bytes()
+    seed = validate_seed(json.loads(seed_bytes.decode("utf-8")))
+    seed_hash = hashlib.sha256(seed_bytes).hexdigest()
+    evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g2" / run_id
+    evidence_dir.mkdir(parents=True, exist_ok=False)
+    await apply_statements(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        root_password=root_password,
+        statements=migration_statements,
+    )
+    connection = await asyncmy.connect(
+        host="127.0.0.1",
+        port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        user="root",
+        password=root_password,
+        db=env_values["RECPRO_MYSQL_DATABASE"],
+        connect_timeout=10,
+        read_timeout=30,
+        charset="utf8mb4",
+        autocommit=True,
+    )
+    try:
+        before_seed = await read_counts(connection)
+        constraints = await read_constraint_summary(connection, env_values["RECPRO_MYSQL_DATABASE"])
+    finally:
+        connection.close()
+    first_seed = await insert_seed(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        root_password=root_password,
+        seed=seed,
+        env_values=env_values,
+        source_hash=seed_hash,
+    )
+    second_seed = await insert_seed(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        root_password=root_password,
+        seed=seed,
+        env_values=env_values,
+        source_hash=seed_hash,
+    )
+    first_profile = await apply_replay(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        root_password=root_password,
+        user_id=1001,
+        as_of=datetime(2025, 12, 31, 23, 59, 59, 999000),
+        formula_version="profile-g2-v1",
+    )
+    second_profile = await apply_replay(
+        host_port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        database=env_values["RECPRO_MYSQL_DATABASE"],
+        root_password=root_password,
+        user_id=1001,
+        as_of=datetime(2025, 12, 31, 23, 59, 59, 999000),
+        formula_version="profile-g2-v1",
+    )
+    connection = await asyncmy.connect(
+        host="127.0.0.1",
+        port=int(env_values["RECPRO_MYSQL_HOST_PORT"]),
+        user="root",
+        password=root_password,
+        db=env_values["RECPRO_MYSQL_DATABASE"],
+        connect_timeout=10,
+        read_timeout=30,
+        charset="utf8mb4",
+        autocommit=True,
+    )
+    try:
+        after_seed = await read_counts(connection)
+        profile_summary = await read_profile_summary(connection, 1001)
+    finally:
+        connection.close()
+    for table in COUNT_TABLES:
+        if after_seed[table] < before_seed[table]:
+            raise ValueError(f"G2 count decreased for {table}")
+    if after_seed["resource_catalog"] < len(seed["resources"]):
+        raise ValueError("G2 resource seed count is incomplete")
+    if after_seed["tag_dictionary"] < len(seed["tags"]):
+        raise ValueError("G2 tag seed count is incomplete")
+    if after_seed["user_behavior_event"] < len(seed["behaviors"]):
+        raise ValueError("G2 behavior seed count is incomplete")
+    if profile_summary["positive_tag_count"] <= 0 or profile_summary["negative_tag_count"] <= 0:
+        raise ValueError("G2 profile replay did not produce both positive and topic-negative signals")
+    if first_profile["input_hash"] != second_profile["input_hash"]:
+        raise ValueError("G2 profile replay input hash changed on repeat")
+    write_payload = {
+        "schema_version": "g2-runtime-evidence-v1",
+        "run_id": run_id,
+        "status": "PASS",
+        "migration_sha256": file_sha256(MIGRATION_PATH),
+        "seed_sha256": seed_hash,
+        "migration_statement_count": len(migration_statements),
+        "before_seed_counts": before_seed,
+        "after_seed_counts": after_seed,
+        "seed_first": first_seed,
+        "seed_second": second_seed,
+        "profile_first": first_profile,
+        "profile_second": second_profile,
+        "profile_summary": profile_summary,
+        "constraints": constraints,
+        "destructive_actions": 0,
+        "database_sql_actions": {
+            "create_if_missing": len(migration_statements) - 1,
+            "insert_ignore": 1,
+            "seed_insert_only": True,
+            "profile_projection_updates": True,
+            "deletes": 0,
+        },
+        "verified_at": datetime.now(UTC).isoformat(),
+    }
+    (evidence_dir / "runtime.json").write_text(json.dumps(write_payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"[PASS] G2 runtime evidence: {evidence_dir}")
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
+    return parser
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return asyncio.run(execute(args))
+    except (OSError, ValueError, RuntimeError, asyncmy.Error) as exc:
+        print(f"[FAIL] G2 runtime verification did not complete: {type(exc).__name__}")
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

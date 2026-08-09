@@ -1,0 +1,205 @@
+{
+  "seed_version": "g2-demo-v1",
+  "dataset_version": "synthetic-demo-2026-08",
+  "source": {
+    "kind": "synthetic",
+    "name": "LibraMAS G2 deterministic demonstration fixture",
+    "license": "CC0-1.0-compatible synthetic data",
+    "generated_by": "RecPro repository fixture generator"
+  },
+  "tags": [
+    {"name": "人工智能", "normalized_name": "artificial-intelligence"},
+    {"name": "推荐系统", "normalized_name": "recommender-systems"},
+    {"name": "多智能体系统", "normalized_name": "multi-agent-systems"},
+    {"name": "智慧图书馆", "normalized_name": "digital-library"},
+    {"name": "研究方法", "normalized_name": "research-methods"},
+    {"name": "Python", "normalized_name": "python"}
+  ],
+  "resources": [
+    {
+      "resource_type": "BOOK",
+      "external_id": "g2-book-ai-foundations",
+      "title": "人工智能基础与实践",
+      "authors": ["LibraMAS Synthetic Author"],
+      "abstract": "用于验证资源目录、标签和画像重放的合成图书。",
+      "keywords": ["人工智能", "Python"],
+      "category_code": "TP18",
+      "publication_year": 2024,
+      "publisher_or_source": "Synthetic Demo Press",
+      "language": "zh-CN",
+      "difficulty_level": 2,
+      "availability_status": "AVAILABLE_BORROW",
+      "available_from": "2024-01-01T00:00:00.000Z",
+      "metadata_quality": 0.96,
+      "is_classic": false,
+      "isbn": "9780000000001",
+      "call_number": "TP18/G2/001",
+      "location": "A-01",
+      "borrowable_copies": 3,
+      "tags": [
+        {"normalized_name": "artificial-intelligence", "weight": 0.95, "confidence": 0.98, "source": "IMPORT"},
+        {"normalized_name": "python", "weight": 0.70, "confidence": 0.90, "source": "IMPORT"}
+      ]
+    },
+    {
+      "resource_type": "BOOK",
+      "external_id": "g2-book-multi-agent",
+      "title": "多智能体系统导论",
+      "authors": ["LibraMAS Synthetic Author"],
+      "abstract": "用于验证多智能体主题标签与推荐资源关系的合成图书。",
+      "keywords": ["多智能体系统", "人工智能"],
+      "category_code": "TP391",
+      "publication_year": 2025,
+      "publisher_or_source": "Synthetic Demo Press",
+      "language": "zh-CN",
+      "difficulty_level": 3,
+      "availability_status": "AVAILABLE_BORROW",
+      "available_from": "2025-01-01T00:00:00.000Z",
+      "metadata_quality": 0.94,
+      "is_classic": false,
+      "isbn": "9780000000002",
+      "call_number": "TP391/G2/002",
+      "location": "A-02",
+      "borrowable_copies": 2,
+      "tags": [
+        {"normalized_name": "multi-agent-systems", "weight": 0.98, "confidence": 0.99, "source": "IMPORT"},
+        {"normalized_name": "artificial-intelligence", "weight": 0.82, "confidence": 0.94, "source": "IMPORT"}
+      ]
+    },
+    {
+      "resource_type": "BOOK",
+      "external_id": "g2-book-library",
+      "title": "智慧图书馆服务设计",
+      "authors": ["LibraMAS Synthetic Author"],
+      "abstract": "用于验证图书馆主题、资源状态和行为事实的合成图书。",
+      "keywords": ["智慧图书馆", "研究方法"],
+      "category_code": "G25",
+      "publication_year": 2023,
+      "publisher_or_source": "Synthetic Demo Press",
+      "language": "zh-CN",
+      "difficulty_level": 2,
+      "availability_status": "AVAILABLE_BORROW",
+      "available_from": "2023-01-01T00:00:00.000Z",
+      "metadata_quality": 0.93,
+      "is_classic": false,
+      "isbn": "9780000000003",
+      "call_number": "G25/G2/003",
+      "location": "B-01",
+      "borrowable_copies": 5,
+      "tags": [
+        {"normalized_name": "digital-library", "weight": 0.97, "confidence": 0.98, "source": "IMPORT"},
+        {"normalized_name": "research-methods", "weight": 0.65, "confidence": 0.86, "source": "IMPORT"}
+      ]
+    },
+    {
+      "resource_type": "PAPER",
+      "external_id": "g2-paper-recsys",
+      "title": "可解释推荐系统的证据约束方法",
+      "authors": ["LibraMAS Synthetic Research Group"],
+      "abstract": "用于验证论文资源、推荐系统标签和时间边界的合成论文。",
+      "keywords": ["推荐系统", "研究方法"],
+      "category_code": "CS.IR",
+      "publication_year": 2025,
+      "publication_date": "2025-05-20",
+      "publisher_or_source": "Synthetic Research Venue",
+      "language": "en",
+      "difficulty_level": 3,
+      "availability_status": "AVAILABLE_ONLINE",
+      "available_from": "2025-05-20T00:00:00.000Z",
+      "access_url": "https://example.invalid/libramas/g2-paper-recsys",
+      "metadata_quality": 0.91,
+      "is_classic": false,
+      "doi": "10.0000/libramas.g2.recsys",
+      "journal_or_conference": "Synthetic Research Venue",
+      "open_access": true,
+      "tags": [
+        {"normalized_name": "recommender-systems", "weight": 0.96, "confidence": 0.97, "source": "IMPORT"},
+        {"normalized_name": "research-methods", "weight": 0.76, "confidence": 0.89, "source": "IMPORT"}
+      ]
+    },
+    {
+      "resource_type": "PAPER",
+      "external_id": "g2-paper-library",
+      "title": "面向智慧图书馆的用户兴趣建模",
+      "authors": ["LibraMAS Synthetic Research Group"],
+      "abstract": "用于验证用户行为与图书馆主题负偏好的合成论文。",
+      "keywords": ["智慧图书馆", "推荐系统"],
+      "category_code": "CS.HC",
+      "publication_year": 2024,
+      "publication_date": "2024-09-10",
+      "publisher_or_source": "Synthetic Research Venue",
+      "language": "zh-CN",
+      "difficulty_level": 2,
+      "availability_status": "AVAILABLE_ONLINE",
+      "available_from": "2024-09-10T00:00:00.000Z",
+      "access_url": "https://example.invalid/libramas/g2-paper-library",
+      "metadata_quality": 0.92,
+      "is_classic": false,
+      "doi": "10.0000/libramas.g2.library",
+      "journal_or_conference": "Synthetic Research Venue",
+      "open_access": true,
+      "tags": [
+        {"normalized_name": "digital-library", "weight": 0.94, "confidence": 0.96, "source": "IMPORT"},
+        {"normalized_name": "recommender-systems", "weight": 0.72, "confidence": 0.88, "source": "IMPORT"}
+      ]
+    },
+    {
+      "resource_type": "PAPER",
+      "external_id": "g2-paper-agents",
+      "title": "多智能体协作推荐的可复现实验框架",
+      "authors": ["LibraMAS Synthetic Research Group"],
+      "abstract": "用于验证多智能体资源标签和索引基线的合成论文。",
+      "keywords": ["多智能体系统", "推荐系统"],
+      "category_code": "CS.MA",
+      "publication_year": 2026,
+      "publication_date": "2026-02-01",
+      "publisher_or_source": "Synthetic Research Venue",
+      "language": "en",
+      "difficulty_level": 4,
+      "availability_status": "REFERENCE_ONLY",
+      "available_from": "2026-02-01T00:00:00.000Z",
+      "access_url": "https://example.invalid/libramas/g2-paper-agents",
+      "metadata_quality": 0.90,
+      "is_classic": false,
+      "doi": "10.0000/libramas.g2.agents",
+      "journal_or_conference": "Synthetic Research Venue",
+      "open_access": false,
+      "tags": [
+        {"normalized_name": "multi-agent-systems", "weight": 0.97, "confidence": 0.98, "source": "IMPORT"},
+        {"normalized_name": "recommender-systems", "weight": 0.80, "confidence": 0.90, "source": "IMPORT"}
+      ]
+    }
+  ],
+  "declared_profiles": [
+    {
+      "user_id": 1001,
+      "declared_version": 1,
+      "major": "计算机科学",
+      "grade": "硕士",
+      "research_direction": "多智能体推荐",
+      "preferred_language": "zh-CN",
+      "personalization_enabled": true,
+      "valid_from": "2025-01-01T00:00:00.000Z"
+    },
+    {
+      "user_id": 1002,
+      "declared_version": 1,
+      "major": "信息管理",
+      "grade": "博士",
+      "research_direction": "智慧图书馆",
+      "preferred_language": "zh-CN",
+      "personalization_enabled": true,
+      "valid_from": "2025-01-01T00:00:00.000Z"
+    }
+  ],
+  "behaviors": [
+    {"event_uuid": "00000000-0000-4000-8000-000000000101", "user_id": 1001, "session_id": "00000000-0000-4000-8000-000000001001", "event_type": "VIEW_RESOURCE", "resource_external_id": "g2-book-ai-foundations", "occurred_at": "2025-01-10T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000102", "user_id": 1001, "session_id": "00000000-0000-4000-8000-000000001001", "event_type": "FAVORITE_RESOURCE", "resource_external_id": "g2-book-multi-agent", "occurred_at": "2025-02-10T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000103", "user_id": 1001, "session_id": "00000000-0000-4000-8000-000000001001", "event_type": "BORROW_BOOK", "resource_external_id": "g2-book-library", "occurred_at": "2025-03-10T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000104", "user_id": 1001, "session_id": "00000000-0000-4000-8000-000000001001", "event_type": "NOT_INTERESTED", "resource_external_id": "g2-paper-library", "reason_code": "TOPIC_NOT_INTERESTED", "occurred_at": "2025-04-10T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000105", "user_id": 1001, "session_id": "00000000-0000-4000-8000-000000001001", "event_type": "VIEW_RESOURCE", "resource_external_id": "g2-paper-recsys", "occurred_at": "2026-01-10T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000201", "user_id": 1002, "session_id": "00000000-0000-4000-8000-000000002001", "event_type": "VIEW_RESOURCE", "resource_external_id": "g2-book-library", "occurred_at": "2025-02-01T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000202", "user_id": 1002, "session_id": "00000000-0000-4000-8000-000000002001", "event_type": "RATE_HIGH", "resource_external_id": "g2-paper-library", "rating": 5.0, "occurred_at": "2025-05-01T10:00:00.000Z"},
+    {"event_uuid": "00000000-0000-4000-8000-000000000203", "user_id": 1002, "session_id": "00000000-0000-4000-8000-000000002001", "event_type": "REJECT_RECOMMENDATION", "resource_external_id": "g2-paper-agents", "reason_code": "TOO_ADVANCED", "occurred_at": "2025-06-01T10:00:00.000Z"}
+  ]
+}
