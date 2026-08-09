@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：2.0
+> 状态版本：2.1
 > 更新时间：2026-08-09
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -50,13 +50,14 @@
   - G2 已完成：新增 Catalog Repository/UoW 端口与 MySQL 适配器、确定性 dataset manifest/质量报告、VECTOR/GRAPH 版本化索引计划与 Outbox 骨架；全新卷运行证据覆盖迁移、seed、画像重放、索引计划两次幂等。
   - G3 已开始：新增 MySQL-only 推荐前向迁移、规则意图、三路 MySQL 召回、RRF/有界 MMR、模板解释和可幂等 CLI 持久化演示；全新卷已产生 5 条带证据推荐项和 Trace。
   - G3 API 首个垂直切片已完成：严格 DTO、场景/Limit 校验、演示身份、请求幂等键、统一错误映射和可注入 `RecommendationTaskService` 端口已接入；默认运行配置仍不挂载推荐路由。
+  - G3 API MySQL 适配已通过真实运行态：新增前向任务状态转移审计表，API 新建/重放/状态查询和 Trace 读取均在隔离 MySQL 上通过；全程只追加写入。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
   - 人工标注与伦理流程需要在正式用户实验前完成。
   - `gh` 已安装但尚未登录 GitHub；Git HTTPS 凭据已成功推送 `codex/g1-runnable-skeleton`，Draft PR 仍需 `gh` 认证或在 GitHub 网页创建。
-  - G3 MySQL-backed API service、完整任务状态机、Debug Trace 查询和前端集成尚未完成；默认运行配置仍保持 `can_recommend=false`，不能宣称系统已对外提供推荐服务。
-- `next_step`：实现 MySQL-backed `RecommendationTaskService`，用状态机和 Trace 持久化接通 API，并在全新 Compose 项目做运行态门禁。
+  - G3 完整 Debug HTTP 管理端点、正式鉴权、Clarification 状态分支和前端集成尚未完成；默认运行配置仍保持 `can_recommend=false`，不能宣称系统已对外提供推荐服务。
+- `next_step`：补齐 research-admin 受控 Debug API 和状态机澄清分支，再进入 G4 多智能体编排。
 
 ---
 
@@ -68,7 +69,7 @@
 | G0 安全与规格基线 | COMPLETED | 原始 Gate 125 tests；当前回归 131 tests；安全/架构/文档/契约均 PASS | 未连接数据库 |
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
-| G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`；10 项确定性服务/迁移/API 测试 | CLI 与 opt-in API 契约 PASS；MySQL API 适配、任务状态机和 Trace 查询待完成 |
+| G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-003/api-runtime.json`；16 项 G3 测试 | CLI、opt-in API、MySQL 持久化、任务状态查询和 Trace 读取 PASS；正式鉴权、Debug HTTP 和 Clarification 待完成 |
 | G4 动态多智能体闭环 | NOT_STARTED | — | 依赖G3 |
 | G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
@@ -83,8 +84,8 @@
 
 ## Working Set
 
-- `current_subtask`：G3 MySQL-backed API service、任务状态机和 Debug Trace 查询；不进入 G4 多智能体状态机。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 10 项和前端 33 项测试通过（累计 289 项）；安全扫描 140 个文件、架构扫描 59 个文件通过；G2 全新卷导入 6/6/12/8 条核心事实并创建 12 条索引计划，G3 全新卷写入 1 task、15 candidate、1 record、5 item、5 explanation、1 trace，重复请求不新增；opt-in API 测试验证新建/重放、身份、场景和 fail-closed。
+- `current_subtask`：G3 research-admin Debug API、Clarification 状态分支和正式鉴权边界；不进入 G4 多智能体状态机。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 16 项和前端 33 项测试通过（累计 295 项）；安全扫描 150 个文件、架构扫描 61 个文件通过；G3 API 真实运行证据证明新建 201、重放 200、状态查询 200、5 条结果、8 条状态转移和 4 步 Trace，全程 destructive_actions=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -103,8 +104,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3 HTTP 路由目前只在显式注入服务和测试旗标时启用，尚无 MySQL-backed API 适配；推荐结果仍只适用于合成演示，不得用于正式论文评价。
-- `next_action`：把 G3 CLI 的持久化事务抽成应用服务端口，补齐状态迁移、Trace 查询和全新 Compose 双次幂等运行态验证。
+- `immediate_risk`：G3 MySQL API 仍是显式注入的 demo/test 组合根，未进入默认生产配置；推荐结果仍只适用于合成演示，不得用于正式论文评价。
+- `next_action`：完成 research-admin Debug HTTP、Clarification 状态机和正式认证适配，再评估 G3 Gate 关闭。
 
 ---
 
@@ -306,6 +307,30 @@ Gate：G3 MySQL-only 推荐闭环（API 垂直切片）
 配置/数据/索引版本：API contract=v1；pipeline default=DISABLED；无新增数据版本。
 未解决风险：尚无 MySQL-backed service、状态机、Trace 查询和真实 Compose API 验证；推荐结果仅适用于合成演示。
 下一步唯一动作：从现有 CLI 事务提取 MySQL 应用服务，接入状态迁移与 Trace 查询，随后用全新隔离卷做两次 API 幂等运行态验证。
+```
+
+---
+
+## G3 API 运行态记录
+
+```text
+交接ID：G3-API-RUNTIME-20260809-003
+Gate：G3 MySQL-only 推荐闭环（MySQL API 运行态）
+状态：IN_PROGRESS / RUNTIME_PASS
+时间：2026-08-09（Asia/Shanghai）
+目标：验证 opt-in FastAPI API 通过最小权限 runtime 用户完成推荐结果 INSERT、重复请求 replay、任务状态读取和 Trace 读取。
+新增文件：backend/app/recommendation/adapters/mysql.py；infra/mysql/migrations/003_g3_task_transition.sql；scripts/migrate_g3_transition.py；scripts/verify_g3_api_runtime.py；tests/g3/test_mysql_adapter_contract.py、test_transition_migration.py。
+修改文件及原版本保存位置：RecommendationTaskService 扩展任务/Trace 查询；API 增加 GET task 状态；Makefile 增加 transition migration 与 API runtime 门禁；原版本由 Git 提交历史保留。
+新增数据库对象和行数：仅新增 `recommendation_task_transition` 表；本次成功运行前后新增 1 task、8 transition、15 candidate、1 record、5 item、5 explanation、1 trace；此前两次验证器自身故障留下的追加记录未删除。
+受控UPDATE对象和审计ID：0；runtime 用户授权仅 SELECT/INSERT，结果与状态转移均为 INSERT-only。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m scripts.verify_g3_api_runtime --run-id g3-api-runtime-20260809-003 --user-id 1001 --input-text 多智能体推荐系统论文与图书 --env-file .env.compose`；运行后仅 `docker compose stop mysql`。
+测试结果：G3 16 项测试 PASS；API 真实运行新建 201、重放 200、`Idempotency-Replayed=true`、任务状态 200、Trace 4 步；安全扫描 150 文件 PASS；架构扫描 61 文件 PASS；destructive_actions=0。
+验证证据目录：`artifacts/verification/g3/g3-api-runtime-20260809-003/api-runtime.json`。
+配置/数据/索引版本：config=rec-1.0.0；policy=policy-g3-v1；ranking=ranking-g3-v1；dataset=synthetic-demo-2026-08；pipeline=explicit opt-in demo only。
+未解决风险：Debug HTTP 仍需 research-admin 鉴权；Clarification 分支和正式认证适配未完成；默认 Compose API 仍关闭。
+下一步唯一动作：完成受控 Debug API 与 Clarification 状态分支后，再执行 G3 Gate 关闭评审。
 ```
 
 ---
