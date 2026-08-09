@@ -1,5 +1,5 @@
-"""Profile read ports."""
+"""Profile ports."""
 
-from .public import ProfileSnapshotReader
+from .public import BehaviorAppendPort, ProfileRefreshPort, ProfileSnapshotReader
 
-__all__ = ["ProfileSnapshotReader"]
+__all__ = ["BehaviorAppendPort", "ProfileRefreshPort", "ProfileSnapshotReader"]

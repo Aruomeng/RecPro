@@ -13,7 +13,12 @@ import asyncmy
 
 from backend.app.config import AppSettings
 from backend.app.catalog.adapters.mysql import MySQLCatalogRepository
+from backend.app.feedback.adapters.mysql import MySQLFeedbackStore
+from backend.app.feedback.application.service import FeedbackApplicationService
+from backend.app.profile.adapters.behavior_mysql import MySQLBehaviorAppender
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
+from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
+from backend.app.profile.application.refresh import ProfileOutboxWorker
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
@@ -94,7 +99,44 @@ def build_research_orchestration_service(
     )
 
 
+def build_research_feedback_service(
+    settings: AppSettings,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> FeedbackApplicationService:
+    """Build the opt-in feedback path with one shared transaction boundary."""
+
+    if settings.app_env == "production":
+        raise ValueError("research feedback requires a non-production environment")
+    return FeedbackApplicationService(
+        connection_factory=connection_factory or _mysql_connection_factory(settings),
+        feedback_store=MySQLFeedbackStore(),
+        behavior_port=MySQLBehaviorAppender(),
+    )
+
+
+def build_profile_outbox_worker(
+    settings: AppSettings,
+    *,
+    connection_factory: ConnectionFactory,
+    worker_id: str,
+    formula_version: str = "profile-g2-v1",
+) -> ProfileOutboxWorker:
+    """Build a worker with an explicitly supplied, controlled-write connection."""
+
+    if settings.app_env == "production":
+        raise ValueError("profile worker requires a non-production environment")
+    return ProfileOutboxWorker(
+        connection_factory=connection_factory,
+        refresh_port=MySQLProfileRefreshAdapter(),
+        worker_id=worker_id,
+        formula_version=formula_version,
+    )
+
+
 __all__ = [
+    "build_profile_outbox_worker",
     "build_demo_orchestration_service",
+    "build_research_feedback_service",
     "build_research_orchestration_service",
 ]

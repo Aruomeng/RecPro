@@ -1,7 +1,7 @@
 # LibraMAS 核心数据字典
 
-> 文档版本：1.1.0
-> 状态：G4 Agent 执行事实草案
+> 文档版本：1.2.0
+> 状态：G5 反馈事实与画像 Outbox 第一切片
 > 日期：2026-08-09
 > 适用范围：MySQL 事实层、领域 DTO、Agent 契约和实验重放
 > 架构依据：`docs/adr/0001-modular-monolith.md`

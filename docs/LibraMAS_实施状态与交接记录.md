@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：2.5
+> 状态版本：2.6
 > 更新时间：2026-08-09
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -58,6 +58,8 @@
   - G4 真实只读端口小步已通过：新增 ProfileSnapshotReader 与 MySQL 画像投影适配器，Catalog/Profile/Semantic/Recall Agent 只依赖端口；显式组合根接入真实只读查询，固定 `evaluation_at`，并以最多两次无退避重试和 deadline fail-closed 处理依赖异常。
   - G4 真实端口隔离运行态已通过：7 次 Agent dispatch 完成，画像 event_count=4、Catalog resource_count=5、candidate_count=5；运行前后六张资源/画像事实表行数一致，端口路径 INSERT/UPDATE/DELETE 均为 0。
   - G4 显式 Demo/Research 组合根与持久化 service 已通过：根级 builder 才能装配 MySQL adapters，默认 FastAPI 不调用；持久化 service 要求冻结 `evaluation_at/deadline_at`，同一事务追加 7 message、7 result、1 trace artifact、1 final orchestration result，异常回滚且不提交。
+  - G5 第一反馈垂直切片已通过：新增曝光、反馈、资源状态的前向表和严格领域命令；反馈 UUID/行为 event UUID 幂等，曝光与行为事实同事务追加，反馈可生成受控 Profile outbox。
+  - G5 Profile outbox worker 已通过隔离 MySQL 运行态：使用显式受控写凭据 claim/apply/mark-done，基于固定 `as_of` 调用确定性画像重放；9 条待处理 outbox 全部完成，负向主题画像被物化，重复消费不增事实行。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -67,7 +69,8 @@
   - Docker CLI 的 `/usr/local/bin/docker` 是失效链接；实际 Docker Desktop 位于 `/Applications/编程/Docker.app`，本次已用绝对路径完成隔离 MySQL 验证，未删除容器、卷或数据。
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取、HTTP/API 正式接入和 Worker 级重试尚未实现；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
-- `next_step`：冻结 G4 组合根/事务证据并进入 G5 反馈事件与画像闭环；先定义只追加曝光/点击/收藏事实端口，再接入可重放画像更新。
+  - G5 当前仍未接入默认 HTTP；worker 的故障注入、DEAD 边界和受控运行凭据部署参数需在 Gate 评审前补齐。
+- `next_step`：完成 G5 worker retry/DEAD 故障注入测试与 opt-in feedback HTTP 契约，再评审 G5 Gate；默认 API 继续关闭。
 
 ---
 
@@ -81,7 +84,7 @@
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`；22 项 G3 测试 | CLI、opt-in API、正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；前端集成和正式 Token 部署配置待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
-| G5 曝光反馈画像闭环 | NOT_STARTED | — | 依赖G4 |
+| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；9 项 G5 测试；`g5-migration-check-20260809` 迁移 dry-run | 4 条前向迁移语句；曝光/反馈/行为/资源状态幂等；9 条 outbox 完成；固定 as-of replay 与负向画像物化 PASS；destructive_actions=0；HTTP、故障注入和正式 worker 参数待补 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
@@ -94,8 +97,8 @@
 
 ## Working Set
 
-- `current_subtask`：G4 显式 Demo/Research 组合根与持久化 orchestration service 已完成；下一阶段转入 G5 反馈事件与画像闭环，G3 正式认证部署参数仍保持独立待审。
-- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 28 项和前端 33 项测试通过（累计 329 项）；安全扫描 187 个文件、架构扫描 79 个文件通过；G4 三次隔离 MySQL 运行态与事务回滚/重放证据 PASS，全程 destructive_actions=0。
+- `current_subtask`：G5 第一反馈/画像闭环已完成；下一小步是 worker retry/DEAD 故障注入与 opt-in feedback HTTP，G3 正式认证部署参数仍保持独立待审。
+- `current_evidence`：G0 131 项、G1 Python 102 项、G2 13 项、G3 22 项、G4 28 项、G5 9 项和前端 33 项测试通过（累计 338 项）；安全扫描 208 个文件、架构扫描 93 个文件通过；G5 隔离 MySQL 反馈幂等、outbox 全消费和 as-of replay 证据 PASS，全程 destructive_actions=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -115,7 +118,7 @@
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：G3/G4 HTTP 仍是显式注入的 demo/test 组合根，未进入默认生产配置；推荐结果仍只适用于合成演示，不得用于正式论文评价；真实 Profile 目前是当前投影读取，恢复读取和 Worker 重试待补。
-- `next_action`：进入 G5 反馈事件/画像闭环，先以 append-only 行为事实端口、幂等事件键和安全 replay 验证为唯一小步；任何默认环境仍不得自动开启推荐。
+- `next_action`：补齐 G5 worker retry/DEAD 故障注入、重复 claim 和 opt-in feedback HTTP 契约；任何默认环境仍不得自动开启推荐。
 
 ---
 
@@ -454,6 +457,28 @@ Gate：G4 动态多智能体闭环（显式组合根/事务编排小步）
 配置/数据/索引版本：composition=research-v1；orchestrator=g4-orchestrator-v1；artifact=g4-orchestration-trace-v1；retry=max_attempts-2；evaluation_at/deadline=explicit。
 未解决风险：正式 HTTP/Worker 尚未接入该 service；数据库重启后的持久化结果恢复读取、跨请求幂等 replay 和历史画像重算待后续 Gate；G3 正式 Token 部署参数仍待审查。
 下一步唯一动作：进入 G5，新增 append-only 反馈事件端口和幂等行为事实写入，再以固定 as-of replay 验证画像更新；默认 API 仍保持关闭。
+```
+
+## G5 反馈事实与画像 Outbox 第一垂直切片记录
+
+```text
+交接ID：G5-FEEDBACK-20260809-001
+Gate：G5 曝光反馈画像闭环（第一垂直切片）
+状态：CONTRACT_PASS, LOCAL_PASS, MYSQL_RUNTIME_PASS / IN_PROGRESS
+时间：2026-08-09（Asia/Shanghai）
+目标：在默认 API 关闭的前提下，把推荐曝光、反馈、行为和资源状态作为幂等事实追加，并以受控 Profile outbox worker 完成固定 as-of 画像重放。
+新增文件：infra/mysql/migrations/006_g5_feedback_state.sql；backend/app/feedback/domain、ports、adapters、application；backend/app/profile/adapters/behavior_mysql.py、refresh_mysql.py；backend/app/profile/application/refresh.py；scripts/migrate_g5_feedback.py；scripts/verify_g5_feedback_runtime.py；tests/g5/。
+修改文件及原版本保存位置：backend/app/composition.py 增加 opt-in feedback service 与受控凭据 worker builder；Profile 端口/适配器导出；Makefile 增加 G5 migration、local test 和 runtime gate；原版本由 Git 提交历史保留。
+新增数据库对象和行数：新增 3 张前向表（recommendation_impression、recommendation_feedback、user_resource_state）；隔离 Compose MySQL 本次追加 1 条曝光、1 条反馈、2 条行为、1 条资源状态、1 条 outbox；worker 消费既有 8 条 seed outbox 与新增 1 条，共 9 条 DONE；新增 9 条 replay run、6 条 profile change log（具体前后计数保存在 runtime evidence）。
+受控UPDATE对象和审计ID：profile_update_outbox claim/status、user_profile、user_interest_tag、user_negative_preference、user_resource_state；均为受控键条件更新，无物理删除；worker 使用显式 migration 凭据，feedback runtime 使用 SELECT/INSERT runtime 凭据。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`PYTHONDONTWRITEBYTECODE=1 .venv-g1-release-py311/bin/python -m unittest discover -s tests/g5 -t tests -p 'test_*.py'`；`python -m scripts.migrate_g5_feedback --run-id g5-migration-check-20260809 --env-file .env.compose`；`python -m scripts.verify_g5_feedback_runtime --run-id g5-feedback-20260809-001 --env-file .env.compose`；验证后仅 `docker compose stop mysql`。
+测试结果：G5 9 项测试 PASS；迁移 4 条语句 dry-run PASS；MySQL 运行态验证曝光/反馈双 UUID 幂等（事实 delta=1/1/2）、反馈 outbox=1、worker 首轮 9 receipts、二次消费 delta=0、全部 outbox=DONE、固定 as-of replay 生成负向主题画像；安全扫描 208 文件 PASS；架构扫描 93 文件 PASS；`destructive_actions=0`。
+验证证据目录：`artifacts/verification/g5/g5-migration-check-20260809/migration.json`；`artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`。
+配置/数据/索引版本：migration=g5-feedback-state-v1；formula=profile-g2-v1；event facts=append-only；outbox worker=claim/apply/mark-done-v1；默认 API=disabled。
+未解决风险：HTTP feedback DTO/opt-in router、worker retry/DEAD 故障注入与重复 claim 测试、正式部署的 worker controlled-write credential scope、历史画像重算和数据库重启恢复读取待后续小步；合成数据仍不得用于正式论文评价。
+下一步唯一动作：补齐 worker retry/DEAD 故障注入和 opt-in feedback HTTP 契约，再评审 G5 Gate；不自动开启默认推荐 API。
 ```
 
 ## 阶段交接模板
