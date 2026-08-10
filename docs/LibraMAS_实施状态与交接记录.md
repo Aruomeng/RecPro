@@ -100,7 +100,7 @@
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
-| G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-001/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
+| G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
 允许的状态：`NOT_STARTED / IN_PROGRESS / BLOCKED / COMPLETED`。状态只能在证据存在后更新为COMPLETED。
@@ -623,9 +623,9 @@ Gate：G9 正式评价输入契约与冻结前置（第一小步）
 输入边界：当前默认 G2 `synthetic-demo-2026-08` 仅用于证明阻断逻辑，未创建任何虚假真实数据、许可、标注、Split 或配置 Manifest；真实 `data/evaluation/` 目录仍由用户授权后的数据准备阶段填充。
 文件删除数量：0。
 数据库物理删除数量：0。
-执行命令：`python -m unittest discover -s tests/g9 -t tests -p 'test_*.py'`；`python -m scripts.verify_evaluation_freeze_inputs --run-id eval-inputs-20260810-001`；后续将执行完整 G0-G5/G9 回归、文档/契约/架构/安全门禁和 Compose config 校验。
+执行命令：`python -m unittest discover -s tests/g9 -t tests -p 'test_*.py'`；`python -m scripts.verify_evaluation_freeze_inputs --run-id eval-inputs-20260810-002`；后续将执行完整 G0-G5/G9 回归、文档/契约/架构/安全门禁和 Compose config 校验。
 测试结果：评价输入门禁 7 项 PASS；当前输入冻结报告 `PASS_WITH_BLOCKERS`，阻断码包含 `DATASET_MANIFEST_INVALID`、`SYNTHETIC_DATASET`、`LICENSE_MANIFEST_MISSING`、`ANNOTATION_MANIFEST_MISSING`、`SPLIT_MANIFEST_MISSING`、`CONFIG_MANIFEST_MISSING`；safety.database_reads=0、database_writes=0、actual_delete_count=0、overwritten_runs=0。
-验证证据目录：`artifacts/verification/experiment-inputs/eval-inputs-20260810-001/input-freeze-report.json`（被 `.gitignore` 保护，不覆盖已有 evidence）。
+验证证据目录：`artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（被 `.gitignore` 保护，不覆盖已有 evidence；此前的 `eval-inputs-dryrun-20260810-001` 和 `eval-inputs-20260810-001` 均保留）。
 配置/数据/索引版本：manifest-schemas=evaluation-*-manifest-v1；freeze-report=evaluation-input-freeze-report-v1；dataset=synthetic-demo-2026-08（development-only）；default business API=disabled。
 未解决风险：真实评价数据来源、许可审批证据、匿名化、Track-I/Track-J 选择、盲标注及一致性、F2 Split、F3 配置、G8 发布候选和外部 IdP/JWKS/Worker 评审仍未完成；不能运行论文确认性测试。
 下一步唯一动作：在不提交身份映射和受限原始数据的前提下，依据五类 Schema 接收真实数据及许可/标注/Split 证据，逐项通过只读输入门禁后再进入 F3 配置冻结。

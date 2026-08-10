@@ -449,10 +449,14 @@ def _cross_manifest_checks(
         track = dataset.get("track")
         if isinstance(counts, Mapping):
             thresholds = (
-                ("resources", 5000),
-                ("anonymous_users", 200),
-                ("events", 30000),
-            ) if track == "TRACK_I" else (("tasks", 100),)
+                (
+                    ("resources", 5000),
+                    ("anonymous_users", 200),
+                    ("events", 30000),
+                )
+                if track == "TRACK_I"
+                else (("tasks", 100),) if track == "TRACK_J" else ()
+            )
             for field, minimum in thresholds:
                 value = counts.get(field)
                 if not isinstance(value, int) or value < minimum:
