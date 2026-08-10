@@ -45,7 +45,9 @@ class G4RealPortContractTests(unittest.TestCase):
             + "DR" + r"OP\s+(?:TABLE|DATABASE|SCHEMA))\b"
         )
         self.assertIsNone(forbidden.search(source))
-        self.assertGreaterEqual(source.count("SELECT"), 4)
+        self.assertGreaterEqual(source.count("SELECT"), 2)
+        self.assertIn("FROM user_behavior_event", source)
+        self.assertIn("FROM resource_tag", source)
 
     def test_runtime_verifier_declares_zero_writes(self) -> None:
         source = (ROOT / "scripts/verify_g4_real_ports_runtime.py").read_text(encoding="utf-8")

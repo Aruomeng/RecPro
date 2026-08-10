@@ -14,6 +14,8 @@ from backend.app.feedback.domain.public import (
     ImpressionReceipt,
 )
 from backend.app.feedback.ports.public import FeedbackStorePort
+from backend.app.observability.domain.public import StateTransition, transition_uuid
+from backend.app.observability.ports.public import StateTransitionSink
 
 
 def _canonical(value: object) -> str:
@@ -32,6 +34,9 @@ def _naive_utc(value: datetime) -> datetime:
 
 class MySQLFeedbackStore(FeedbackStorePort):
     """Use a caller-owned transaction for all feedback-owned facts."""
+
+    def __init__(self, *, transition_sink: StateTransitionSink | None = None) -> None:
+        self._transition_sink = transition_sink
 
     async def find_item(
         self,
@@ -270,14 +275,54 @@ class MySQLFeedbackStore(FeedbackStorePort):
                         "VALUES (%s, %s, %s, %s, %s, %s, %s)",
                         (command.user_id, resource_id, state["state_type"], suppress_until, behavior_event_id, _naive_utc(command.occurred_at), state_version),
                     )
+                    version_before = None
                 elif int(existing_state[1]) == behavior_event_id:
                     state_version = int(existing_state[3])
+                    version_before = None
                 else:
                     state_version = int(existing_state[3]) + 1
                     await cursor.execute(
                         "UPDATE user_resource_state SET suppress_until = %s, source_event_id = %s, "
                         "last_feedback_at = %s, state_version = %s WHERE user_id = %s AND resource_id = %s AND state_type = %s",
                         (suppress_until, behavior_event_id, _naive_utc(command.occurred_at), state_version, command.user_id, resource_id, state["state_type"]),
+                    )
+                    version_before = int(existing_state[3])
+                should_audit_state = self._transition_sink is not None and (
+                    existing_state is None or version_before is not None
+                )
+                if should_audit_state:
+                    aggregate_id = f"{command.user_id}:{resource_id}:{state['state_type']}"
+                    is_created = existing_state is None
+                    before_state = None if is_created else str(state["state_type"])
+                    transition_type = "CREATED" if is_created else "UPDATED"
+                    await self._transition_sink.append(
+                        connection,
+                        StateTransition(
+                            transition_uuid=transition_uuid(
+                                aggregate_type="USER_RESOURCE_STATE",
+                                aggregate_id=aggregate_id,
+                                transition_type=transition_type,
+                                version_after=state_version,
+                                causation_ref=f"BEHAVIOR:{behavior_event_id}",
+                            ),
+                            module_name="feedback",
+                            aggregate_type="USER_RESOURCE_STATE",
+                            aggregate_id=aggregate_id,
+                            transition_type=transition_type,
+                            from_state=before_state,
+                            to_state=str(state["state_type"]),
+                            version_before=version_before,
+                            version_after=state_version,
+                            causation_ref=f"BEHAVIOR:{behavior_event_id}",
+                            actor_type="SYSTEM",
+                            actor_ref="feedback-service",
+                            detail={
+                                "suppress_until": suppress_until.isoformat() if isinstance(suppress_until, datetime) else None,
+                                "source_event_id": behavior_event_id,
+                                "last_feedback_at": _naive_utc(command.occurred_at).isoformat(),
+                            },
+                            created_at=created_at.replace(tzinfo=UTC),
+                        ),
                     )
                 state_snapshot = {
                     "state_type": state["state_type"],

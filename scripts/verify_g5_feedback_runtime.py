@@ -38,6 +38,7 @@ MIGRATIONS = tuple(
         "004_g3_clarification_debug.sql",
         "005_g4_agent_execution.sql",
         "006_g5_feedback_state.sql",
+        "007_g5_state_transition_audit.sql",
     )
 )
 G5_TABLES = (

@@ -22,6 +22,7 @@ from backend.app.profile.adapters.behavior_mysql import MySQLBehaviorAppender
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
 from backend.app.profile.application.refresh import ProfileOutboxWorker
+from backend.app.observability.adapters.mysql_transition import MySQLStateTransitionWriter
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
@@ -111,10 +112,11 @@ def build_research_feedback_service(
 
     if settings.app_env == "production":
         raise ValueError("research feedback requires a non-production environment")
+    transition_sink = MySQLStateTransitionWriter()
     return FeedbackApplicationService(
         connection_factory=connection_factory or _mysql_connection_factory(settings),
-        feedback_store=MySQLFeedbackStore(),
-        behavior_port=MySQLBehaviorAppender(),
+        feedback_store=MySQLFeedbackStore(transition_sink=transition_sink),
+        behavior_port=MySQLBehaviorAppender(transition_sink=transition_sink),
     )
 
 
@@ -127,9 +129,10 @@ def build_research_behavior_service(
 
     if settings.app_env == "production":
         raise ValueError("research behavior ingestion requires a non-production environment")
+    transition_sink = MySQLStateTransitionWriter()
     return BehaviorApplicationService(
         connection_factory=connection_factory or _mysql_connection_factory(settings),
-        append_port=MySQLBehaviorAppender(),
+        append_port=MySQLBehaviorAppender(transition_sink=transition_sink),
         ownership_reader=MySQLFeedbackStore(),
     )
 
@@ -147,7 +150,9 @@ def build_profile_outbox_worker(
         raise ValueError("profile worker requires a non-production environment")
     return ProfileOutboxWorker(
         connection_factory=connection_factory,
-        refresh_port=MySQLProfileRefreshAdapter(),
+        refresh_port=MySQLProfileRefreshAdapter(
+            transition_sink=MySQLStateTransitionWriter()
+        ),
         worker_id=worker_id,
         formula_version=formula_version,
     )

@@ -8,6 +8,8 @@ from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 from backend.app.feedback.domain.public import ProfileRefreshReceipt
+from backend.app.observability.domain.public import StateTransition, transition_uuid
+from backend.app.observability.ports.public import StateTransitionSink
 from backend.app.profile.ports.public import ProfileRefreshPort
 from backend.app.profile.replay import (
     BehaviorForReplay,
@@ -72,6 +74,9 @@ async def _read_events(connection: Any, *, user_id: int, as_of: datetime) -> tup
 class MySQLProfileRefreshAdapter(ProfileRefreshPort):
     """Apply one outbox item with versioned, idempotent profile projection writes."""
 
+    def __init__(self, *, transition_sink: StateTransitionSink | None = None) -> None:
+        self._transition_sink = transition_sink
+
     async def claim_pending(
         self,
         connection: Any,
@@ -90,13 +95,33 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
         claimed: list[dict[str, object]] = []
         async with connection.cursor() as cursor:
             await cursor.execute(
-                "UPDATE profile_update_outbox SET status = 'DEAD', last_error = %s, "
-                "locked_at = NULL, locked_by = NULL, updated_at = %s "
-                "WHERE status IN ('PENDING','PROCESSING') AND attempts >= %s",
-                ("MAX_ATTEMPTS", now, max_attempts),
+                "SELECT id, user_id, source_event_id, status, attempts FROM profile_update_outbox "
+                "WHERE status IN ('PENDING','PROCESSING') AND attempts >= %s "
+                "ORDER BY id FOR UPDATE",
+                (max_attempts,),
             )
+            dead_rows = await cursor.fetchall()
+            for row in dead_rows:
+                outbox_id = int(row[0])
+                attempts = int(row[4])
+                await cursor.execute(
+                    "UPDATE profile_update_outbox SET status = 'DEAD', last_error = %s, "
+                    "locked_at = NULL, locked_by = NULL, updated_at = %s WHERE id = %s",
+                    ("MAX_ATTEMPTS", now, outbox_id),
+                )
+                await self._append_outbox_transition(
+                    connection,
+                    outbox_id=outbox_id,
+                    transition_type="MARK_DEAD",
+                    from_state=str(row[3]),
+                    to_state="DEAD",
+                    attempts=attempts,
+                    causation_ref=f"OUTBOX:{outbox_id}:ATTEMPT:{attempts}",
+                    actor_ref="profile-outbox-worker",
+                    detail={"source_event_id": int(row[2]), "error_code": "MAX_ATTEMPTS"},
+                )
             await cursor.execute(
-                "SELECT id, user_id, source_event_id, source_type, payload_json, attempts "
+                "SELECT id, user_id, source_event_id, status, source_type, payload_json, attempts "
                 "FROM profile_update_outbox WHERE "
                 "(status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= %s)) "
                 "OR (status = 'PROCESSING' AND locked_at <= %s AND attempts < %s) "
@@ -105,19 +130,32 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
             )
             rows = await cursor.fetchall()
             for row in rows:
+                outbox_id = int(row[0])
+                next_attempts = int(row[6]) + 1
                 await cursor.execute(
                     "UPDATE profile_update_outbox SET status = 'PROCESSING', attempts = attempts + 1, "
                     "locked_at = %s, locked_by = %s, last_error = NULL, updated_at = %s WHERE id = %s",
-                    (now, worker_id, now, int(row[0])),
+                    (now, worker_id, now, outbox_id),
+                )
+                await self._append_outbox_transition(
+                    connection,
+                    outbox_id=outbox_id,
+                    transition_type="CLAIMED",
+                    from_state=str(row[3]),
+                    to_state="PROCESSING",
+                    attempts=next_attempts,
+                    causation_ref=f"OUTBOX:{outbox_id}:ATTEMPT:{next_attempts}",
+                    actor_ref=worker_id,
+                    detail={"source_event_id": int(row[2]), "attempts": next_attempts},
                 )
                 claimed.append(
                     {
-                        "outbox_id": int(row[0]),
+                        "outbox_id": outbox_id,
                         "user_id": int(row[1]),
                         "source_event_id": int(row[2]),
-                        "source_type": str(row[3]),
-                        "payload_json": row[4],
-                        "attempts": int(row[5]) + 1,
+                        "source_type": str(row[4]),
+                        "payload_json": row[5],
+                        "attempts": next_attempts,
                     }
                 )
         return tuple(claimed)
@@ -234,6 +272,42 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
                             "delta_json, formula_version, created_at) VALUES (%s, %s, 'REPLAY', %s, %s, %s, %s, %s)",
                             (user_id, replay_event.event_id, max(0, target_version - 1), target_version, _canonical(delta), formula_version, now),
                         )
+                if self._transition_sink is not None:
+                    version_before = (
+                        current_version
+                        if current_version > 0
+                        else (None if target_version == 1 else target_version - 1)
+                    )
+                    await self._transition_sink.append(
+                        connection,
+                        StateTransition(
+                            transition_uuid=transition_uuid(
+                                aggregate_type="USER_PROFILE",
+                                aggregate_id=str(user_id),
+                                transition_type="REPLAY_APPLIED",
+                                version_after=target_version,
+                                causation_ref=f"OUTBOX:{outbox_id}:EVENT:{source_event_id}",
+                            ),
+                            module_name="profile",
+                            aggregate_type="USER_PROFILE",
+                            aggregate_id=str(user_id),
+                            transition_type="REPLAY_APPLIED",
+                            from_state=str(current_version) if current_version > 0 else None,
+                            to_state=str(target_version),
+                            version_before=version_before,
+                            version_after=target_version,
+                            causation_ref=f"OUTBOX:{outbox_id}:EVENT:{source_event_id}",
+                            actor_type="WORKER",
+                            actor_ref="profile-outbox-worker",
+                            detail={
+                                "as_of": _db_datetime(as_of).isoformat(),
+                                "formula_version": formula_version,
+                                "input_hash": snapshot.input_hash,
+                                "event_count": snapshot.event_count,
+                            },
+                            created_at=now.replace(tzinfo=UTC),
+                        ),
+                    )
         return ProfileRefreshReceipt(
             outbox_id=outbox_id,
             user_id=user_id,
@@ -248,9 +322,28 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
         now = datetime.now(UTC).replace(tzinfo=None)
         async with connection.cursor() as cursor:
             await cursor.execute(
+                "SELECT user_id, source_event_id, status, attempts, locked_by "
+                "FROM profile_update_outbox WHERE id = %s FOR UPDATE",
+                (outbox_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise ValueError("profile outbox row is missing before mark-done")
+            await cursor.execute(
                 "UPDATE profile_update_outbox SET status = 'DONE', next_retry_at = NULL, "
                 "locked_at = NULL, locked_by = NULL, last_error = NULL, updated_at = %s WHERE id = %s",
                 (now, outbox_id),
+            )
+            await self._append_outbox_transition(
+                connection,
+                outbox_id=outbox_id,
+                transition_type="MARK_DONE",
+                from_state=str(row[2]),
+                to_state="DONE",
+                attempts=int(row[3]),
+                causation_ref=f"OUTBOX:{outbox_id}:ATTEMPT:{int(row[3])}",
+                actor_ref=str(row[4]) if row[4] is not None else "profile-outbox-worker",
+                detail={"source_event_id": int(row[1])},
             )
 
     async def mark_failed(
@@ -266,10 +359,72 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
         next_retry = None if dead else now + timedelta(seconds=30)
         async with connection.cursor() as cursor:
             await cursor.execute(
+                "SELECT user_id, source_event_id, status, attempts, locked_by "
+                "FROM profile_update_outbox WHERE id = %s FOR UPDATE",
+                (outbox_id,),
+            )
+            row = await cursor.fetchone()
+            if row is None:
+                raise ValueError("profile outbox row is missing before mark-failed")
+            await cursor.execute(
                 "UPDATE profile_update_outbox SET status = %s, next_retry_at = %s, locked_at = NULL, "
                 "locked_by = NULL, last_error = %s, updated_at = %s WHERE id = %s",
                 (status, next_retry, error_code[:1000], now, outbox_id),
             )
+            await self._append_outbox_transition(
+                connection,
+                outbox_id=outbox_id,
+                transition_type="MARK_FAILED",
+                from_state=str(row[2]),
+                to_state=status,
+                attempts=int(row[3]),
+                causation_ref=f"OUTBOX:{outbox_id}:ATTEMPT:{int(row[3])}",
+                actor_ref=str(row[4]) if row[4] is not None else "profile-outbox-worker",
+                detail={"source_event_id": int(row[1]), "error_code": error_code[:1000]},
+            )
+
+    async def _append_outbox_transition(
+        self,
+        connection: Any,
+        *,
+        outbox_id: int,
+        transition_type: str,
+        from_state: str,
+        to_state: str,
+        attempts: int,
+        causation_ref: str,
+        actor_ref: str,
+        detail: dict[str, object],
+    ) -> None:
+        if self._transition_sink is None:
+            return
+        version_after = 2 * attempts + (1 if transition_type != "CLAIMED" else 0)
+        version_before = version_after - 1
+        await self._transition_sink.append(
+            connection,
+            StateTransition(
+                transition_uuid=transition_uuid(
+                    aggregate_type="PROFILE_OUTBOX",
+                    aggregate_id=str(outbox_id),
+                    transition_type=transition_type,
+                    version_after=version_after,
+                    causation_ref=causation_ref,
+                ),
+                module_name="profile",
+                aggregate_type="PROFILE_OUTBOX",
+                aggregate_id=str(outbox_id),
+                transition_type=transition_type,
+                from_state=from_state,
+                to_state=to_state,
+                version_before=version_before,
+                version_after=version_after,
+                causation_ref=causation_ref,
+                actor_type="WORKER",
+                actor_ref=actor_ref,
+                detail={**detail, "attempts": attempts},
+                created_at=datetime.now(UTC),
+            ),
+        )
 
 
 __all__ = ["MySQLProfileRefreshAdapter"]

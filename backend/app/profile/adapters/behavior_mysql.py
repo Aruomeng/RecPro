@@ -8,6 +8,8 @@ from decimal import Decimal
 from typing import Any
 
 from backend.app.feedback.domain.public import BehaviorAppendCommand, BehaviorReceipt
+from backend.app.observability.domain.public import StateTransition, transition_uuid
+from backend.app.observability.ports.public import StateTransitionSink
 from backend.app.profile.ports.public import BehaviorAppendPort
 
 
@@ -35,6 +37,9 @@ def _decimal(value: float | None) -> Decimal | None:
 
 class MySQLBehaviorAppender(BehaviorAppendPort):
     """Insert behavior facts and optional profile outbox rows without commits."""
+
+    def __init__(self, *, transition_sink: StateTransitionSink | None = None) -> None:
+        self._transition_sink = transition_sink
 
     async def append_behavior(self, connection: Any, command: BehaviorAppendCommand) -> BehaviorReceipt:
         created_at = datetime.now(UTC).replace(tzinfo=None)
@@ -116,8 +121,9 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
                     "VALUES (%s, %s, 'BEHAVIOR', %s, 'PENDING', %s, %s)",
                     (command.user_id, event_id, _canonical(payload), created_at, created_at),
                 )
+                outbox_inserted = cursor.rowcount == 1
                 await cursor.execute(
-                    "SELECT id FROM profile_update_outbox "
+                    "SELECT id, status, attempts FROM profile_update_outbox "
                     "WHERE source_event_id = %s AND source_type = 'BEHAVIOR'",
                     (event_id,),
                 )
@@ -125,6 +131,37 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
                 if outbox is None:
                     raise ValueError("profile outbox could not be resolved after append")
                 outbox_id = int(outbox[0])
+                if outbox_inserted and self._transition_sink is not None:
+                    aggregate_id = str(outbox_id)
+                    await self._transition_sink.append(
+                        connection,
+                        StateTransition(
+                            transition_uuid=transition_uuid(
+                                aggregate_type="PROFILE_OUTBOX",
+                                aggregate_id=aggregate_id,
+                                transition_type="CREATED",
+                                version_after=1,
+                                causation_ref=f"BEHAVIOR:{event_id}",
+                            ),
+                            module_name="profile",
+                            aggregate_type="PROFILE_OUTBOX",
+                            aggregate_id=aggregate_id,
+                            transition_type="CREATED",
+                            from_state=None,
+                            to_state="PENDING",
+                            version_before=None,
+                            version_after=1,
+                            causation_ref=f"BEHAVIOR:{event_id}",
+                            actor_type="SYSTEM",
+                            actor_ref="behavior-appender",
+                            detail={
+                                "source_event_id": event_id,
+                                "source_type": "BEHAVIOR",
+                                "attempts": 0,
+                            },
+                            created_at=created_at.replace(tzinfo=UTC),
+                        ),
+                    )
         return BehaviorReceipt(
             event_uuid=command.event_uuid,
             event_id=event_id,

@@ -24,6 +24,7 @@ import asyncmy
 from backend.app.composition import build_profile_outbox_worker, build_research_behavior_service
 from backend.app.config import AppSettings
 from backend.app.feedback.domain.public import BehaviorAppendCommand
+from backend.app.observability.adapters.mysql_transition import MySQLStateTransitionWriter
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
 from backend.app.profile.application.refresh import ProfileOutboxWorker
 from backend.app.shared_kernel.contracts.enums import BehaviorEventType
@@ -50,6 +51,7 @@ class InjectedRefreshFailureAdapter(MySQLProfileRefreshAdapter):
     """Use the real claim/mark SQL but fail before any profile projection write."""
 
     def __init__(self) -> None:
+        super().__init__(transition_sink=MySQLStateTransitionWriter())
         self.failure_calls = 0
 
     async def apply_claim(

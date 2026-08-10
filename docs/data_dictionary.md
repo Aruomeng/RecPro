@@ -1,7 +1,7 @@
 # LibraMAS 核心数据字典
 
-> 文档版本：1.3.0
-> 状态：G5 反馈事实、画像 Outbox 与 opt-in Interaction HTTP
+> 文档版本：1.4.0
+> 状态：G5 反馈事实、状态迁移审计、历史时点画像与 opt-in Interaction HTTP
 > 日期：2026-08-10
 > 适用范围：MySQL 事实层、领域 DTO、Agent 契约和实验重放
 > 架构依据：`docs/adr/0001-modular-monolith.md`
@@ -684,6 +684,10 @@ context、policy 和 trace 文档，敏感输入默认只返回摘要或哈希�
 | `created_at` | DATETIME(3) | 否 | 与状态变化同事务写入 |
 
 约束：`(aggregate_type, aggregate_id, version_after)` 唯一。若审计事实写入失败，对应状态更新必须整体失败；不能出现“状态已变但没有迁移证据”。
+
+G5 的 `PROFILE_OUTBOX` 版本序列使用创建=1、每次 claim=偶数、完成/失败=后续奇数；崩溃后的租约回收允许留下缺口，但不覆盖已有审计事实。`USER_RESOURCE_STATE` 使用自身递增的 `state_version`，`USER_PROFILE` 使用 `profile_version`。G5 运行态由 `MySQLStateTransitionWriter` 在调用方事务中追加并做 UUID/载荷一致性校验。
+
+历史画像读取不依赖当前投影：`MySQLProfileSnapshotReader` 只查询 `user_behavior_event` 与 `resource_tag` 中 `occurred_at <= as_of` 的事实，再调用确定性 `profile-g2-v1` 公式计算快照；读取过程不写入画像、Outbox 或审计表。
 
 ### 9.2 G4 Agent 执行事实
 
