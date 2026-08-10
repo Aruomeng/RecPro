@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/experiment/dataset-manifest.schema.json",
+  "title": "LibraMAS evaluation dataset manifest",
+  "description": "Immutable description of the source files and privacy boundary used by a formal evaluation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "dataset_version",
+    "track",
+    "source",
+    "input_files",
+    "anonymization",
+    "counts",
+    "content_digest",
+    "confirmation_eligible"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-dataset-manifest-v1"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^evaluation-dataset-v[0-9]+$"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "track": {
+      "type": "string",
+      "enum": ["TRACK_I", "TRACK_J"]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "kind", "name", "license_id", "acquired_at"],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["external", "curated", "synthetic"]
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "license_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+/-]{1,127}$"
+        },
+        "acquired_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "input_files": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "bytes", "role"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/ -]{0,255}$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "role": {
+            "type": "string",
+            "enum": ["resource", "behavior", "task", "metadata", "other"]
+          }
+        }
+      }
+    },
+    "anonymization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "method", "mapping_separated"],
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["VERIFIED", "PENDING", "NOT_REQUIRED"]
+        },
+        "method": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "mapping_separated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resources", "anonymous_users", "events", "tasks"],
+      "properties": {
+        "resources": {"type": "integer", "minimum": 0},
+        "anonymous_users": {"type": "integer", "minimum": 0},
+        "events": {"type": "integer", "minimum": 0},
+        "tasks": {"type": "integer", "minimum": 0}
+      }
+    },
+    "content_digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "confirmation_eligible": {
+      "type": "boolean"
+    }
+  }
+}

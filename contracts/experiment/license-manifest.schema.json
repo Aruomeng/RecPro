@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/experiment/license-manifest.schema.json",
+  "title": "LibraMAS evaluation license manifest",
+  "description": "Evidence and restrictions for every source contributing to a formal evaluation dataset.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "manifest_version", "dataset_version", "sources", "approval_status"],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-license-manifest-v1"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^evaluation-license-v[0-9]+$"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "license_id",
+          "license_name",
+          "permission_scope",
+          "attribution_required",
+          "evidence_ref",
+          "restrictions"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+          },
+          "license_id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+/-]{1,127}$"
+          },
+          "license_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "permission_scope": {
+            "type": "string",
+            "enum": ["RESEARCH_ONLY", "RESEARCH_AND_EDUCATIONAL", "CUSTOM_APPROVAL"]
+          },
+          "attribution_required": {
+            "type": "boolean"
+          },
+          "evidence_ref": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "evidence_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "restrictions": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1, "maxLength": 300}
+          }
+        }
+      }
+    },
+    "approval_status": {
+      "type": "string",
+      "enum": ["VERIFIED", "PENDING", "REJECTED"]
+    }
+  }
+}

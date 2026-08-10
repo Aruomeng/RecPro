@@ -836,6 +836,40 @@ FREEZE_RUN_ID=freeze-<unique-id> make verify-experiment-freeze \
 Manifest；在真实数据来源、许可、匿名化、标注和 Split 完成前，不能把它升级为
 论文确认性实验。
 
+### 25.1 五类输入 Manifest 契约
+
+正式数据入口不直接接受散落的 CSV、JSONL 或人工说明，而是接受以下五类独立
+Manifest。每个 Manifest 使用严格 JSON Schema，未知字段、路径穿越、缺少哈希或
+版本字段都会阻断门禁：
+
+| Manifest | Schema | 关键冻结内容 |
+|---|---|---|
+| Dataset | `contracts/experiment/dataset-manifest.schema.json` | 来源、Track、输入文件哈希、匿名化状态、规模和确认性资格 |
+| License | `contracts/experiment/license-manifest.schema.json` | 每个来源的许可范围、证据引用、署名和限制、审批状态 |
+| Annotation | `contracts/experiment/annotation-manifest.schema.json` | 盲标注、至少两名独立标注者、一致性、仲裁和测试集冻结 |
+| Split | `contracts/experiment/split-manifest.schema.json` | train/validation/test 文件哈希、时间边界、Group 泄漏和不重叠约束 |
+| Config | `contracts/experiment/config-manifest.schema.json` | Git Commit、依赖锁、配置 Bundle、策略/公式/索引版本、输入引用和随机种子 |
+
+`data/evaluation/` 只放经授权、脱敏且由项目负责人确认可用于研究的数据及其
+Manifest；本仓库不把任何真实用户数据、身份映射或许可证凭证提交到 Git。配置
+Manifest 的 `input_refs` 必须同时匹配四个输入 Manifest 的路径和 SHA-256，避免
+运行时悄悄替换数据或标注。
+
+### 25.2 输入冻结前置检查
+
+```bash
+EVAL_INPUT_RUN_ID=eval-inputs-<unique-id> make verify-evaluation-freeze-inputs \
+  PYTHON=.venv-g1-release-py311/bin/python
+```
+
+`scripts/verify_evaluation_freeze_inputs.py` 只读五类 Manifest 及其引用文件，
+在 `artifacts/verification/experiment-inputs/<run_id>/input-freeze-report.json`
+追加一份新证据；同名目录直接失败，不覆盖历史报告，不连接数据库，不删除或
+更新任何输入。默认使用已提交的 G2 演示 Manifest 以便立即发现 `SYNTHETIC_DATASET`
+阻断；正式数据准备完成后用 `--dataset data/evaluation/dataset_manifest.json`
+显式切换。只有报告为 `READY_FOR_FORMAL_RUN` 且 F1、F2、F3、盲标注门禁全部通过，
+才允许继续生成预测产物。
+
 ## 26. 结果解释边界
 
 - RQ1 显著：可以主张在当前数据、任务和配置下改善相应排序指标，不能自动外推到所有图书馆。

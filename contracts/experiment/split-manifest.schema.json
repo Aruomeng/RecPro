@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/experiment/split-manifest.schema.json",
+  "title": "LibraMAS evaluation split manifest",
+  "description": "Immutable train/validation/test boundaries and split files used by a formal evaluation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "dataset_version",
+    "strategy",
+    "group_key",
+    "boundaries",
+    "train",
+    "validation",
+    "test",
+    "no_overlap",
+    "user_group_leakage",
+    "event_unique",
+    "evaluation_at_policy",
+    "frozen"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-split-manifest-v1"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^evaluation-split-v[0-9]+$"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "strategy": {
+      "type": "string",
+      "enum": ["TIME", "GROUP_TIME", "STRATIFIED_GROUP"]
+    },
+    "group_key": {
+      "type": "string",
+      "enum": ["user_research_id", "source_group_id", "task_group_id", "NONE"]
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["train_end", "validation_start", "test_start"],
+      "properties": {
+        "train_end": {"type": "string", "format": "date-time"},
+        "validation_start": {"type": "string", "format": "date-time"},
+        "test_start": {"type": "string", "format": "date-time"}
+      }
+    },
+    "train": {"$ref": "#/$defs/split_file"},
+    "validation": {"$ref": "#/$defs/split_file"},
+    "test": {"$ref": "#/$defs/split_file"},
+    "no_overlap": {"const": true},
+    "user_group_leakage": {"const": false},
+    "event_unique": {"const": true},
+    "evaluation_at_policy": {
+      "type": "string",
+      "enum": ["OCCURRED_AT_LEQ_EVALUATION_AT", "TASK_STATIC_AS_OF"]
+    },
+    "frozen": {"const": true}
+  },
+  "$defs": {
+    "split_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "count"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/ -]{0,255}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

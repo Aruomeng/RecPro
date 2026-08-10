@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/experiment/config-manifest.schema.json",
+  "title": "LibraMAS formal evaluation configuration manifest",
+  "description": "Code, dependency, policy and input references frozen before opening the test set.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "config_version",
+    "status",
+    "git_commit",
+    "worktree_clean",
+    "dependency_lock_file",
+    "dependency_lock_sha256",
+    "config_bundle_file",
+    "config_bundle_sha256",
+    "policy_version",
+    "ranking_version",
+    "behavior_formula_version",
+    "prompt_version",
+    "embedding_version",
+    "graph_version",
+    "random_seed",
+    "evaluation_at_policy",
+    "input_refs"
+  ],
+  "properties": {
+    "schema_version": {"const": "evaluation-config-manifest-v1"},
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^evaluation-config-v[0-9]+$"
+    },
+    "config_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "status": {"type": "string", "enum": ["DRAFT", "FROZEN"]},
+    "git_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "worktree_clean": {"const": true},
+    "dependency_lock_file": {"$ref": "#/$defs/repository_path"},
+    "dependency_lock_sha256": {"$ref": "#/$defs/sha256"},
+    "config_bundle_file": {"$ref": "#/$defs/repository_path"},
+    "config_bundle_sha256": {"$ref": "#/$defs/sha256"},
+    "policy_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "ranking_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "behavior_formula_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "prompt_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "embedding_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "graph_version": {"type": "string", "minLength": 1, "maxLength": 128},
+    "random_seed": {"type": "integer", "minimum": 0},
+    "evaluation_at_policy": {
+      "type": "string",
+      "enum": ["OCCURRED_AT_LEQ_EVALUATION_AT", "TASK_STATIC_AS_OF"]
+    },
+    "input_refs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["dataset_manifest", "license_manifest", "annotation_manifest", "split_manifest"],
+      "properties": {
+        "dataset_manifest": {"$ref": "#/$defs/input_reference"},
+        "license_manifest": {"$ref": "#/$defs/input_reference"},
+        "annotation_manifest": {"$ref": "#/$defs/input_reference"},
+        "split_manifest": {"$ref": "#/$defs/input_reference"}
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "repository_path": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/ -]{0,255}$"
+    },
+    "input_reference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"$ref": "#/$defs/repository_path"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

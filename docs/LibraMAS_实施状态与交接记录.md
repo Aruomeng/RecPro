@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.1
+> 状态版本：3.2
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -70,6 +70,8 @@
   - 正式认证安全运行态已通过：`g5-formal-auth-20260810-001/runtime.json` 验证默认业务路由 404、合法用户 Bearer 201、非法 Token 401、Bearer 与 Demo Header 混用 403、research-admin Debug 200、普通用户/混用身份 Debug 403；该验证不连接数据库，数据库读写和破坏性动作均为 0。
   - 生产 HTTP 组合根门禁已完成：`build_production_http_app()` 只接受 production 环境、`RECPRO_PRODUCTION_HTTP_ENABLED=true`、正式 Bearer Secret 和 Recommendation/Feedback/Behavior 完整服务图；默认模块级 FastAPI 与 Compose 仍关闭，构造阶段不连接数据库。
   - 论文实验冻结前置检查已完成：`verify_experiment_freeze` 校验协议/Manifest/seed 哈希与 Git clean 状态，并以新证据报告当前 `synthetic-demo-2026-08` 只能开发/演示，缺少正式 F2 Split、标注和 F3 配置 Manifest；该检查不连接数据库、不覆盖旧 Run。
+  - 已完成正式评价输入契约第一小步：新增 Dataset、License、Annotation、Split、Config 五类严格 JSON Schema；所有关键路径、输入文件、哈希、匿名化、盲标注、一致性、时间边界、Group 泄漏和 F3 配置引用均以独立 Manifest 表达，未知字段默认拒绝。
+  - 已完成只读评价输入冻结校验器：`verify_evaluation_freeze_inputs` 验证五类 Manifest 的 JSON Schema、引用文件 SHA-256、跨 Manifest dataset_version、许可覆盖、标注仲裁、Split 安全属性、配置 Commit/依赖/Bundle 哈希和输入引用一致性；同名证据目录直接失败，不连接数据库、不删除或覆盖输入。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -80,7 +82,7 @@
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
   - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
-- `next_step`：补齐真实评价数据来源/许可、F2 Split、盲标注和 F3 配置 Manifest，并评审外部 IdP/JWKS 与 Worker 运行接线；默认 API 继续关闭。
+- `next_step`：依据五类 Manifest 契约接收并审查真实评价数据、许可证据、盲标注和 F2 Split，再生成 F3 配置 Manifest；同时评审外部 IdP/JWKS 与 Worker 运行接线；默认 API 继续关闭。
 
 ---
 
@@ -98,7 +100,7 @@
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
-| G9 冻结实验 | NOT_STARTED | — | 依赖G8 |
+| G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-001/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
 允许的状态：`NOT_STARTED / IN_PROGRESS / BLOCKED / COMPLETED`。状态只能在证据存在后更新为COMPLETED。
@@ -107,8 +109,8 @@
 
 ## Working Set
 
-- `current_subtask`：G5 opt-in HTTP、Worker retry/DEAD、同事务状态迁移审计、历史 `as_of` 只读画像重算、正式 HS256 Bearer 验证和 production HTTP 显式组合根已完成；冻结前置检查已产出，但真实评价数据和正式实验 Manifest 仍未齐备。
-- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G9 冻结前置 3 项和前端 33 项测试通过（累计 364 项）；安全扫描、架构扫描和文档/契约校验通过；正式认证/生产组合根验证均未连接数据库，冻结前置报告 `PASS_WITH_BLOCKERS`，全程 destructive_actions=0。
+- `current_subtask`：已建立五类正式评价输入 Manifest Schema 与只读校验器；当前 G2 合成 Fixture 和 F2/F3/许可/标注输入缺失仍被阻断，真实数据准备完成前不得开始确认性实验。
+- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G9 冻结前置 3 项、评价输入门禁 7 项和前端 33 项测试通过（累计 368 项）；安全扫描、架构扫描、文档/契约校验待本阶段最终回归；评价输入报告 `PASS_WITH_BLOCKERS`，全程 database_reads=0、database_writes=0、actual_delete_count=0、overwritten_runs=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -127,8 +129,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；production HTTP 仅能通过显式组合根构造，正式 Worker 接线和外部 IdP/JWKS 仍待补；实验冻结报告已证明当前数据只能用于合成演示，不得用于正式论文评价。
-- `next_action`：补齐真实数据/许可、F2 Split、盲标注、F3 配置 Manifest，并完成 Worker/外部 IdP 评审；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；production HTTP 仅能通过显式组合根构造，正式 Worker 接线和外部 IdP/JWKS 仍待补；五类输入门禁已证明当前数据只能用于合成演示，不得用于正式论文评价。
+- `next_action`：按五类 Schema 准备真实数据/许可/盲标注/F2 Split/F3 配置，并完成 Worker/外部 IdP 评审；任何默认环境仍不得自动开启推荐。
 
 ---
 
@@ -604,6 +606,29 @@ Gate：生产 HTTP 显式组合与论文实验冻结前置
 配置/数据/索引版本：production-gate=explicit-production-http-v1；protocol=1.0.0；dataset=synthetic-demo-2026-08；default business API=disabled。
 未解决风险：真实评价数据来源/许可、匿名化、F2 Split、盲标注、F3 配置 Manifest、正式 Worker 接线和外部 OIDC/JWKS 仍未完成；不得把当前合成 Fixture 用于论文确认性结论。
 下一步唯一动作：先补齐真实评价数据和冻结产物，再评审 Worker/外部 IdP；默认 API 继续关闭。
+```
+
+## 正式评价输入契约与只读冻结门禁记录
+
+```text
+交接ID：EVAL-INPUT-CONTRACT-20260810-001
+Gate：G9 正式评价输入契约与冻结前置（第一小步）
+状态：CONTRACT_PASS, LOCAL_PASS, PREFLIGHT_PASS_WITH_BLOCKERS / IN_PROGRESS
+时间：2026-08-10（Asia/Shanghai）
+目标：把真实数据来源/许可、盲标注、F2 Split 和 F3 配置拆成低耦合、高内聚的五类 Manifest，并在不连接数据库、不覆盖输入的前提下提供可复现的只读校验。
+新增文件：contracts/experiment/dataset-manifest.schema.json；contracts/experiment/license-manifest.schema.json；contracts/experiment/annotation-manifest.schema.json；contracts/experiment/split-manifest.schema.json；contracts/experiment/config-manifest.schema.json；scripts/verify_evaluation_freeze_inputs.py；tests/g9/test_evaluation_freeze_inputs.py。
+修改文件及原版本保存位置：Makefile 增加 `verify-evaluation-freeze-inputs` 与 `EVAL_INPUT_RUN_ID`；docs/experiment_protocol.md 增加五类 Manifest 契约和输入冻结命令；本交接记录更新；原版本由 Git 提交历史保留。
+新增数据库对象和行数：0；校验器只读取本地文件和 Git 元数据，数据库读写均为 0。
+受控UPDATE对象和审计ID：0；不适用。
+输入边界：当前默认 G2 `synthetic-demo-2026-08` 仅用于证明阻断逻辑，未创建任何虚假真实数据、许可、标注、Split 或配置 Manifest；真实 `data/evaluation/` 目录仍由用户授权后的数据准备阶段填充。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m unittest discover -s tests/g9 -t tests -p 'test_*.py'`；`python -m scripts.verify_evaluation_freeze_inputs --run-id eval-inputs-20260810-001`；后续将执行完整 G0-G5/G9 回归、文档/契约/架构/安全门禁和 Compose config 校验。
+测试结果：评价输入门禁 7 项 PASS；当前输入冻结报告 `PASS_WITH_BLOCKERS`，阻断码包含 `DATASET_MANIFEST_INVALID`、`SYNTHETIC_DATASET`、`LICENSE_MANIFEST_MISSING`、`ANNOTATION_MANIFEST_MISSING`、`SPLIT_MANIFEST_MISSING`、`CONFIG_MANIFEST_MISSING`；safety.database_reads=0、database_writes=0、actual_delete_count=0、overwritten_runs=0。
+验证证据目录：`artifacts/verification/experiment-inputs/eval-inputs-20260810-001/input-freeze-report.json`（被 `.gitignore` 保护，不覆盖已有 evidence）。
+配置/数据/索引版本：manifest-schemas=evaluation-*-manifest-v1；freeze-report=evaluation-input-freeze-report-v1；dataset=synthetic-demo-2026-08（development-only）；default business API=disabled。
+未解决风险：真实评价数据来源、许可审批证据、匿名化、Track-I/Track-J 选择、盲标注及一致性、F2 Split、F3 配置、G8 发布候选和外部 IdP/JWKS/Worker 评审仍未完成；不能运行论文确认性测试。
+下一步唯一动作：在不提交身份映射和受限原始数据的前提下，依据五类 Schema 接收真实数据及许可/标注/Split 证据，逐项通过只读输入门禁后再进入 F3 配置冻结。
 ```
 
 ## 阶段交接模板

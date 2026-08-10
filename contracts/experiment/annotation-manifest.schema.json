@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/experiment/annotation-manifest.schema.json",
+  "title": "LibraMAS blinded annotation manifest",
+  "description": "Frozen annotation provenance, blinding and reliability evidence for Track-J or E2.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "dataset_version",
+    "annotation_version",
+    "track",
+    "label_file",
+    "annotators",
+    "blinding",
+    "reliability",
+    "adjudication",
+    "test_set_frozen"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "evaluation-annotation-manifest-v1"
+    },
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^evaluation-annotation-v[0-9]+$"
+    },
+    "dataset_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "annotation_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "track": {
+      "type": "string",
+      "enum": ["TRACK_J", "E2"]
+    },
+    "label_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "rows"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/ -]{0,255}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "rows": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "annotators": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["annotator_id", "independent"],
+        "properties": {
+          "annotator_id": {
+            "type": "string",
+            "pattern": "^annotator-[A-Za-z0-9][A-Za-z0-9._-]{1,63}$"
+          },
+          "independent": {
+            "type": "boolean",
+            "const": true
+          }
+        }
+      }
+    },
+    "blinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["system_identity_hidden", "rank_hidden", "algorithm_score_hidden"],
+      "properties": {
+        "system_identity_hidden": {"const": true},
+        "rank_hidden": {"const": true},
+        "algorithm_score_hidden": {"const": true}
+      }
+    },
+    "reliability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["metric", "value", "threshold", "meets_threshold"],
+      "properties": {
+        "metric": {
+          "type": "string",
+          "enum": ["COHEN_KAPPA", "FLEISS_KAPPA", "WEIGHTED_COHEN_KAPPA"]
+        },
+        "value": {"type": "number", "minimum": -1, "maximum": 1},
+        "threshold": {"type": "number", "minimum": -1, "maximum": 1},
+        "meets_threshold": {"type": "boolean"}
+      }
+    },
+    "adjudication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "original_labels_preserved"],
+      "properties": {
+        "status": {"type": "string", "enum": ["COMPLETE", "PENDING"]},
+        "artifact_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "original_labels_preserved": {"const": true}
+      }
+    },
+    "test_set_frozen": {
+      "type": "boolean",
+      "const": true
+    }
+  }
+}
