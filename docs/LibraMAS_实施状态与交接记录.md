@@ -124,7 +124,7 @@
 ## Working Set
 
 - `current_subtask`：图书图计划和 Neo4j 只读预演已完成；等待用户明确确认 `Lib` 数据用于本地研究原型（或提供许可证据），确认前不得执行 `--apply`。DeepSeek 适配器已准备，未配置 key、未联网。
-- `current_evidence`：在原有 376 项基础上新增图计划/DeepSeek 定向测试 19 项；`lib-graph-plan-20260810-002` 为 PASS_WITH_WARNINGS（76 文件、15,538 来源记录、63,388 节点、191,865 关系）；`lib-graph-dry-run-20260810-002` 为 PASS，目标 0/0、database_writes=0；本阶段文件删除、数据库物理删除、覆盖和目标数据写入均为 0。
+- `current_evidence`：当前 Python 全量 `unittest discover` 共 354 项通过，其中图计划/DeepSeek 定向测试 19 项；`lib-graph-plan-20260810-002` 为 PASS_WITH_WARNINGS（76 文件、15,538 来源记录、63,388 节点、191,865 关系）；`lib-graph-dry-run-20260810-002` 为 PASS，目标 0/0、database_writes=0；本阶段文件删除、数据库物理删除、覆盖和目标数据写入均为 0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
