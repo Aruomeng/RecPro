@@ -821,6 +821,21 @@ REP-10 运行前后受保护对象数量未减少
 
 任一门禁未通过时只能执行开发/验证 Run，不能将结果标记为论文确认性实验。
 
+仓库提供只读前置检查：
+
+```bash
+FREEZE_RUN_ID=freeze-<unique-id> make verify-experiment-freeze \
+  PYTHON=.venv-g1-release-py311/bin/python
+```
+
+检查器只读取协议、数据 Manifest、种子和 Git 状态，并把一份新的
+`freeze-preflight.json` 写入 `artifacts/verification/experiment/<run_id>/`；
+同名目录存在时直接失败，不覆盖旧证据，也不连接数据库。当前仓库的
+`synthetic-demo-2026-08` 仅用于开发/演示，因此预期报告为
+`PASS_WITH_BLOCKERS`，明确标记 `DEMO_FIXTURE`、缺少正式 Split/标注和配置
+Manifest；在真实数据来源、许可、匿名化、标注和 Split 完成前，不能把它升级为
+论文确认性实验。
+
 ## 26. 结果解释边界
 
 - RQ1 显著：可以主张在当前数据、任务和配置下改善相应排序指标，不能自动外推到所有图书馆。

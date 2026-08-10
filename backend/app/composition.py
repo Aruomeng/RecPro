@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 import asyncmy
+from fastapi import FastAPI
 
 from backend.app.config import AppSettings
 from backend.app.catalog.adapters.mysql import MySQLCatalogRepository
@@ -67,6 +68,56 @@ def build_formal_auth_resolver(
     """
 
     return build_formal_principal_resolver(settings)
+
+
+def build_production_http_app(
+    settings: AppSettings,
+    *,
+    recommendation_service: object | None,
+    feedback_service: object | None,
+    behavior_service: object | None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+) -> FastAPI:
+    """Build the complete production HTTP graph behind explicit fail-closed gates.
+
+    This function is intentionally separate from :func:`create_app`: the
+    default module-level app remains health-only, while a deployment must opt
+    into the production flag, formal authentication, all G3/G5 services, and
+    both business API flags in one reviewed call.  No database connection is
+    opened while constructing the graph.
+    """
+
+    if settings.app_env != "production":
+        raise ValueError("production HTTP composition requires RECPRO_APP_ENV=production")
+    if not settings.production_http_enabled:
+        raise ValueError("production HTTP composition is disabled by configuration")
+    if not settings.auth_enabled or settings.auth_jwt_secret is None:
+        raise ValueError("production HTTP composition requires formal bearer authentication")
+    if recommendation_service is None:
+        raise ValueError("production HTTP composition requires recommendation service")
+    if feedback_service is None or behavior_service is None:
+        raise ValueError("production HTTP composition requires feedback and behavior services")
+    principal_resolver = build_formal_auth_resolver(settings)
+    if principal_resolver is None:
+        raise ValueError("production HTTP composition could not build bearer resolver")
+
+    # Import locally to keep the main module's default app and this explicit
+    # production graph free of an import cycle.
+    from backend.app.main import create_app
+
+    return create_app(
+        settings=settings,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        recommendation_service=recommendation_service,
+        recommendation_api_enabled=True,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        feedback_api_enabled=True,
+        principal_resolver=principal_resolver,
+        debug_api_enabled=False,
+    )
 
 
 def _build_mysql_orchestration_service(
@@ -178,6 +229,7 @@ def build_profile_outbox_worker(
 
 __all__ = [
     "build_formal_auth_resolver",
+    "build_production_http_app",
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
     "build_research_behavior_service",

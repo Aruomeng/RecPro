@@ -21,6 +21,7 @@ G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
 G5_AUDIT_RUN_ID ?=
 FORMAL_AUTH_RUN_ID ?=
+FREEZE_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -30,6 +31,7 @@ FORMAL_AUTH_RUN_ID ?=
 	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g5-runtime compose-config \
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
+	verify-experiment-freeze \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -128,6 +130,10 @@ verify-g5-audit-replay-runtime:
 verify-formal-auth-runtime:
 	@test -n "$(FORMAL_AUTH_RUN_ID)" || { echo "FORMAL_AUTH_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_formal_auth_runtime --run-id "$(FORMAL_AUTH_RUN_ID)"
+
+verify-experiment-freeze:
+	@test -n "$(FREEZE_RUN_ID)" || { echo "FREEZE_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_experiment_freeze --run-id "$(FREEZE_RUN_ID)"
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

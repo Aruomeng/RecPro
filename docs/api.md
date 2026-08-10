@@ -66,6 +66,12 @@ UUID：小写标准形式
 默认 Compose 与 `create_app()` 继续保持业务 API 关闭。Secret 只能放在被
 忽略的部署环境文件或 Secret 管理系统中，不能提交到仓库。
 
+完整生产 HTTP 图只能由 `build_production_http_app()` 组合根创建。它额外要求
+`RECPRO_APP_ENV=production`、`RECPRO_PRODUCTION_HTTP_ENABLED=true`、正式
+Bearer Secret、Recommendation/Feedback/Behavior 三个应用服务和完整 API
+开关；缺少任一条件都会在构造阶段 fail-closed。该组合根不在模块级
+`backend.app.main:app` 中自动调用，Compose 默认值仍为 `false`。
+
 ### 2.3 请求追踪
 
 客户端可以发送：

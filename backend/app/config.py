@@ -76,6 +76,9 @@ class AppSettings(BaseSettings):
     llm_provider: Literal["mock"] = "mock"
     recommendation_pipeline_enabled: Literal[False] = False
     debug_api_enabled: bool = False
+    # A production HTTP composition must opt in separately from authentication
+    # and from the default health-only application.
+    production_http_enabled: bool = False
     # Formal HTTP authentication is deliberately opt-in.  The default local
     # runtime has no bearer secret and therefore cannot accidentally expose a
     # credential-backed route.
