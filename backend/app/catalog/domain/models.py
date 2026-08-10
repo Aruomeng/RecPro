@@ -38,6 +38,16 @@ class ResourceTagEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class GraphRecallEvidence:
+    """A read-only graph hit keyed by the catalog's stable external ID."""
+
+    external_id: str
+    score: float
+    matched_terms: tuple[str, ...]
+    graph_version: str
+
+
+@dataclass(frozen=True, slots=True)
 class IndexBuildPlan:
     build_id: str
     resource_id: int

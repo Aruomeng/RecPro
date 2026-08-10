@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/data/intake/mysql-book-plan.schema.json",
+  "title": "LibraMAS append-only MySQL book catalog plan",
+  "description": "A deterministic, database-free plan that maps the versioned book graph to the existing G2 catalog tables.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "can_import",
+    "license_status",
+    "graph_version",
+    "source_graph_plan",
+    "source_graph_plan_sha256",
+    "available_from_date",
+    "available_from",
+    "table_counts",
+    "book_count",
+    "tag_count",
+    "resource_tag_count",
+    "quality",
+    "safety",
+    "generated_at",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "mysql-book-plan-v1"},
+    "status": {"enum": ["READY_FOR_MYSQL_REVIEW", "PASS_WITH_WARNINGS", "PASS_WITH_BLOCKERS"]},
+    "can_import": {"type": "boolean"},
+    "license_status": {"enum": ["PENDING_USER_CONFIRMATION", "CONFIRMED_LOCAL_RESEARCH", "LICENSED_OPEN_DATA"]},
+    "graph_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "source_graph_plan": {"type": "string", "minLength": 1, "maxLength": 255},
+    "source_graph_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "available_from_date": {"type": "string", "format": "date"},
+    "available_from": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"},
+    "table_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_catalog", "resource_book_detail", "tag_dictionary", "resource_tag", "resource_index_state"],
+      "properties": {
+        "resource_catalog": {"type": "integer", "minimum": 0},
+        "resource_book_detail": {"type": "integer", "minimum": 0},
+        "tag_dictionary": {"type": "integer", "minimum": 0},
+        "resource_tag": {"type": "integer", "minimum": 0},
+        "resource_index_state": {"type": "integer", "minimum": 0}
+      }
+    },
+    "book_count": {"type": "integer", "minimum": 0},
+    "tag_count": {"type": "integer", "minimum": 0},
+    "resource_tag_count": {"type": "integer", "minimum": 0},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["warnings", "blockers"],
+      "properties": {
+        "warnings": {"type": "array", "items": {"type": "object"}},
+        "blockers": {"type": "array", "items": {"type": "object"}}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_reads", "database_writes", "expected_delete_count", "actual_delete_count", "overwritten_inputs"],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 0},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "expected_delete_count": {"type": "integer", "minimum": 0},
+        "actual_delete_count": {"type": "integer", "minimum": 0},
+        "overwritten_inputs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_catalog", "resource_book_detail", "tag_dictionary", "resource_tag", "resource_index_state"],
+      "properties": {
+        "resource_catalog": {"$ref": "#/$defs/artifact"},
+        "resource_book_detail": {"$ref": "#/$defs/artifact"},
+        "tag_dictionary": {"$ref": "#/$defs/artifact"},
+        "resource_tag": {"$ref": "#/$defs/artifact"},
+        "resource_index_state": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "count"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 255},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "external_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "nullable_string": {"type": ["string", "null"]},
+    "bounded_score": {"type": "number", "minimum": 0, "maximum": 1},
+    "mysql_datetime": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"},
+    "resource_catalog_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["resource_type", "external_id", "title", "authors", "abstract", "keywords", "category_code", "publication_year", "publication_date", "publisher_or_source", "language", "difficulty_level", "availability_status", "available_from", "access_url", "metadata_quality", "is_classic", "metadata_version"],
+      "properties": {
+        "resource_type": {"const": "BOOK"},
+        "external_id": {"$ref": "#/$defs/external_id"},
+        "title": {"type": "string", "minLength": 1, "maxLength": 500},
+        "authors": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "abstract": {"$ref": "#/$defs/nullable_string"},
+        "keywords": {"type": "array", "items": {"type": "string", "minLength": 1}},
+        "category_code": {"$ref": "#/$defs/nullable_string"},
+        "publication_year": {"type": ["integer", "null"], "minimum": 1000, "maximum": 2200},
+        "publication_date": {"type": ["string", "null"], "format": "date"},
+        "publisher_or_source": {"$ref": "#/$defs/nullable_string"},
+        "language": {"$ref": "#/$defs/nullable_string"},
+        "difficulty_level": {"type": ["integer", "null"], "minimum": 1, "maximum": 4},
+        "availability_status": {"const": "REFERENCE_ONLY"},
+        "available_from": {"$ref": "#/$defs/mysql_datetime"},
+        "access_url": {"$ref": "#/$defs/nullable_string"},
+        "metadata_quality": {"$ref": "#/$defs/bounded_score"},
+        "is_classic": {"type": "boolean"},
+        "metadata_version": {"const": 1}
+      }
+    },
+    "resource_book_detail_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "isbn", "call_number", "location", "borrowable_copies"],
+      "properties": {
+        "external_id": {"$ref": "#/$defs/external_id"},
+        "isbn": {"$ref": "#/$defs/nullable_string"},
+        "call_number": {"$ref": "#/$defs/nullable_string"},
+        "location": {"$ref": "#/$defs/nullable_string"},
+        "borrowable_copies": {"type": "integer", "minimum": 0}
+      }
+    },
+    "tag_dictionary_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "normalized_name", "kind"],
+      "properties": {
+        "name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "normalized_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "kind": {"enum": ["kw", "topic", "clc"]}
+      }
+    },
+    "resource_tag_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "normalized_name", "weight", "confidence", "source"],
+      "properties": {
+        "external_id": {"$ref": "#/$defs/external_id"},
+        "normalized_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "weight": {"$ref": "#/$defs/bounded_score"},
+        "confidence": {"$ref": "#/$defs/bounded_score"},
+        "source": {"const": "IMPORT"}
+      }
+    },
+    "resource_index_state_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["external_id", "content_hash", "embedding_status", "graph_status", "graph_version"],
+      "properties": {
+        "external_id": {"$ref": "#/$defs/external_id"},
+        "content_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "embedding_status": {"const": "PENDING"},
+        "graph_status": {"const": "READY"},
+        "graph_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"}
+      }
+    }
+  }
+}

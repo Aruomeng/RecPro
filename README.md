@@ -4,13 +4,13 @@ LibraMAS 是一个面向智慧图书馆知识资源推荐的研究生论文原�
 
 ## 当前状态
 
-G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 正在接入真实图书数据和可选检索能力。`Lib` 已完成 76 个 CSV 的只读规范化和版本化图计划预演（15,538 条来源记录、63,388 个节点、191,865 条关系），但尚未写入数据库。默认 HTTP/API 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
+G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 正在接入真实图书数据和可选检索能力。`Lib` 已完成 76 个 CSV 的只读规范化，并将版本化图 `lib-books-v1-20260810` 追加导入独立 Neo4j（15,538 条来源记录、63,388 个节点、191,865 条关系）；MySQL 书目事实层已生成可审计 ChangePlan 但尚未写入，Neo4j 只读图召回端口已实现并完成独立查询验证，尚未默认接线。默认 HTTP/API 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和图计划只读校验，再由 `scripts/import_book_graph.py` 以显式 `--apply` 追加到带 `graph_version` 的 Neo4j 影子图；实体/关系见 [图书图谱模型与导入契约](docs/book_graph_model.md)。当前没有外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；DeepSeek 适配器已准备但默认关闭，密钥只能通过本地忽略的环境配置注入，禁止提交到 Git。
 
 数据库管理员凭据只保存在本机 `.env.user-secrets`（权限 `0600`，已被 `.gitignore` 忽略），不进入应用日志或提交。MySQL 应用运行账号仍保持最小权限；`root` 仅作为后续受控管理/迁移凭据使用。Neo4j Community 只提供默认 `neo4j` 数据库，因此 RecPro 使用独立 Compose 实例和独立数据卷隔离于本机已有 Neo4j；不会连接本机 `7474/7687` 上的既有图。
 
-当前已创建新的 RecPro Neo4j 隔离实例 `recpro-library-neo4j-20260810a`，使用独立数据卷和本地端口 `62475/62688`，初始节点/关系为 `0/0`。原有 RecPro 验证实例和本机已有大图均保留，不迁移、不复用。
+当前 RecPro Neo4j 隔离实例为 `recpro-library-neo4j-20260810a`，使用独立数据卷和本地端口 `62475/62688`，图版本 `lib-books-v1-20260810` 当前为 63,388 节点、191,865 关系；原有 RecPro 验证实例和本机已有大图均保留，不迁移、不复用。
 
 ## 核心文档
 
@@ -27,6 +27,7 @@ G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立
 - [图书数据接入契约](contracts/data/intake/book-intake-manifest.schema.json)
 - [书目图谱模型与导入契约](docs/book_graph_model.md)
 - [书目图计划 Schema](contracts/data/intake/book-graph-plan.schema.json)
+- [MySQL 书目计划 Schema](contracts/data/intake/mysql-book-plan.schema.json)
 
 ## 最高优先级安全约束
 

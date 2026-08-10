@@ -32,6 +32,13 @@ BOOK_GRAPH_GRAPH_VERSION ?=
 BOOK_GRAPH_LICENSE_STATUS ?= PENDING_USER_CONFIRMATION
 BOOK_GRAPH_PLAN_DIR ?=
 BOOK_GRAPH_SECRET_ENV_FILE ?= .env.user-secrets
+MYSQL_BOOK_PLAN_RUN_ID ?=
+MYSQL_BOOK_GRAPH_PLAN_DIR ?=
+MYSQL_BOOK_AVAILABLE_FROM ?= 2026-08-10T00:00:00Z
+MYSQL_BOOK_PLAN_DIR ?=
+MYSQL_BOOK_IMPORT_RUN_ID ?=
+MYSQL_BOOK_PREFLIGHT_RUN_ID ?=
+MYSQL_BOOK_MYSQL_ENV_FILE ?= .env.compose
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -43,6 +50,7 @@ BOOK_GRAPH_SECRET_ENV_FILE ?= .env.user-secrets
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
+	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -179,6 +187,26 @@ import-book-graph:
 	@test -n "$(BOOK_GRAPH_PLAN_DIR)" || { echo "BOOK_GRAPH_PLAN_DIR is required and must point to a reviewed plan directory"; exit 2; }
 	@test "$(BOOK_GRAPH_LICENSE_STATUS)" != "PENDING_USER_CONFIRMATION" || { echo "BOOK_GRAPH_LICENSE_STATUS must be explicitly confirmed before import"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_book_graph --run-id "$(BOOK_GRAPH_IMPORT_RUN_ID)" --plan-dir "$(BOOK_GRAPH_PLAN_DIR)" --env-file "$(BOOK_GRAPH_SECRET_ENV_FILE)" --license-status "$(BOOK_GRAPH_LICENSE_STATUS)" --apply
+
+build-mysql-book-plan:
+	@test -n "$(MYSQL_BOOK_PLAN_RUN_ID)" || { echo "MYSQL_BOOK_PLAN_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(MYSQL_BOOK_GRAPH_PLAN_DIR)" || { echo "MYSQL_BOOK_GRAPH_PLAN_DIR is required and must point to a reviewed graph plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_mysql_book_plan --run-id "$(MYSQL_BOOK_PLAN_RUN_ID)" --graph-plan-dir "$(MYSQL_BOOK_GRAPH_PLAN_DIR)" --available-from "$(MYSQL_BOOK_AVAILABLE_FROM)"
+
+verify-mysql-book-plan:
+	@test -n "$(MYSQL_BOOK_IMPORT_RUN_ID)" || { echo "MYSQL_BOOK_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(MYSQL_BOOK_PLAN_DIR)" || { echo "MYSQL_BOOK_PLAN_DIR is required and must point to a reviewed MySQL plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_mysql_book_catalog --run-id "$(MYSQL_BOOK_IMPORT_RUN_ID)" --plan-dir "$(MYSQL_BOOK_PLAN_DIR)" --env-file "$(MYSQL_BOOK_MYSQL_ENV_FILE)"
+
+preflight-mysql-book-catalog:
+	@test -n "$(MYSQL_BOOK_PREFLIGHT_RUN_ID)" || { echo "MYSQL_BOOK_PREFLIGHT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(MYSQL_BOOK_PLAN_DIR)" || { echo "MYSQL_BOOK_PLAN_DIR is required and must point to a reviewed MySQL plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_mysql_book_catalog --run-id "$(MYSQL_BOOK_PREFLIGHT_RUN_ID)" --plan-dir "$(MYSQL_BOOK_PLAN_DIR)" --env-file "$(MYSQL_BOOK_MYSQL_ENV_FILE)" --preflight-db
+
+import-mysql-book-catalog:
+	@test -n "$(MYSQL_BOOK_IMPORT_RUN_ID)" || { echo "MYSQL_BOOK_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(MYSQL_BOOK_PLAN_DIR)" || { echo "MYSQL_BOOK_PLAN_DIR is required and must point to a reviewed MySQL plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_mysql_book_catalog --run-id "$(MYSQL_BOOK_IMPORT_RUN_ID)" --plan-dir "$(MYSQL_BOOK_PLAN_DIR)" --env-file "$(MYSQL_BOOK_MYSQL_ENV_FILE)" --apply --confirm-mysql-write
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

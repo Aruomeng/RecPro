@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
-from backend.app.catalog.domain.models import ResourceSummary, ResourceTagEvidence
+from backend.app.catalog.domain.models import GraphRecallEvidence, ResourceSummary, ResourceTagEvidence
 
 
 class CatalogRepository(Protocol):
@@ -37,3 +37,15 @@ class CatalogUnitOfWork(Protocol):
     async def commit(self) -> None: ...
 
     async def rollback(self) -> None: ...
+
+
+class GraphRecallPort(Protocol):
+    """Read-only graph recall boundary; it never owns a write transaction."""
+
+    async def recall(
+        self,
+        *,
+        terms: tuple[str, ...],
+        graph_version: str,
+        limit: int,
+    ) -> tuple[GraphRecallEvidence, ...]: ...

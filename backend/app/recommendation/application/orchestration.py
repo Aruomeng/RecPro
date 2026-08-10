@@ -18,7 +18,7 @@ from backend.app.recommendation.agents.real_agents import (
 )
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
-from backend.app.catalog.ports.public import CatalogRepository
+from backend.app.catalog.ports.public import CatalogRepository, GraphRecallPort
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
 
@@ -35,6 +35,8 @@ def build_port_orchestrator(
     catalog: CatalogRepository,
     profile: ProfileSnapshotReader,
     *,
+    graph: GraphRecallPort | None = None,
+    graph_version: str | None = None,
     retry_policy: RetryPolicy = RetryPolicy(),
 ) -> RecommendationOrchestrator:
     """Compose read-only Catalog/Profile Agents without exposing adapters to HTTP."""
@@ -51,7 +53,10 @@ def build_port_orchestrator(
                 catalog, retry_policy=retry_policy
             ),
             "CandidateRecallAgent": CatalogCandidateRecallAgent(
-                catalog, retry_policy=retry_policy
+                catalog,
+                graph=graph,
+                graph_version=graph_version,
+                retry_policy=retry_policy,
             ),
         }
     )

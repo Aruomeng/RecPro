@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid5
 
-from backend.app.catalog.ports.public import CatalogRepository
+from backend.app.catalog.ports.public import CatalogRepository, GraphRecallPort
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.agents.base import (
     Agent,
@@ -241,9 +241,13 @@ class CatalogCandidateRecallAgent:
         self,
         catalog: CatalogRepository,
         *,
+        graph: GraphRecallPort | None = None,
+        graph_version: str | None = None,
         retry_policy: RetryPolicy = RetryPolicy(),
     ) -> None:
         self._catalog = catalog
+        self._graph = graph
+        self._graph_version = graph_version
         self._retry_policy = retry_policy
 
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
@@ -298,6 +302,24 @@ class CatalogCandidateRecallAgent:
             for signal in (profile.get("signals", []) if isinstance(profile, dict) else [])
             if isinstance(signal, dict) and signal.get("tag_id") is not None
         }
+        graph_hits: dict[str, Any] = {}
+        graph_attempts = 0
+        graph_warning: tuple[str, ...] = ()
+        if self._graph is not None and self._graph_version and terms:
+            try:
+                graph_results, graph_attempts = await call_with_retry(
+                    lambda: self._graph.recall(
+                        terms=tuple(sorted(terms)),
+                        graph_version=self._graph_version or "",
+                        limit=limit,
+                    ),
+                    operation_name="catalog.graph_recall",
+                    deadline_at=message.deadline_at,
+                    policy=self._retry_policy,
+                )
+                graph_hits = {item.external_id: item for item in graph_results}
+            except DependencyCallFailed:
+                graph_warning = ("GRAPH_RECALL_UNAVAILABLE",)
         candidates: list[dict[str, object]] = []
         for resource in eligible:
             searchable = " ".join((resource.title, *resource.keywords)).lower()
@@ -313,13 +335,20 @@ class CatalogCandidateRecallAgent:
                     for tag in tags_by_resource.get(resource.id, ())
                 ),
             )
-            score = max(0.0, min(1.0, 0.65 * keyword_score + 0.35 * profile_score))
+            graph_hit = graph_hits.get(resource.external_id)
+            graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
+            score = max(0.0, min(1.0, 0.50 * keyword_score + 0.25 * profile_score + 0.25 * graph_score))
+            channels = ["MYSQL"]
+            evidence_ref = f"catalog:resource:{resource.id}:metadata:{resource.metadata_version}"
+            if graph_hit is not None:
+                channels.append("GRAPH")
+                evidence_ref += f":graph:{graph_hit.graph_version}"
             candidates.append(
                 {
                     "resource_id": resource.id,
-                    "channel": "MYSQL",
+                    "channel": "+".join(channels),
                     "score": round(score, 6),
-                    "evidence_ref": f"catalog:resource:{resource.id}:metadata:{resource.metadata_version}",
+                    "evidence_ref": evidence_ref,
                 }
             )
         candidates.sort(key=lambda item: (-float(item["score"]), int(item["resource_id"])))
@@ -328,15 +357,19 @@ class CatalogCandidateRecallAgent:
             message,
             agent_name=self.name,
             agent_version=self.version,
-            payload={"candidates": selected, "candidate_count": len(selected), "channels": ["MYSQL"]},
+            payload={
+                "candidates": selected,
+                "candidate_count": len(selected),
+                "channels": ["MYSQL"] + (["GRAPH"] if graph_hits else []),
+            },
             confidence=0.8 if selected else 0.3,
             status=AgentResultStatus.SUCCESS if selected else AgentResultStatus.PARTIAL,
-            warnings=("CATALOG_EMPTY",) if not selected else (),
+            warnings=(("CATALOG_EMPTY",) if not selected else ()) + graph_warning,
             fallback_used=False,
             tool_calls=(
                 {"operation": "catalog.list_resources.recall", "attempts": resource_attempts, "outcome": "SUCCESS"},
                 {"operation": "catalog.list_resource_tags.recall", "attempts": tag_attempts, "outcome": "SUCCESS"},
-            ),
+            ) + (({"operation": "catalog.graph_recall", "attempts": graph_attempts, "outcome": "SUCCESS"},) if graph_hits else ()),
         )
 
 

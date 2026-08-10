@@ -55,4 +55,12 @@ ISBN 冲突不强行合并：相同 ISBN 出现多个核心书目指纹时，Boo
 3. 只有计划的 `license_status` 已明确为 `CONFIRMED_LOCAL_RESEARCH` 或 `LICENSED_OPEN_DATA`，并显式传入 `--apply`，才会在隔离目标创建唯一约束并按批次追加写入。
 4. 写入后按 `graph_version` 和全库分别计数；计划数与实际不一致即失败。报告保存在新建的 `artifacts/verification/book-graph-import/<run_id>/`，不覆盖旧证据。
 
-当前首轮计划：76 个 CSV、15,538 条来源记录、63,388 个节点、191,865 条关系；状态 `PASS_WITH_WARNINGS`，警告为 371 条 ISBN 规范化问题，目标库仍为 0/0。由于数据来源许可尚未由项目负责人明确确认，当前只执行了只读预演，未写入书目数据。
+当前图版本：76 个 CSV、15,538 条来源记录、63,388 个节点、191,865 条关系；计划状态 `PASS_WITH_WARNINGS`，警告为 371 条 ISBN 规范化问题。用户确认本地研究授权后，`lib-books-v1-20260810` 已追加到独立目标并完成幂等复验，最终计数保持 63,388/191,865。
+
+## MySQL 事实层映射与只读召回
+
+`scripts/build_mysql_book_plan.py` 将同一 `graph_version` 的 `Book` 节点和标签关系映射为现有 G2 五张表的 JSONL ChangePlan：`resource_catalog`、`resource_book_detail`、`tag_dictionary`、`resource_tag`、`resource_index_state`。计划只使用稳定 `external_id`，不提前猜测 MySQL 自增 ID；详情见 [MySQL 书目计划 Schema](../contracts/data/intake/mysql-book-plan.schema.json)。
+
+`scripts/import_mysql_book_catalog.py` 默认只做计划完整性校验和干跑。实际追加必须同时提供 `--apply --confirm-mysql-write`，非空目标还要显式 `--allow-nonempty-target`；导入先检查资源、标签和索引状态冲突，再使用 `INSERT IGNORE`，不提供删除、清空、更新或覆盖路径。本轮仅生成计划并完成干跑，未写入 MySQL。
+
+应用侧的 `Neo4jGraphReader` 实现 `GraphRecallPort`，只发送参数化 `MATCH` 查询，固定 `Book.graph_version`，返回稳定外部 ID 和可解释匹配词。该端口可选接入 `CandidateRecallAgent`，默认组合根仍不自动启用图召回或外部 DeepSeek。
