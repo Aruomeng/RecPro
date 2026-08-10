@@ -647,7 +647,7 @@ Gate：G6 可选检索与解释（数据平面、书目接入前置）
 修改文件及原版本保存位置：Makefile 增加 `verify-book-intake`、`verify-data-plane-runtime` 和对应 Run ID；.gitignore 忽略本地 `data/incoming/books/`；README.md、docs/experiment_protocol.md 与本交接记录增加数据入口和当前依赖事实；原版本由 Git 提交历史保留。
 数据平面结果：Compose 项目 `recpro-g2-tianyuhang-20260809a` 的 MySQL/Neo4j 均 healthy；MySQL 表数量 40；Neo4j 节点/关系 0/0；干净工作区报告绑定提交 `a49b7a86b7b037c629e172202de49e393b26bce7`。
 新增数据库对象和行数：0；只读检查执行 MySQL SELECT 1 次、Neo4j count 查询 2 次；没有迁移、导入或业务写入。
-受控UPDATE对象和审计ID：0；数据库物理删除数量：0；文件删除数量：0；覆盖数量：0；服务启停动作：0。
+受控UPDATE对象和审计ID：0；数据库物理删除数量：0；文件删除数量：0；覆盖数量：0；只读验证器服务启停动作：0（前置 `up -d` 仅启动/复用隔离服务，未执行 stop/down/rm 或卷删除）。
 输入边界：用户尚未提供书目 JSONL/原始抓取文件、来源许可或字段说明；未创建、伪造或导入任何书目数据。干净工作区 intake 报告按设计为 `PASS_WITH_BLOCKERS`，唯一阻断码为 `INTAKE_MANIFEST_MISSING`。
 执行命令：`python -m unittest discover -s tests/g6 -t tests -p 'test_*.py'`；`make DATA_PLANE_RUN_ID=data-plane-20260810-003 verify-data-plane-runtime`；`make BOOK_INTAKE_RUN_ID=books-intake-preflight-20260810-002 verify-book-intake`；`docker compose --env-file .env.compose up -d mysql neo4j`（仅启动/复用服务，未执行 down、rm、volume 删除或迁移）。
 测试结果：G6 8 项单元测试 PASS；数据平面只读报告 PASS；MySQL/Neo4j 查询与安全计数符合预期；intake 无输入时安全阻断。
