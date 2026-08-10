@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from contextlib import contextmanager
 from datetime import UTC, datetime
 import hashlib
 import json
+import logging
 from pathlib import Path
 import re
 from typing import Any, Mapping, Sequence
@@ -32,6 +34,25 @@ PLAN_SCHEMA_VERSION = "mysql-book-plan-v1"
 ALLOWED_LICENSE_STATUSES = {"CONFIRMED_LOCAL_RESEARCH", "LICENSED_OPEN_DATA"}
 PLAN_STATUSES = {"READY_FOR_MYSQL_REVIEW", "PASS_WITH_WARNINGS"}
 CHUNK_SIZE = 400
+
+
+class _ExpectedDuplicateWarningFilter(logging.Filter):
+    """Keep asyncmy's expected INSERT IGNORE warnings out of evidence logs."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not str(record.getMessage()).startswith("Duplicate entry ")
+
+
+@contextmanager
+def _suppress_expected_duplicate_warnings():
+    # asyncmy.cursors uses ``logging.getLogger(__package__)``, i.e. ``asyncmy``.
+    logger = logging.getLogger("asyncmy")
+    warning_filter = _ExpectedDuplicateWarningFilter()
+    logger.addFilter(warning_filter)
+    try:
+        yield
+    finally:
+        logger.removeFilter(warning_filter)
 
 
 def resolve_repository_path(value: str | Path, *, label: str) -> Path:
@@ -575,12 +596,16 @@ async def execute(args: argparse.Namespace) -> int:
             }
         )
     if args.apply:
-        result = await apply_plan(
-            values=values,
-            plan=plan,
-            rows_by_table=rows_by_table,
-            allow_nonempty_target=args.allow_nonempty_target,
-        )
+        # INSERT IGNORE is intentional for append-only/idempotent replays.  The
+        # driver logs one warning for every already-present key; suppress only
+        # that expected message while preserving all other importer failures.
+        with _suppress_expected_duplicate_warnings():
+            result = await apply_plan(
+                values=values,
+                plan=plan,
+                rows_by_table=rows_by_table,
+                allow_nonempty_target=args.allow_nonempty_target,
+            )
         payload.update(
             {
                 "status": "APPLIED",

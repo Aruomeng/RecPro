@@ -61,6 +61,6 @@ ISBN 冲突不强行合并：相同 ISBN 出现多个核心书目指纹时，Boo
 
 `scripts/build_mysql_book_plan.py` 将同一 `graph_version` 的 `Book` 节点和标签关系映射为现有 G2 五张表的 JSONL ChangePlan：`resource_catalog`、`resource_book_detail`、`tag_dictionary`、`resource_tag`、`resource_index_state`。计划只使用稳定 `external_id`，不提前猜测 MySQL 自增 ID；详情见 [MySQL 书目计划 Schema](../contracts/data/intake/mysql-book-plan.schema.json)。
 
-`scripts/import_mysql_book_catalog.py` 默认只做计划完整性校验和干跑。实际追加必须同时提供 `--apply --confirm-mysql-write`，非空目标还要显式 `--allow-nonempty-target`；导入先检查资源、标签和索引状态冲突，再使用 `INSERT IGNORE`，不提供删除、清空、更新或覆盖路径。本轮仅生成计划并完成干跑，未写入 MySQL。
+`scripts/import_mysql_book_catalog.py` 默认只做计划完整性校验和干跑。实际追加必须同时提供 `--apply --confirm-mysql-write`，非空目标还要显式 `--allow-nonempty-target`；导入先检查资源、标签和索引状态冲突，再使用 `INSERT IGNORE`，不提供删除、清空、更新或覆盖路径。用户确认目标 `recpro-g2-tianyuhang-20260809a` 的本地研究追加写入后，`mysql-book-import-20260810-002` 已将计划追加到 `recpro` 数据库；前后目标表总数为 `resource_catalog=14,989`、`resource_book_detail=14,986`、`tag_dictionary=8,522`、`resource_tag=70,762`、`resource_index_state=14,989`，其中本次新增 14,983 本书、8,516 个标签和 70,750 条资源标签关系。`mysql-book-import-idempotency-20260810-004` 复跑前后计数完全一致；独立只读核验确认重复外部 ID 为 0、图版本 READY/PENDING 索引为 14,983、标签引用全部可解析。导入器仅过滤 asyncmy 输出的预期 `Duplicate entry ...` 日志，避免污染证据，不改变 append-only 语义。
 
 应用侧的 `Neo4jGraphReader` 实现 `GraphRecallPort`，只发送参数化 `MATCH` 查询，固定 `Book.graph_version`，返回稳定外部 ID 和可解释匹配词。该端口可选接入 `CandidateRecallAgent`，默认组合根仍不自动启用图召回或外部 DeepSeek。

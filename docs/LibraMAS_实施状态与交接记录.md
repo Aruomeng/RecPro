@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.9
+> 状态版本：4.0
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -44,7 +44,7 @@
   - 已完成 `book-graph-plan-v1` Schema、实体/关系模型、确定性节点/三元组构建器、SHA-256 绑定和只读 Neo4j 导入预演；已生成 `lib-graph-plan-20260810-002`，预演读取目标 0/0 且数据库写入 0。
   - 已完成用户授权后的 Neo4j 追加导入：首轮导入 63,388 个节点、191,865 条关系和 10 个唯一约束；同一 graph_version 第二次幂等复验前后计数不变，未产生重复数据。
   - 已完成 MySQL 书目事实层的数据库无关 ChangePlan：映射 `resource_catalog`、`resource_book_detail`、`tag_dictionary`、`resource_tag`、`resource_index_state` 五张现有表；计划包含 14,983 本书、8,516 个标签和 70,750 条资源标签关系，状态 `PASS_WITH_WARNINGS`，安全计数为 0 读/0 写。
-  - 已完成 MySQL 计划严格 Schema、行级校验和显式双确认导入器；默认干跑不连接数据库，实际写入必须同时提供 `--apply --confirm-mysql-write`，非空目标还需单独 `--allow-nonempty-target`。当前只执行了干跑，未写入 MySQL。
+  - 已完成 MySQL 计划严格 Schema、行级校验和显式双确认导入器；默认干跑不连接数据库，实际写入必须同时提供 `--apply --confirm-mysql-write`，非空目标还需单独 `--allow-nonempty-target`。用户确认后已在隔离 Compose MySQL 追加 14,983 本书、8,516 个标签和 70,750 条标签关系，并完成幂等复跑与独立只读计数核验。
   - 已完成 Neo4j 只读图召回端口与可选 Agent 通道：使用参数化 Cypher、固定 `graph_version` 和外部稳定 ID 映射，不提供任何图写操作；对独立图目标的只读查询已返回命中结果，未写入 Neo4j。
   - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；尚未提供或保存 DeepSeek 密钥，未发起外部请求。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
@@ -96,11 +96,11 @@
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
   - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
-  - MySQL 当前已有隔离历史事实，本轮已生成新的书目 ChangePlan 但未执行写入；Neo4j 图构建、实际导入和只读图召回端口均已完成，图召回尚未接入默认 HTTP/Worker。MySQL 实际写入仍需用户单独确认目标实例和写入授权。
+  - MySQL 已有隔离历史事实；本轮经用户授权后已将书目 ChangePlan 追加写入同一隔离 Compose 项目并完成幂等复验。Neo4j 图构建、实际导入和只读图召回端口均已完成，图召回尚未接入默认 HTTP/Worker。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
-- `next_step`：在用户单独确认 MySQL 目标实例和写入授权后，先执行导入器只读目标快照，再决定是否显式 `--apply`；随后接入向量索引和（如提供 key）DeepSeek 连通性测试，默认 Mock 不变。
+- `next_step`：冻结 MySQL/Neo4j 书目版本后，进入向量索引 ChangePlan 与离线构建；随后在用户提供 DeepSeek key 和明确外部请求授权时做一次受控连通性测试，默认 Mock 不变，再评审图召回/向量召回的 opt-in Agent 接线。
 
 ---
 
@@ -115,7 +115,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/book-graph/lib-graph-plan-20260810-003/graph-plan.json`；`artifacts/verification/book-graph-import/lib-graph-import-20260810-001/import-report.json`；`artifacts/verification/book-graph-import/lib-graph-import-idempotency-20260810-001/import-report.json`；`artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-001/mysql-book-plan.json`；`artifacts/verification/mysql-book-import/mysql-book-import-dryrun-20260810-001/import.json`；`docs/book_graph_model.md`；362 项全量测试 | Lib 图计划 PASS_WITH_WARNINGS；独立 Neo4j 首轮导入与幂等复验 PASS（63,388/191,865）；MySQL 书目 ChangePlan PASS_WITH_WARNINGS（14,983/8,516/70,750），干跑 0 读/0 写；Neo4j 只读图召回端口已实测；MySQL 实际写入、向量索引和 DeepSeek key 仍待后续显式授权/配置 |
+| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/book-graph/lib-graph-plan-20260810-003/graph-plan.json`；`artifacts/verification/book-graph-import/lib-graph-import-20260810-001/import-report.json`；`artifacts/verification/book-graph-import/lib-graph-import-idempotency-20260810-001/import-report.json`；`artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-002/mysql-book-plan.json`；`artifacts/verification/mysql-book-import/mysql-book-import-20260810-002/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-idempotency-20260810-004/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-integrity-20260810-001/readonly.json`；`docs/book_graph_model.md`；G6 测试 | Lib 图计划 PASS_WITH_WARNINGS；独立 Neo4j 首轮导入与幂等复验 PASS（63,388/191,865）；MySQL 书目 ChangePlan PASS_WITH_WARNINGS，授权后追加导入 PASS（本次新增 14,983/8,516/70,750）；幂等复跑前后目标表计数一致，独立只读核验重复外部 ID=0、标签引用全部可解析；Neo4j 只读图召回端口已实测；向量索引和 DeepSeek key 仍待后续配置 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -127,8 +127,8 @@
 
 ## Working Set
 
-- `current_subtask`：Lib 图版本已安全导入独立 Neo4j 并完成幂等复验；MySQL 书目 ChangePlan、严格导入器和 Neo4j 只读图召回端口已完成，当前等待 MySQL 目标/写入授权后进入只读目标快照。DeepSeek 适配器已准备，未配置 key、未联网。
-- `current_evidence`：当前 Python 全量 `unittest discover` 共 354 项通过，其中图计划/DeepSeek 定向测试 19 项；`lib-graph-plan-20260810-003` 为 PASS_WITH_WARNINGS（76 文件、15,538 来源记录、63,388 节点、191,865 关系）；首轮导入及幂等复验均 PASS，最终目标计数 63,388/191,865；本阶段文件删除、数据库物理删除、覆盖均为 0。
+- `current_subtask`：Lib 图版本和 MySQL 书目事实层均已在隔离目标完成追加导入与幂等复验；下一阶段是冻结双库版本、设计向量索引 ChangePlan，并在 key 与外部请求授权齐备后做 DeepSeek 受控连通性测试。默认 API/Worker 和外部 LLM 仍关闭。
+- `current_evidence`：`mysql-book-import-20260810-002` 首轮追加后目标表总数为 `resource_catalog=14,989`、`resource_book_detail=14,986`、`tag_dictionary=8,522`、`resource_tag=70,762`、`resource_index_state=14,989`；计划新增 14,983/14,983/8,516/70,750/14,983，安全计数 0 删除、0 覆盖。`mysql-book-import-idempotency-20260810-004` 前后计数一致；独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。全量 Python `unittest` 当前为 363 项 PASS；Neo4j 最终计数 63,388/191,865；本阶段文件删除、数据库物理删除、覆盖均为 0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -147,9 +147,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Neo4j 图版本和图召回只读端口已完成，但 MySQL 书目尚未实际写入、向量索引/DeepSeek key 仍缺失；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 双库书目已就绪，但向量索引、图/向量召回的默认策略、DeepSeek key 和外部请求授权仍缺失；任何默认环境仍不得自动开启推荐。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：用户确认 MySQL 目标实例和写入授权后，执行 MySQL 只读目标快照并提交独立导入证据；确认前不执行 `--apply`。DeepSeek key 仍单独等待用户提供。
+- `next_action`：以 `lib-books-v1-20260810` 冻结 MySQL/Neo4j 事实版本，生成向量索引 ChangePlan 并先做数据库无关校验；随后等待用户提供 DeepSeek key/模型/Base URL 及外部调用授权，再执行一次不写数据库的 HTTPS 连通性验证。图/向量召回继续保持 opt-in。
 
 ---
 
@@ -757,6 +757,32 @@ MySQL 干跑结果：`mysql-book-import-dryrun-20260810-001` PASS；`database_re
 数据库与文件安全：本阶段未删除文件、未删除数据库数据、未清空卷、未修改 `Lib`；Neo4j 只发生前序已授权版本导入，本阶段图召回为只读；MySQL 读写均为 0。旧 Homebrew Neo4j、旧 RecPro Neo4j 和已有 MySQL 历史事实均未被覆盖。
 未解决风险：MySQL 实际追加导入、向量索引、DeepSeek key 连通性和默认 HTTP/Worker 接线仍未完成；当前 `.env.user-secrets` 中的 MySQL 管理凭据不代表已授权写入现有 Compose MySQL，且本次预检使用的是现有 Compose 的隔离迁移账号只读路径。
 下一步唯一动作：由用户明确确认 MySQL 目标项目/端口及本次 append-only 写入授权；确认后先执行只读目标快照和冲突报告，用户再次确认后才可执行 `--apply`。在此之前不得写入 MySQL。
+```
+
+## G6 MySQL 书目事实层实际导入与幂等复验记录
+
+```text
+交接ID：G6-MYSQL-BOOK-20260810-006
+Gate：G6 可选检索与解释（MySQL 书目事实层追加导入）
+状态：PREFLIGHT_PASS / IMPORT_PASS / IDEMPOTENCY_PASS / INTEGRITY_PASS
+时间：2026-08-10（Asia/Shanghai）
+目标：在用户确认本地研究用途和 MySQL 写入范围后，把已审查的 Lib 书目 ChangePlan 追加到 RecPro 隔离 Compose MySQL，并证明重复执行不增加行、不覆盖既有事实。
+授权：用户在本轮明确确认继续完成任务并授权本次 MySQL append-only 写入；授权仅覆盖隔离 Compose 项目 `recpro-g2-tianyuhang-20260809a` 的 `recpro` 数据库，不覆盖其他 MySQL 实例或任何 Neo4j 实例。
+目标边界：只连接本机端口 `127.0.0.1:62306` 的 RecPro 隔离 MySQL，使用现有 migration 账号；未使用用户既有 Homebrew Neo4j、旧 RecPro Neo4j 或其他业务数据库。root 凭据仍只保存在本机受保护环境文件，不出现在日志、证据或提交中。
+输入绑定：MySQL 计划 `mysql-book-plan-20260810-002`；graph_version=`lib-books-v1-20260810`；source graph plan SHA-256=`e4b1f382c2ec988f3ea94cee0b256515bb7318bb4843a027cfaa87701a6928c`；license_status=`CONFIRMED_LOCAL_RESEARCH`。
+只读预检：`mysql-book-preflight-20260810-002` 为 `PREFLIGHT_PASS`；五张目标表存在，导入前行数为 `resource_catalog=6`、`resource_book_detail=3`、`tag_dictionary=6`、`resource_tag=12`、`resource_index_state=6`；资源、标签和索引状态冲突均为 0；`database_reads=70`、`database_writes=0`、`actual_delete_count=0`。
+首轮追加：`mysql-book-import-20260810-002` 为 `APPLIED`；计划新增 `resource_catalog=14,983`、`resource_book_detail=14,983`、`tag_dictionary=8,516`、`resource_tag=70,750`、`resource_index_state=14,983`；写入尝试 124,215 次；提交后目标总数为 `14,989/14,986/8,522/70,762/14,989`；`actual_delete_count=0`、`overwritten_inputs=0`。所有 SQL 写入均为 `INSERT IGNORE`，没有 DELETE、TRUNCATE、DROP、ALTER 或覆盖路径。
+幂等复跑：`mysql-book-import-idempotency-20260810-001`、`-002`、`-003` 和最新 `mysql-book-import-idempotency-20260810-004` 均为 `APPLIED`；复跑前后五张表总数完全一致，未增加重复行；安全计数仍为 `actual_delete_count=0`、`overwritten_inputs=0`。早期复跑曾因 asyncmy 默认行为输出大量已存在键提示，事务结果和计数均正确；导入器现已在执行窗口内仅过滤 `Duplicate entry ...` 这一预期的 `INSERT IGNORE` 日志，最新 `-004` 复跑输出干净，其他异常仍会正常失败。
+独立只读完整性：`mysql-book-import-integrity-20260810-001/readonly.json` 为 `PASS`；graph_version=`lib-books-v1-20260810` 的书籍数/REFERENCE_ONLY 数为 14,983/14,983，`resource_tag` 关系 70,750、可解析关系 70,750，`graph_status=READY` 且 `embedding_status=PENDING` 索引 14,983，重复外部 ID=0；只读事务回滚，`database_writes=0`、`actual_delete_count=0`。抽样标题为《二十世纪中国文学与世界》。
+新增数据库对象和行数：未新增表、索引或约束；仅向既有五张表追加计划行。首轮新增行总计 124,215，复跑新增 0。
+受控UPDATE对象和审计ID：0；本阶段未执行 UPDATE，不产生状态迁移审计行。
+文件删除数量：0；数据库物理删除数量：0；未删除或修改 `Lib`、旧 Neo4j 数据、旧 MySQL 历史事实、容器或卷。
+执行命令：`python -m scripts.import_mysql_book_catalog --run-id mysql-book-preflight-20260810-002 --plan-dir artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-002 --env-file .env.compose --preflight-db`；用户授权后 `python -m scripts.import_mysql_book_catalog --run-id mysql-book-import-20260810-002 --plan-dir artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-002 --env-file .env.compose --apply --confirm-mysql-write --allow-nonempty-target`；幂等复跑使用同一 `--apply` 参数；独立只读 SQL 完整性检查使用 migration 账号并回滚事务。
+测试结果：导入计划 Schema/行级校验 PASS；首轮导入 PASS；幂等复跑 PASS；独立只读完整性 PASS；代码修改后的 Python 全量 `unittest` 363 项 PASS，contracts 20 documents PASS，docs 17 Markdown/42 blocks PASS，安全扫描 249 files PASS，架构扫描 105 files PASS，`git diff --check` PASS。
+验证证据目录：`artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-002/`；`artifacts/verification/mysql-book-import/mysql-book-import-20260810-002/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-idempotency-20260810-004/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-integrity-20260810-001/readonly.json`；追加后只读预检 `mysql-book-preflight-20260810-003`。
+配置/数据/索引版本：graph_version=`lib-books-v1-20260810`；MySQL plan=`mysql-book-plan-v1`；书籍初始 `REFERENCE_ONLY`；图索引 `READY`；向量索引 `PENDING`；LLM default=`mock`；DeepSeek 未联网。
+未解决风险：向量索引尚未构建；图召回尚未接入默认 HTTP/Worker；DeepSeek key、模型、Base URL 和外部请求授权尚未提供；默认推荐仍保持关闭。
+下一步唯一动作：冻结双库书目版本并生成向量索引 ChangePlan，先完成离线质量校验；在用户另行提供 DeepSeek 配置和外部调用授权后，仅做一次受控 HTTPS 连通性测试，再评审 opt-in Agent 接线。
 ```
 
 ## 阶段交接模板

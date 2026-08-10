@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC
+import logging
 from pathlib import Path
 import unittest
 
@@ -13,6 +14,7 @@ from scripts.build_mysql_book_plan import (
     parse_available_from,
     tag_key,
 )
+from scripts.import_mysql_book_catalog import _ExpectedDuplicateWarningFilter
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -109,6 +111,13 @@ class MySQLBookPlanTests(unittest.TestCase):
         invalid = dict(plan)
         invalid["unexpected"] = True
         self.assertTrue(list(validator.iter_errors(invalid)))
+
+    def test_duplicate_warning_filter_keeps_unexpected_messages_visible(self) -> None:
+        warning_filter = _ExpectedDuplicateWarningFilter()
+        duplicate = logging.LogRecord("asyncmy", logging.WARNING, __file__, 1, "Duplicate entry 'x'", (), None)
+        other = logging.LogRecord("asyncmy", logging.WARNING, __file__, 1, "Unexpected server warning", (), None)
+        self.assertFalse(warning_filter.filter(duplicate))
+        self.assertTrue(warning_filter.filter(other))
 
 
 if __name__ == "__main__":
