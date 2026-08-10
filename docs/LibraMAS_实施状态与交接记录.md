@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.0
+> 状态版本：3.1
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -68,6 +68,8 @@
   - G5 状态迁移审计与历史画像真实运行态已通过：`g5-audit-replay-20260810-001` 新增 `domain_state_transition`，覆盖 Outbox 创建/claim/DONE 和画像版本迁移；`MySQLProfileSnapshotReader` 按 `as_of` 只读重算，早/晚快照事件数 20/21、重复读取哈希一致且读取阶段计数不变；HTTP 资源状态审计和 Worker 故障恢复均在后续运行中复验通过。
   - 正式 Bearer 身份最小切片已完成：新增 Platform HS256 JWT 验证适配器，严格校验 `typ/alg/iss/aud/sub/roles/exp` 及可选 `nbf/iat/jti`，只向 API 注入 `AuthenticatedPrincipal`；`RECPRO_AUTH_ENABLED`、Secret、issuer、audience 和时钟偏差均由配置显式控制，默认关闭。
   - 正式认证安全运行态已通过：`g5-formal-auth-20260810-001/runtime.json` 验证默认业务路由 404、合法用户 Bearer 201、非法 Token 401、Bearer 与 Demo Header 混用 403、research-admin Debug 200、普通用户/混用身份 Debug 403；该验证不连接数据库，数据库读写和破坏性动作均为 0。
+  - 生产 HTTP 组合根门禁已完成：`build_production_http_app()` 只接受 production 环境、`RECPRO_PRODUCTION_HTTP_ENABLED=true`、正式 Bearer Secret 和 Recommendation/Feedback/Behavior 完整服务图；默认模块级 FastAPI 与 Compose 仍关闭，构造阶段不连接数据库。
+  - 论文实验冻结前置检查已完成：`verify_experiment_freeze` 校验协议/Manifest/seed 哈希与 Git clean 状态，并以新证据报告当前 `synthetic-demo-2026-08` 只能开发/演示，缺少正式 F2 Split、标注和 F3 配置 Manifest；该检查不连接数据库、不覆盖旧 Run。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -77,8 +79,8 @@
   - Docker CLI 的 `/usr/local/bin/docker` 是失效链接；实际 Docker Desktop 位于 `/Applications/编程/Docker.app`，本次已用绝对路径完成隔离 MySQL 验证，未删除容器、卷或数据。
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
-  - G5 当前仍未接入默认 HTTP；本轮完成的是可替换的 HS256 本地正式身份适配器，外部 OIDC/JWKS、production service composition、默认 Compose API 和正式发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
-- `next_step`：评审默认 HTTP、外部 IdP/JWKS 接入和论文实验冻结边界，再决定是否进入 G6；默认 API 继续关闭。
+  - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
+- `next_step`：补齐真实评价数据来源/许可、F2 Split、盲标注和 F3 配置 Manifest，并评审外部 IdP/JWKS 与 Worker 运行接线；默认 API 继续关闭。
 
 ---
 
@@ -92,7 +94,7 @@
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
-| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；默认 HTTP、外部 IdP/JWKS、正式发布凭据流程待补 |
+| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
 | G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
@@ -105,8 +107,8 @@
 
 ## Working Set
 
-- `current_subtask`：G5 opt-in HTTP、Worker retry/DEAD、同事务状态迁移审计、历史 `as_of` 只读画像重算和正式 HS256 Bearer 验证最小切片已完成；下一小步是默认 HTTP、外部 IdP/JWKS 与论文实验冻结评审。
-- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 28 项、G5 21 项、认证 5 项和前端 33 项测试通过（累计 356 项）；安全扫描、架构扫描和文档/契约校验通过；G5 隔离 MySQL 反馈幂等、HTTP 首写/重放、资源状态受控更新与审计、故障注入/DEAD、重启恢复、Outbox 全消费和历史 as-of 证据 PASS；正式认证运行态未连接数据库，全程 destructive_actions=0。
+- `current_subtask`：G5 opt-in HTTP、Worker retry/DEAD、同事务状态迁移审计、历史 `as_of` 只读画像重算、正式 HS256 Bearer 验证和 production HTTP 显式组合根已完成；冻结前置检查已产出，但真实评价数据和正式实验 Manifest 仍未齐备。
+- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G9 冻结前置 3 项和前端 33 项测试通过（累计 364 项）；安全扫描、架构扫描和文档/契约校验通过；正式认证/生产组合根验证均未连接数据库，冻结前置报告 `PASS_WITH_BLOCKERS`，全程 destructive_actions=0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -125,8 +127,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍是显式注入的 demo/research 组合根，未进入默认生产配置；HS256 适配器仅覆盖受控 Secret 部署，外部 IdP/JWKS、production service composition、默认 Compose API 和实验数据冻结仍待补；推荐结果仍只适用于合成演示，不得用于正式论文评价。
-- `next_action`：完成默认 HTTP/外部 IdP 评审与论文实验冻结清单；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；production HTTP 仅能通过显式组合根构造，正式 Worker 接线和外部 IdP/JWKS 仍待补；实验冻结报告已证明当前数据只能用于合成演示，不得用于正式论文评价。
+- `next_action`：补齐真实数据/许可、F2 Split、盲标注、F3 配置 Manifest，并完成 Worker/外部 IdP 评审；任何默认环境仍不得自动开启推荐。
 
 ---
 
@@ -578,6 +580,30 @@ Gate：G5 曝光反馈画像闭环（正式认证最小安全切片）
 配置/数据/索引版本：auth=hs256-bearer-v1；claims=iss/aud/sub/roles/exp/nbf/iat/jti；default business API=disabled。
 未解决风险：当前只完成受控 Secret 的 HS256 适配器；外部 OIDC/JWKS、production service composition、默认 Compose API 和论文实验数据冻结仍需 Gate 评审。
 下一步唯一动作：评审外部身份提供方/默认 HTTP 的启用条件，继续保持默认 API 关闭。
+```
+
+## 生产 HTTP 组合根与论文实验冻结前置记录
+
+```text
+交接ID：PLATFORM-FREEZE-PREFLIGHT-20260810-001
+Gate：生产 HTTP 显式组合与论文实验冻结前置
+状态：CONTRACT_PASS, LOCAL_PASS, PREFLIGHT_PASS_WITH_BLOCKERS / IN_PROGRESS
+时间：2026-08-10（Asia/Shanghai）
+目标：为正式部署建立 production HTTP 的显式 fail-closed 组合根，并在任何论文确认性实验前验证协议、Manifest、seed 哈希、Git clean 状态和 F1-F3 产物边界。
+新增文件：scripts/verify_experiment_freeze.py；tests/g4/test_production_composition.py；tests/g9/__init__.py；tests/g9/test_experiment_freeze.py。
+修改文件及原版本保存位置：backend/app/config.py、backend/app/composition.py、compose.yaml、.env.compose.example、.env.host.example、Makefile、docs/api.md、docs/experiment_protocol.md 与本交接记录；原版本由 Git 提交历史保留。
+生产组合门禁：仅当 RECPRO_APP_ENV=production、RECPRO_PRODUCTION_HTTP_ENABLED=true、正式 Bearer Secret、Recommendation/Feedback/Behavior 三个服务和完整业务 API 开关同时满足时，build_production_http_app() 才构造路由；默认 backend.app.main:app 和 Compose 仍为 health-only，构造阶段不打开数据库连接。
+冻结前置结果：协议版本 1.0.0、协议必需门禁标记、G2 dataset_manifest 与 seed SHA-256 一致，Git 工作区 clean；当前 synthetic-demo-2026-08 被标记 DEMO_FIXTURE，缺少 F2 split_manifest、盲标注 annotation_manifest 和 F3 config_manifest，因此 paper_confirmation_ready=false。
+新增数据库对象和行数：0；冻结检查和生产组合根测试未连接或修改任何数据库。
+受控UPDATE对象和审计ID：0；不适用。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`python -m unittest discover -s tests/g4 -t tests -p 'test_*.py'`；`python -m unittest discover -s tests/g9 -t tests -p 'test_*.py'`；`python -m scripts.verify_experiment_freeze --run-id freeze-20260810-001`；`docker compose --env-file .env.compose config --quiet`。
+测试结果：G4 33 项、G9 3 项 PASS；freeze preflight=`PASS_WITH_BLOCKERS`；database_reads=0、database_writes=0、expected_delete_count=0、actual_delete_count=0、overwritten_runs=0。
+验证证据目录：`artifacts/verification/experiment/freeze-20260810-001/freeze-preflight.json`。
+配置/数据/索引版本：production-gate=explicit-production-http-v1；protocol=1.0.0；dataset=synthetic-demo-2026-08；default business API=disabled。
+未解决风险：真实评价数据来源/许可、匿名化、F2 Split、盲标注、F3 配置 Manifest、正式 Worker 接线和外部 OIDC/JWKS 仍未完成；不得把当前合成 Fixture 用于论文确认性结论。
+下一步唯一动作：先补齐真实评价数据和冻结产物，再评审 Worker/外部 IdP；默认 API 继续关闭。
 ```
 
 ## 阶段交接模板
