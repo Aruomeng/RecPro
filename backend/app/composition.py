@@ -14,7 +14,10 @@ import asyncmy
 from backend.app.config import AppSettings
 from backend.app.catalog.adapters.mysql import MySQLCatalogRepository
 from backend.app.feedback.adapters.mysql import MySQLFeedbackStore
-from backend.app.feedback.application.service import FeedbackApplicationService
+from backend.app.feedback.application.service import (
+    BehaviorApplicationService,
+    FeedbackApplicationService,
+)
 from backend.app.profile.adapters.behavior_mysql import MySQLBehaviorAppender
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
@@ -115,6 +118,22 @@ def build_research_feedback_service(
     )
 
 
+def build_research_behavior_service(
+    settings: AppSettings,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> BehaviorApplicationService:
+    """Build the opt-in direct-behavior path with one shared transaction boundary."""
+
+    if settings.app_env == "production":
+        raise ValueError("research behavior ingestion requires a non-production environment")
+    return BehaviorApplicationService(
+        connection_factory=connection_factory or _mysql_connection_factory(settings),
+        append_port=MySQLBehaviorAppender(),
+        ownership_reader=MySQLFeedbackStore(),
+    )
+
+
 def build_profile_outbox_worker(
     settings: AppSettings,
     *,
@@ -137,6 +156,7 @@ def build_profile_outbox_worker(
 __all__ = [
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
+    "build_research_behavior_service",
     "build_research_feedback_service",
     "build_research_orchestration_service",
 ]

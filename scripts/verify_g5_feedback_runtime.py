@@ -21,6 +21,7 @@ from backend.app.catalog.adapters.mysql import MySQLCatalogRepository
 from backend.app.recommendation.domain.public import RecommendationTaskCommand
 from backend.app.shared_kernel.contracts.enums import FeedbackType, NegativeReasonCode
 from scripts.migrate_g2 import apply_statements, split_statements
+from scripts.g5_runtime_permissions import grant_g5_runtime_projection
 from scripts.replay_g2_profile import apply_replay
 from scripts.seed_g2 import DEFAULT_SEED, insert_seed, sha256_bytes, validate_seed
 from scripts.validate_runtime_env import read_env, validate_compose
@@ -216,6 +217,12 @@ async def execute(args: argparse.Namespace) -> int:
             password=migration_password,
             path=migration,
         )
+    await grant_g5_runtime_projection(
+        host_port=host_port,
+        database=database,
+        root_password=values["RECPRO_MYSQL_ROOT_PASSWORD"],
+        runtime_user=runtime_user,
+    )
 
     g3_service = MySQLRecommendationTaskService(
         host="127.0.0.1",

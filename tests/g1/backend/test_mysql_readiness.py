@@ -26,6 +26,26 @@ class GrantSafetyEvaluatorTest(unittest.TestCase):
         )
         self.assertTrue(self.evaluator.grants_are_safe(grants))
 
+    def test_g5_resource_state_column_grant_is_safe(self) -> None:
+        grants = (
+            "GRANT USAGE ON *.* TO `runtime`@`%`",
+            "GRANT SELECT, INSERT ON `recpro`.* TO `runtime`@`%`",
+            (
+                "GRANT UPDATE (`suppress_until`, `source_event_id`, `last_feedback_at`, `state_version`) "
+                "ON `recpro`.`user_resource_state` TO `runtime`@`%`"
+            ),
+        )
+        self.assertTrue(self.evaluator.grants_are_safe(grants))
+        self.assertFalse(
+            self.evaluator.grants_are_safe(
+                grants[:2]
+                + (
+                    "GRANT UPDATE (`state_type`) "
+                    "ON `recpro`.`user_resource_state` TO `runtime`@`%`",
+                )
+            )
+        )
+
     def test_empty_or_unparseable_grants_fail_closed(self) -> None:
         self.assertFalse(self.evaluator.grants_are_safe(()))
         self.assertFalse(self.evaluator.grants_are_safe(("unparseable",)))

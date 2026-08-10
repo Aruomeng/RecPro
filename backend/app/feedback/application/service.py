@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import inspect
-from datetime import timedelta
+from dataclasses import replace
+from datetime import UTC, datetime, timedelta
 from typing import Any, Awaitable, Callable
 from uuid import NAMESPACE_URL, uuid5
 
@@ -61,16 +62,48 @@ def _state_for(command: FeedbackCommand) -> dict[str, object] | None:
     return {"state_type": "HIDDEN", "suppress_until": command.occurred_at + timedelta(days=7)}
 
 
+def _as_aware(value: object) -> datetime:
+    if not isinstance(value, datetime):
+        raise ValueError("stored behavior event occurred_at is invalid")
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class BehaviorApplicationService:
     """Own the connection transaction for one direct behavior command."""
 
-    def __init__(self, *, connection_factory: ConnectionFactory, append_port: BehaviorAppendPort) -> None:
+    def __init__(
+        self,
+        *,
+        connection_factory: ConnectionFactory,
+        append_port: BehaviorAppendPort,
+        ownership_reader: FeedbackStorePort | None = None,
+    ) -> None:
         self._connection_factory = connection_factory
         self._append_port = append_port
+        self._ownership_reader = ownership_reader
 
     async def append(self, command: BehaviorAppendCommand) -> BehaviorReceipt:
         connection = await self._connection_factory()
         try:
+            if self._ownership_reader is not None and command.recommendation_item_id is not None:
+                item = await self._ownership_reader.find_item(
+                    connection,
+                    recommendation_item_id=command.recommendation_item_id,
+                    user_id=command.user_id,
+                )
+                if item is None:
+                    raise LookupError("recommendation item does not belong to user")
+                if command.impression_uuid is not None:
+                    impression = await self._ownership_reader.find_impression(
+                        connection,
+                        impression_uuid=command.impression_uuid,
+                        user_id=command.user_id,
+                        recommendation_item_id=command.recommendation_item_id,
+                    )
+                    if impression is None:
+                        raise ValueError("impression does not belong to user and recommendation item")
             receipt = await self._append_port.append_behavior(connection, command)
             await connection.commit()
             return receipt
@@ -147,6 +180,30 @@ class FeedbackApplicationService:
             )
             if item is None:
                 raise LookupError("recommendation item does not belong to user")
+            existing_event = await self._feedback_store.find_behavior_event(
+                connection,
+                event_uuid=command.feedback_uuid,
+                user_id=command.user_id,
+                recommendation_item_id=command.recommendation_item_id,
+            )
+            if existing_event is not None:
+                expected_event_type = feedback_event_type(command).value
+                expected_impression = (
+                    str(command.impression_uuid) if command.impression_uuid is not None else None
+                )
+                expected_reason = command.reason_code.value if command.reason_code is not None else None
+                if (
+                    existing_event["event_type"] != expected_event_type
+                    or existing_event["resource_id"] != int(item["resource_id"])
+                    or existing_event["impression_uuid"] != expected_impression
+                    or existing_event["rating"] != command.rating
+                    or existing_event["reason_code"] != expected_reason
+                ):
+                    raise ValueError("feedback event identity or payload conflict")
+                # The public feedback DTO intentionally lets the server assign its
+                # business timestamp. Reuse the persisted timestamp on a UUID retry
+                # so idempotency does not turn a safe replay into a payload conflict.
+                command = replace(command, occurred_at=_as_aware(existing_event["occurred_at"]))
             if command.feedback_type in {
                 FeedbackType.REJECT,
                 FeedbackType.NOT_INTERESTED,

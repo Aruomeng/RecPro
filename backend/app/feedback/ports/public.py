@@ -33,6 +33,15 @@ class FeedbackStorePort(Protocol):
         recommendation_item_id: int,
     ) -> dict[str, object] | None: ...
 
+    async def find_behavior_event(
+        self,
+        connection: object,
+        *,
+        event_uuid: UUID,
+        user_id: int,
+        recommendation_item_id: int,
+    ) -> dict[str, object] | None: ...
+
     async def append_impression(
         self,
         connection: object,

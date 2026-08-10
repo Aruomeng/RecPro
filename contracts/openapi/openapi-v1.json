@@ -3,7 +3,7 @@
   "info": {
     "title": "LibraMAS Recommendation API",
     "version": "0.1.0-draft",
-    "description": "G0 contract baseline. The implementation is introduced gate by gate; this document does not claim that the HTTP service is already available."
+    "description": "Versioned contract baseline. Health and explicitly injected G3/G5 slices may be enabled gate by gate; the default runtime remains fail-closed and does not claim that recommendation HTTP is enabled."
   },
   "servers": [
     {"url": "http://localhost:8000", "description": "Local development"}

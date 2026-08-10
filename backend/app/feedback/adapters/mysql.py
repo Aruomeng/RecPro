@@ -92,6 +92,38 @@ class MySQLFeedbackStore(FeedbackStorePort):
             "is_valid_exposure": bool(row[7]),
         }
 
+    async def find_behavior_event(
+        self,
+        connection: Any,
+        *,
+        event_uuid,
+        user_id: int,
+        recommendation_item_id: int,
+    ) -> dict[str, object] | None:
+        """Read an existing derived event so server-timestamped retries replay safely."""
+
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT event_uuid, user_id, event_type, resource_id, recommendation_item_id, "
+                "impression_uuid, rating, reason_code, occurred_at "
+                "FROM user_behavior_event WHERE event_uuid = %s",
+                (str(event_uuid),),
+            )
+            row = await cursor.fetchone()
+        if row is None or int(row[1]) != user_id or int(row[4]) != recommendation_item_id:
+            return None
+        return {
+            "event_uuid": str(row[0]),
+            "user_id": int(row[1]),
+            "event_type": str(row[2]),
+            "resource_id": int(row[3]) if row[3] is not None else None,
+            "recommendation_item_id": int(row[4]),
+            "impression_uuid": str(row[5]) if row[5] is not None else None,
+            "rating": float(row[6]) if row[6] is not None else None,
+            "reason_code": str(row[7]) if row[7] is not None else None,
+            "occurred_at": row[8],
+        }
+
     async def append_impression(
         self,
         connection: Any,

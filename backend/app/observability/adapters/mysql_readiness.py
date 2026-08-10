@@ -124,6 +124,14 @@ class GrantSafetyEvaluator:
                         ),
                         "recommendation_task": frozenset({"status", "updated_at"}),
                         "worker_heartbeat": frozenset({"heartbeat_at", "status"}),
+                        "user_resource_state": frozenset(
+                            {
+                                "suppress_until",
+                                "source_event_id",
+                                "last_feedback_at",
+                                "state_version",
+                            }
+                        ),
                     }
                 ),
             )

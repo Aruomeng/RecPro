@@ -1,8 +1,8 @@
 # LibraMAS 核心数据字典
 
-> 文档版本：1.2.0
-> 状态：G5 反馈事实与画像 Outbox 第一切片
-> 日期：2026-08-09
+> 文档版本：1.3.0
+> 状态：G5 反馈事实、画像 Outbox 与 opt-in Interaction HTTP
+> 日期：2026-08-10
 > 适用范围：MySQL 事实层、领域 DTO、Agent 契约和实验重放
 > 架构依据：`docs/adr/0001-modular-monolith.md`
 > 安全依据：`docs/LibraMAS_系统实施计划_安全低耦合版.md`
@@ -777,7 +777,7 @@ G4 第一实现使用 `g4-orchestrator-v1` 与八个规则 Agent 版本。当前
 | `resource_index_state` | 当前活动版本、状态、最近错误和时间 |
 | `user_declared_profile` | 当前声明投影；同事务追加历史 |
 | `user_profile`、`user_interest_tag`、`user_negative_preference` | 当前公式版本产生的投影字段 |
-| `user_resource_state` | 当前有效投影和递增 `state_version` |
+| `user_resource_state` | 当前有效投影和递增 `state_version`；运行账号只可受控更新 `suppress_until`、`source_event_id`、`last_feedback_at`、`state_version` |
 | 两个 Outbox | `status`、`attempts`、租约、重试时间、错误、`updated_at` |
 | `recommendation_task` | 合法状态前进、上下文版本、完成时间和错误码 |
 | `recommendation_impression` | 同一曝光的可见度聚合和 `clicked_at`，必须单调且有幂等保护 |

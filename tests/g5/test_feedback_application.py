@@ -60,6 +60,9 @@ class FakeFeedbackStore:
     async def find_impression(self, connection, *, impression_uuid, user_id, recommendation_item_id):
         return {"impression_id": 10, "impression_uuid": str(impression_uuid)}
 
+    async def find_behavior_event(self, connection, *, event_uuid, user_id, recommendation_item_id):
+        return None
+
     async def append_impression(self, connection, command):
         self.impressions.append(command)
         return ImpressionReceipt(command.impression_uuid, 10, 0, True, False)

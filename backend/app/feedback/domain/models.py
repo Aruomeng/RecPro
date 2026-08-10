@@ -61,6 +61,7 @@ class BehaviorAppendCommand:
     occurred_at: datetime
     resource_id: int | None = None
     recommendation_item_id: int | None = None
+    task_id: UUID | None = None
     impression_uuid: UUID | None = None
     query_text: str | None = None
     rating: float | None = None
@@ -78,6 +79,8 @@ class BehaviorAppendCommand:
             raise ValueError("event_type must be a BehaviorEventType")
         if self.impression_uuid is not None:
             _uuid(self.impression_uuid, "impression_uuid")
+        if self.task_id is not None:
+            _uuid(self.task_id, "task_id")
         if self.user_id < 1:
             raise ValueError("user_id must be positive")
         if self.resource_id is not None and self.resource_id < 1:

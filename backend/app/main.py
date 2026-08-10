@@ -8,6 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.api.errors import register_exception_handlers
 from backend.app.api.auth import PrincipalResolver
 from backend.app.api.debug import create_debug_router
+from backend.app.api.feedback import create_feedback_router
 from backend.app.api.health import create_health_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
@@ -35,6 +36,9 @@ def create_app(
     configuration_state: ConfigurationState | None = None,
     recommendation_service: object | None = None,
     recommendation_api_enabled: bool = False,
+    feedback_service: object | None = None,
+    behavior_service: object | None = None,
+    feedback_api_enabled: bool = False,
     principal_resolver: PrincipalResolver | None = None,
     debug_api_enabled: bool | None = None,
 ) -> FastAPI:
@@ -86,7 +90,11 @@ def create_app(
     application.add_middleware(RequestContextMiddleware)
     cors_methods = ["GET"]
     cors_headers = ["X-Request-Id", "Content-Type"]
-    if recommendation_service is not None and recommendation_api_enabled:
+    interaction_api_enabled = (
+        (feedback_service is not None or behavior_service is not None)
+        and feedback_api_enabled
+    )
+    if (recommendation_service is not None and recommendation_api_enabled) or interaction_api_enabled:
         cors_methods.append("POST")
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
     if principal_resolver is not None or effective_debug_api_enabled:
@@ -122,6 +130,17 @@ def create_app(
                     principal_resolver=principal_resolver,
                 )
             )
+    if feedback_service is not None or behavior_service is not None:
+        application.include_router(
+            create_feedback_router(
+                feedback_service=feedback_service,
+                behavior_service=behavior_service,
+                app_env=runtime.app_env,
+                demo_identity_enabled=runtime.app_env == "demo",
+                pipeline_enabled=feedback_api_enabled,
+                principal_resolver=principal_resolver,
+            )
+        )
     return application
 
 

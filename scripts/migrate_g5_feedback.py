@@ -14,6 +14,7 @@ from typing import Sequence
 import asyncmy
 
 from scripts.migrate_g2 import apply_statements, split_statements
+from scripts.g5_runtime_permissions import grant_g5_runtime_projection
 from scripts.validate_runtime_env import read_env, validate_compose
 
 
@@ -68,6 +69,12 @@ async def execute(args: argparse.Namespace) -> int:
             admin_user=migration_user,
             admin_password=migration_password,
             statements=statements,
+        )
+        await grant_g5_runtime_projection(
+            host_port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+            database=values["RECPRO_MYSQL_DATABASE"],
+            root_password=values["RECPRO_MYSQL_ROOT_PASSWORD"],
+            runtime_user=values["RECPRO_MYSQL_USER"],
         )
         evidence.update({"status": "APPLIED", "applied": True, "applied_at": datetime.now(UTC).isoformat()})
     write_evidence(evidence_path, evidence)

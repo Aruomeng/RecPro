@@ -24,15 +24,32 @@ class FakeConnection:
 
 
 class FakeRefreshPort:
-    def __init__(self, *, fail: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        fail: bool = False,
+        starting_attempts: int = 1,
+        empty_after_first: bool = False,
+    ) -> None:
         self.fail = fail
+        self.starting_attempts = starting_attempts
+        self.empty_after_first = empty_after_first
         self.claims = 0
         self.done: list[int] = []
         self.failed: list[tuple[int, bool]] = []
 
     async def claim_pending(self, connection, **kwargs):
         self.claims += 1
-        return ({"outbox_id": 44, "user_id": 1001, "source_event_id": 77, "attempts": 1},)
+        if self.empty_after_first and self.claims > 1:
+            return ()
+        return (
+            {
+                "outbox_id": 44,
+                "user_id": 1001,
+                "source_event_id": 77,
+                "attempts": self.starting_attempts + self.claims - 1,
+            },
+        )
 
     async def apply_claim(self, connection, work, *, formula_version):
         if self.fail:
@@ -68,6 +85,27 @@ class ProfileWorkerTests(unittest.TestCase):
         self.assertTrue(any(connection.commits == 1 for connection in connections))
         self.assertTrue(all(connection.closed == 1 for connection in connections))
 
+    def test_worker_does_not_reclaim_a_done_item(self) -> None:
+        connections: list[FakeConnection] = []
+
+        async def factory():
+            connection = FakeConnection()
+            connections.append(connection)
+            return connection
+
+        port = FakeRefreshPort(empty_after_first=True)
+        worker = ProfileOutboxWorker(
+            connection_factory=factory,
+            refresh_port=port,
+            worker_id="g5-test-worker",
+        )
+        first = asyncio.run(worker.run_once(limit=1))
+        second = asyncio.run(worker.run_once(limit=1))
+        self.assertEqual(1, len(first))
+        self.assertEqual((), second)
+        self.assertEqual(2, port.claims)
+        self.assertEqual([44], port.done)
+
     def test_worker_records_retryable_failure_without_losing_claim(self) -> None:
         connections: list[FakeConnection] = []
 
@@ -88,6 +126,48 @@ class ProfileWorkerTests(unittest.TestCase):
         self.assertEqual([(44, False)], port.failed)
         self.assertGreaterEqual(sum(connection.commits for connection in connections), 2)
         self.assertGreaterEqual(sum(connection.rollbacks for connection in connections), 1)
+
+    def test_worker_retries_the_same_claim_without_losing_the_fact(self) -> None:
+        connections: list[FakeConnection] = []
+
+        async def factory():
+            connection = FakeConnection()
+            connections.append(connection)
+            return connection
+
+        port = FakeRefreshPort(fail=True)
+        worker = ProfileOutboxWorker(
+            connection_factory=factory,
+            refresh_port=port,
+            worker_id="g5-test-worker",
+            max_attempts=3,
+        )
+        self.assertEqual((), asyncio.run(worker.run_once(limit=1)))
+        self.assertEqual([(44, False)], port.failed)
+        port.fail = False
+        receipts = asyncio.run(worker.run_once(limit=1))
+        self.assertEqual(1, len(receipts))
+        self.assertEqual([44], port.done)
+        self.assertEqual(2, port.claims)
+
+    def test_worker_marks_max_attempt_failure_dead_and_keeps_row(self) -> None:
+        connections: list[FakeConnection] = []
+
+        async def factory():
+            connection = FakeConnection()
+            connections.append(connection)
+            return connection
+
+        port = FakeRefreshPort(fail=True, starting_attempts=3)
+        worker = ProfileOutboxWorker(
+            connection_factory=factory,
+            refresh_port=port,
+            worker_id="g5-test-worker",
+            max_attempts=3,
+        )
+        self.assertEqual((), asyncio.run(worker.run_once(limit=1)))
+        self.assertEqual([(44, True)], port.failed)
+        self.assertEqual([], port.done)
 
 
 if __name__ == "__main__":

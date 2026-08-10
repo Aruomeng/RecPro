@@ -43,9 +43,9 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
             await cursor.execute(
                 "INSERT IGNORE INTO user_behavior_event "
                 "(event_uuid, user_id, session_id, event_type, resource_id, recommendation_item_id, "
-                "impression_uuid, query_text, rating, dwell_ms, visible_ratio, position, reason_code, "
+                "task_id, impression_uuid, query_text, rating, dwell_ms, visible_ratio, position, reason_code, "
                 "tag_evidence_json, occurred_at, created_at) VALUES "
-                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
                     str(command.event_uuid),
                     command.user_id,
@@ -53,6 +53,7 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
                     command.event_type.value,
                     command.resource_id,
                     command.recommendation_item_id,
+                    str(command.task_id) if command.task_id else None,
                     str(command.impression_uuid) if command.impression_uuid else None,
                     command.query_text,
                     _decimal(command.rating),
@@ -68,7 +69,7 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
             inserted = cursor.rowcount == 1
             await cursor.execute(
                 "SELECT id, event_uuid, user_id, session_id, event_type, resource_id, "
-                "recommendation_item_id, impression_uuid, query_text, rating, dwell_ms, "
+                "recommendation_item_id, task_id, impression_uuid, query_text, rating, dwell_ms, "
                 "visible_ratio, position, reason_code, tag_evidence_json, occurred_at "
                 "FROM user_behavior_event WHERE event_uuid = %s",
                 (str(command.event_uuid),),
@@ -83,6 +84,7 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
                 command.event_type.value,
                 command.resource_id,
                 command.recommendation_item_id,
+                str(command.task_id) if command.task_id else None,
                 str(command.impression_uuid) if command.impression_uuid else None,
                 command.query_text,
                 _decimal(command.rating),
@@ -91,10 +93,12 @@ class MySQLBehaviorAppender(BehaviorAppendPort):
                 command.position,
                 command.reason_code,
             )
-            actual = tuple(row[1:14])
-            if actual != expected or _canonical(_json(row[14])) != tag_json:
+            actual = tuple(row[1:15])
+            if actual != expected:
                 raise ValueError("behavior event identity or payload conflict")
-            if _naive_utc(row[15]) != _naive_utc(command.occurred_at):
+            if _canonical(_json(row[15])) != tag_json:
+                raise ValueError("behavior event tag evidence conflict")
+            if _naive_utc(row[16]) != _naive_utc(command.occurred_at):
                 raise ValueError("behavior event occurred_at conflict")
             event_id = int(row[0])
             outbox_id: int | None = None

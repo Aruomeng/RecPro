@@ -199,6 +199,8 @@ dataset
 
 第一版不注册 `DELETE` 路由。停用、撤回和过期均通过明确的追加事件或状态转换用例处理；任何确需物理删除的情况必须离开应用 API，进入项目规定的删除前详细汇报和单次审批流程。
 
+交互三个 POST 路由属于 G5 的显式 opt-in 能力：只有组合根同时注入 feedback/behavior application service 并设置 `feedback_api_enabled=true` 时才注册；默认 `create_app()` 不暴露这些路由。Demo 环境可使用 `X-Demo-User-Id`，非 Demo 环境必须注入正式 `PrincipalResolver`，未认证或服务未启用时 fail-closed。
+
 ## 4. 健康检查
 
 ### 4.1 `GET /health/live`
@@ -642,6 +644,7 @@ Query：
 - `TOO_BASIC`/`TOO_ADVANCED` 要求资源有难度；
 - 低评分不自动泛化为主题负偏好；
 - 一个 `feedback_uuid` 只映射一次反馈事实、行为事实和 Outbox。
+- Feedback DTO 不要求客户端提交业务发生时间；服务端首次接收时生成 UTC `occurred_at`，同一 `feedback_uuid` 重试读取并复用已持久化时间，避免幂等重放被动态时间误判为冲突。
 
 事实和 Outbox 提交成功但画像尚未应用时返回 `202`：
 
