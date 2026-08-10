@@ -26,6 +26,12 @@ FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
 BOOK_INTAKE_RUN_ID ?=
 DATA_PLANE_RUN_ID ?=
+BOOK_GRAPH_PLAN_RUN_ID ?=
+BOOK_GRAPH_IMPORT_RUN_ID ?=
+BOOK_GRAPH_GRAPH_VERSION ?=
+BOOK_GRAPH_LICENSE_STATUS ?= PENDING_USER_CONFIRMATION
+BOOK_GRAPH_PLAN_DIR ?=
+BOOK_GRAPH_SECRET_ENV_FILE ?= .env.user-secrets
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -36,6 +42,7 @@ DATA_PLANE_RUN_ID ?=
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
+	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -156,6 +163,22 @@ verify-book-intake:
 verify-data-plane-runtime:
 	@test -n "$(DATA_PLANE_RUN_ID)" || { echo "DATA_PLANE_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_data_plane_runtime --run-id "$(DATA_PLANE_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+
+build-book-graph-plan:
+	@test -n "$(BOOK_GRAPH_PLAN_RUN_ID)" || { echo "BOOK_GRAPH_PLAN_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(BOOK_GRAPH_GRAPH_VERSION)" || { echo "BOOK_GRAPH_GRAPH_VERSION is required and must identify a new graph version"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_book_graph_plan --run-id "$(BOOK_GRAPH_PLAN_RUN_ID)" --graph-version "$(BOOK_GRAPH_GRAPH_VERSION)" --license-status "$(BOOK_GRAPH_LICENSE_STATUS)"
+
+verify-book-graph-plan:
+	@test -n "$(BOOK_GRAPH_IMPORT_RUN_ID)" || { echo "BOOK_GRAPH_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(BOOK_GRAPH_PLAN_DIR)" || { echo "BOOK_GRAPH_PLAN_DIR is required and must point to a reviewed plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_book_graph --run-id "$(BOOK_GRAPH_IMPORT_RUN_ID)" --plan-dir "$(BOOK_GRAPH_PLAN_DIR)" --env-file "$(BOOK_GRAPH_SECRET_ENV_FILE)" --license-status "$(BOOK_GRAPH_LICENSE_STATUS)"
+
+import-book-graph:
+	@test -n "$(BOOK_GRAPH_IMPORT_RUN_ID)" || { echo "BOOK_GRAPH_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(BOOK_GRAPH_PLAN_DIR)" || { echo "BOOK_GRAPH_PLAN_DIR is required and must point to a reviewed plan directory"; exit 2; }
+	@test "$(BOOK_GRAPH_LICENSE_STATUS)" != "PENDING_USER_CONFIRMATION" || { echo "BOOK_GRAPH_LICENSE_STATUS must be explicitly confirmed before import"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_book_graph --run-id "$(BOOK_GRAPH_IMPORT_RUN_ID)" --plan-dir "$(BOOK_GRAPH_PLAN_DIR)" --env-file "$(BOOK_GRAPH_SECRET_ENV_FILE)" --license-status "$(BOOK_GRAPH_LICENSE_STATUS)" --apply
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

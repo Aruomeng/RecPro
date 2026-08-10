@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/data/intake/book-graph-plan.schema.json",
+  "title": "LibraMAS versioned book graph plan",
+  "description": "A deterministic, append-only Neo4j node/triple plan produced from the local Lib CSV boundary.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "can_import",
+    "license_status",
+    "graph_version",
+    "source_id",
+    "input_root",
+    "git_commit",
+    "git_worktree_dirty",
+    "generated_at",
+    "input",
+    "quality",
+    "nodes",
+    "triples",
+    "blockers",
+    "safety",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "book-graph-plan-v1"},
+    "status": {"enum": ["READY_FOR_IMPORT_REVIEW", "PASS_WITH_WARNINGS", "PASS_WITH_BLOCKERS"]},
+    "can_import": {"type": "boolean"},
+    "license_status": {"enum": ["PENDING_USER_CONFIRMATION", "CONFIRMED_LOCAL_RESEARCH", "LICENSED_OPEN_DATA"]},
+    "graph_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "source_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "input_root": {"type": "string", "minLength": 1, "maxLength": 255},
+    "git_commit": {"type": "string", "pattern": "^[a-f0-9]{40}$"},
+    "git_worktree_dirty": {"type": "boolean"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "input": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_count", "record_count", "total_bytes", "sha256", "files"],
+      "properties": {
+        "file_count": {"type": "integer", "minimum": 0},
+        "record_count": {"type": "integer", "minimum": 0},
+        "total_bytes": {"type": "integer", "minimum": 0},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256", "bytes", "record_count"],
+            "properties": {
+              "path": {"type": "string", "minLength": 1, "maxLength": 255},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+              "bytes": {"type": "integer", "minimum": 0},
+              "record_count": {"type": "integer", "minimum": 0}
+            }
+          }
+        }
+      }
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["errors", "error_count", "isbn_group_count", "isbn_conflict_group_count", "isbn_conflicting_record_count"],
+      "properties": {
+        "errors": {"type": "array", "items": {"type": "object"}},
+        "error_count": {"type": "integer", "minimum": 0},
+        "isbn_group_count": {"type": "integer", "minimum": 0},
+        "isbn_conflict_group_count": {"type": "integer", "minimum": 0},
+        "isbn_conflicting_record_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "by_label"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "by_label": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "triples": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "by_predicate"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "by_predicate": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "blockers": {"type": "array", "items": {"type": "object"}},
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_reads", "database_writes", "expected_delete_count", "actual_delete_count", "overwritten_inputs"],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 0},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "expected_delete_count": {"type": "integer", "minimum": 0},
+        "actual_delete_count": {"type": "integer", "minimum": 0},
+        "overwritten_inputs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes_path", "triples_path", "nodes_sha256", "triples_sha256"],
+      "properties": {
+        "nodes_path": {"type": "string", "minLength": 1, "maxLength": 255},
+        "triples_path": {"type": "string", "minLength": 1, "maxLength": 255},
+        "nodes_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "triples_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  }
+}

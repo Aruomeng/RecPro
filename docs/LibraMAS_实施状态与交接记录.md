@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.6
+> 状态版本：3.7
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -25,6 +25,7 @@
   - 用户提供的 MySQL/Neo4j 管理凭据已保存至本机 `.env.user-secrets`（`0600`、Git 忽略、未提交）；不会在日志、报告或 Agent 上下文中输出密码。MySQL 运行时仍使用最小权限账号，root 仅用于后续受控管理/迁移。
   - 只读盘点发现本机另有 Homebrew Neo4j（`127.0.0.1:7474/7687`），默认 `neo4j` 库有 59,301 个节点、185,238 条关系；只读查询后未写入、清空、删除或停用该实例。RecPro 不使用该实例。
   - 已创建新的 RecPro Neo4j 隔离实例 `recpro-library-neo4j-20260810a`，独立数据卷 `recpro-library-neo4j-20260810a_neo4j_data`、端口 `62475/62688`，用户凭据认证成功，初始节点/关系为 0/0；旧 RecPro 空实例未删除或复用。
+  - `Lib` 已完成只读 CSV 结构审查与版本化图计划：76 个文件、15,538 条来源记录、63,388 个节点、191,865 条关系；目标图计划 `lib-books-v1-20260810` 仍未写入数据库。
 - `decisions`：
   - 用户最新零删除要求优先于旧实施文档中的reset、destroy和clear语义。
   - `demo-reset`替换为新 `fixture_generation/test_run_id`。
@@ -32,12 +33,16 @@
   - Chroma和Neo4j重建使用新版本构建与活动指针，不删除旧版本。
   - 代码按Catalog、Profile、Recommendation、Feedback、Observability、Platform等业务域组织。
   - 正式论文实验只能在G8发布候选通过后开始。
+  - Neo4j 图导入使用独立实例、显式 `graph_version`、节点/关系唯一键和 `MERGE` + `ON CREATE SET`；不使用本机已有图，也不执行删除/清空/覆盖。
+  - DeepSeek 仅作为显式 opt-in 的 LLM 适配器；默认仍为 MockLLM，缺少本地 API key 时配置 fail-closed。
 - `completed_work`：
   - 已完成最新版可运行实施文档。
   - 已完成安全、低耦合、高内聚的系统实施计划。
   - 已建立本交接记录。
   - 已验证计划文档代码围栏成对、JSON示例合法、相对链接目标存在，且需求基线哈希未变化。
   - 已完成零删除政策、删除前汇报模板、G0 基线清单和两份架构 ADR。
+  - 已完成 `book-graph-plan-v1` Schema、实体/关系模型、确定性节点/三元组构建器、SHA-256 绑定和只读 Neo4j 导入预演；已生成 `lib-graph-plan-20260810-002`，预演读取目标 0/0 且数据库写入 0。
+  - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；尚未提供或保存 DeepSeek 密钥，未发起外部请求。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
   - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
   - 已冻结 A01—A25 的首次实现 Gate、最终复验 Gate 和证据要求。
@@ -91,7 +96,7 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
-- `next_step`：先接收用户授权的书目原始文件、来源/许可证据和字段说明，生成规范化 JSONL 与 intake manifest 并通过只读门禁；随后实现 MySQL 追加导入、Neo4j 版本化图导入和可选向量索引，最后再评审外部 LLM Provider 与默认 HTTP/Worker 接线。
+- `next_step`：用户明确确认 `Lib` 数据可用于本地研究原型后，以 `CONFIRMED_LOCAL_RESEARCH` 重建同一图版本计划并执行 `import-book-graph`；随后验证 Neo4j 图计数，再实现图召回适配器和 MySQL 书目事实层。DeepSeek 密钥需由用户单独提供后才可做连通性测试，默认 Mock 不变。
 
 ---
 
@@ -106,7 +111,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/data-plane/data-plane-20260810-003/runtime.json`；`contracts/data/intake/book-record.schema.json`；`contracts/data/intake/book-intake-manifest.schema.json`；`scripts/inspect_book_intake.py`；8 项 G6 测试 | RecPro 隔离 MySQL/Neo4j 健康与只读计数 PASS；书目接入契约和导入前审查 PASS_WITH_BLOCKERS（当前无用户书目）；本机已有 59,301 节点图被明确排除；Neo4j 图适配器、向量索引、图召回、LLM Provider 和故障矩阵尚未完成 |
+| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/book-graph/lib-graph-plan-20260810-002/graph-plan.json`；`artifacts/verification/book-graph-import/lib-graph-dry-run-20260810-002/import-report.json`；`docs/book_graph_model.md`；`scripts/build_book_graph_plan.py`；`scripts/import_book_graph.py`；19 项新增/定向测试 | Lib 图计划 PASS_WITH_WARNINGS；只读预演目标为独立 Neo4j 0/0、database_writes=0；实体/关系和 graph_version 契约已固化；实际导入、图召回、向量索引仍待用户许可确认；DeepSeek 适配器已准备但没有密钥且未联网 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -118,8 +123,8 @@
 
 ## Working Set
 
-- `current_subtask`：已建立五类正式评价输入 Manifest Schema、数据平面只读检查器和书目 intake 门禁；等待用户提供真实书目、来源许可和字段说明，之前不得导入 MySQL/Neo4j，也不得启用外部 LLM。
-- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G6 8 项、G9 冻结前置 3 项、评价输入门禁 7 项和前端 33 项测试通过（累计 376 项）；干净工作区数据平面证据 `data-plane-20260810-003` 为 PASS，intake `books-intake-preflight-20260810-002` 因缺少用户输入而为 `PASS_WITH_BLOCKERS`；本阶段数据库写入、物理删除、覆盖和服务启停动作均为 0。
+- `current_subtask`：图书图计划和 Neo4j 只读预演已完成；等待用户明确确认 `Lib` 数据用于本地研究原型（或提供许可证据），确认前不得执行 `--apply`。DeepSeek 适配器已准备，未配置 key、未联网。
+- `current_evidence`：在原有 376 项基础上新增图计划/DeepSeek 定向测试 19 项；`lib-graph-plan-20260810-002` 为 PASS_WITH_WARNINGS（76 文件、15,538 来源记录、63,388 节点、191,865 关系）；`lib-graph-dry-run-20260810-002` 为 PASS，目标 0/0、database_writes=0；本阶段文件删除、数据库物理删除、覆盖和目标数据写入均为 0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -138,9 +143,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 还没有 Neo4j/向量/外部 LLM 适配器；真实书目、许可、脱敏确认和评价输入仍缺失；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 已有 Neo4j 图计划/追加导入器和 DeepSeek 适配器，但实际导入、MySQL 书目事实层、向量索引/图召回、许可证确认和 DeepSeek key 仍缺失；任何默认环境仍不得自动开启推荐。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：由用户提供书目原始文件、来源与许可证据后，先运行 `verify-book-intake`，再设计并评审 append-only 导入 ChangePlan；同时保持外部 LLM 和默认 API 关闭。
+- `next_action`：用户确认本地研究授权后，使用同一输入哈希生成 `CONFIRMED_LOCAL_RESEARCH` 图计划并执行显式 `import-book-graph`；导入计数通过后再接入图召回。DeepSeek key 仍单独等待用户提供。
 
 ---
 
@@ -681,6 +686,31 @@ RecPro 边界：RecPro 使用独立 Compose Neo4j 容器和独立数据卷，当
 文件删除数量：0；数据库物理删除数量：0；覆盖数量：0；容器删除动作：0；临时 `agentsystem-neo4j-1` 停止动作：1（恢复其原 stopped 状态）；Homebrew Neo4j 外部实例未停止。
 未解决风险：应用组合根尚未切换到新目标实例，当前旧 RecPro 验证实例仍保留；正式图书导入前必须在配置 Bundle 中显式选择新目标实例，并保留旧隔离卷，不原地改密或复用外部大图。
 下一步唯一动作：把新目标实例的端口/凭据引用接入独立配置 Bundle，完成只读健康门禁后，再接收书目导入。
+```
+
+## G6 书目图计划与 DeepSeek 适配准备记录
+
+```text
+交接ID：G6-BOOK-GRAPH-20260810-003
+Gate：G6 可选检索与解释（书目图建模、Neo4j 预演、LLM 适配准备）
+状态：PLAN_PASS, DRY_RUN_PASS / IMPORT_PENDING_USER_CONFIRMATION
+时间：2026-08-10（Asia/Shanghai）
+目标：将 Lib CSV 固化为可审计的实体/关系/三元组计划，并在 RecPro 独立 Neo4j 目标上完成只读预演；同时准备 DeepSeek 端口而不泄露或猜测密钥。
+新增文件：`contracts/data/intake/book-graph-plan.schema.json`；`scripts/build_book_graph_plan.py`；`scripts/import_book_graph.py`；`docs/book_graph_model.md`；`backend/app/llm/adapters/deepseek.py`；`tests/g6/test_book_graph_plan.py`；`tests/g1/backend/test_deepseek_llm.py`。
+修改文件及原版本保存位置：`Makefile` 增加图计划/预演/显式导入命令；`backend/app/config.py` 增加 DeepSeek opt-in 配置和 fail-closed 校验；LLM 导出、`.env.user-secrets.example`、README、本记录更新；原版本由 Git 提交历史保留。
+输入审查：`Lib` 共 76 个 CSV、15,538 条有效来源记录；图计划包含 63,388 个节点和 191,865 条关系；状态 `PASS_WITH_WARNINGS`，371 条警告均为 ISBN 规范化问题；187 个 ISBN 冲突组按内容指纹拆分，不强行合并。
+图模型：GraphVersion、SourceFile、SourceRecord、Book、Category、Topic、Author、Publisher、SubjectCode、Keyword 十类实体；SourceRecord/DESCRIBES、Book/CLASSIFIED_AS、AUTHORED_BY、PUBLISHED_BY、HAS_SUBJECT_CODE、HAS_KEYWORD 等 11 类关系；所有节点/边带 `graph_version` 和稳定键。
+目标边界：仅访问 `recpro-library-neo4j-20260810a`（HTTP 62475、Bolt 62688）的独立容器；已读取目标计数 0/0；本机 Homebrew `7474/7687` 大图和旧 RecPro 空实例均未连接或修改。
+预演结果：`lib-graph-dry-run-20260810-002` PASS；节点/关系写入 0；删除、覆盖和 schema/data 写入均为 0；输入 URL query/fragment 未写入图，仅保留安全 URL和哈希。
+DeepSeek：新增 HTTPS origin、API key、model、timeout、max tokens 配置；`MockLLM` 仍为默认，DeepSeek 构造缺少 key 时 fail-closed；本阶段未保存 key、未发起外部网络请求。
+用户授权门禁：当前计划 `license_status=PENDING_USER_CONFIRMATION`，因此 `--apply` 被拒绝；只有用户明确确认数据可用于本地研究原型（或提供许可证据）后，才能以 `CONFIRMED_LOCAL_RESEARCH` 重建同一输入哈希的计划并执行追加导入。
+新增数据库对象和行数：0；只读预演 Neo4j 查询 6 次，无业务写入；约束/节点/关系尚未创建。
+文件删除数量：0；数据库物理删除数量：0；覆盖数量：0；输入 `Lib` 未修改；旧容器、卷和 59,301 节点外部图均保留。
+验证命令：`python -m scripts.build_book_graph_plan --run-id lib-graph-plan-20260810-002 --graph-version lib-books-v1-20260810 --input-root Lib`；`python -m scripts.import_book_graph --run-id lib-graph-dry-run-20260810-002 --plan-dir artifacts/verification/book-graph/lib-graph-plan-20260810-002 --env-file .env.user-secrets`；定向单元测试 19 项；Neo4j 目标只读计数。
+验证证据：`artifacts/verification/book-graph/lib-graph-plan-20260810-002/graph-plan.json`；`artifacts/verification/book-graph-import/lib-graph-dry-run-20260810-002/import-report.json`；`docs/book_graph_model.md`。
+配置/数据/索引版本：graph-plan=book-graph-plan-v1；graph_version=lib-books-v1-20260810；LLM default=mock；DeepSeek prompt=deepseek-json-v1（未启用）。
+未解决风险：用户许可确认、Neo4j 实际追加导入、MySQL 书目事实层、图召回/向量索引、DeepSeek key 连通性测试和默认 HTTP/Worker 接线仍未完成。
+下一步唯一动作：收到用户明确本地研究授权后，重建 `CONFIRMED_LOCAL_RESEARCH` 计划并在同一独立目标执行显式 `import-book-graph`，完成计数和幂等复验。
 ```
 
 ## 阶段交接模板

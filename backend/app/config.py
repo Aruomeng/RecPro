@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -73,7 +74,23 @@ class AppSettings(BaseSettings):
         pattern=r"^[a-z0-9][a-z0-9_-]{2,47}$",
     )
 
-    llm_provider: Literal["mock"] = "mock"
+    # Mock remains the only default.  ``deepseek`` is a deliberately opt-in
+    # adapter and cannot become valid until a local API key is supplied.
+    llm_provider: Literal["mock", "deepseek"] = "mock"
+    llm_base_url: str = Field(
+        default="https://api.deepseek.com",
+        min_length=1,
+        max_length=255,
+    )
+    llm_model: str = Field(
+        default="deepseek-chat",
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",
+    )
+    llm_api_key: SecretStr | None = None
+    llm_timeout_seconds: float = Field(default=20.0, gt=0.0, le=120.0)
+    llm_max_output_tokens: int = Field(default=512, ge=1, le=8192)
     recommendation_pipeline_enabled: Literal[False] = False
     debug_api_enabled: bool = False
     # A production HTTP composition must opt in separately from authentication
@@ -143,6 +160,32 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "auth JWT secret is required when formal authentication is enabled"
             )
+        return self
+
+    @field_validator("llm_base_url")
+    @classmethod
+    def validate_llm_base_url(cls, value: str) -> str:
+        parsed = urlsplit(value.strip())
+        if parsed.scheme != "https" or not parsed.netloc:
+            raise ValueError("llm base URL must be an HTTPS origin")
+        if parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+            raise ValueError("llm base URL must not include a path, query, or fragment")
+        return value.rstrip("/")
+
+    @field_validator("llm_api_key")
+    @classmethod
+    def validate_llm_api_key(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None or value.get_secret_value() == "":
+            return None
+        secret = value.get_secret_value()
+        if not 16 <= len(secret) <= 256 or any(character.isspace() for character in secret):
+            raise ValueError("llm API key must be 16-256 non-whitespace characters")
+        return value
+
+    @model_validator(mode="after")
+    def validate_llm_configuration(self) -> "AppSettings":
+        if self.llm_provider == "deepseek" and self.llm_api_key is None:
+            raise ValueError("llm API key is required when deepseek provider is enabled")
         return self
 
 

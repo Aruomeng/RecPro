@@ -78,6 +78,29 @@ class ConfigurationTest(unittest.TestCase):
                 recommendation_pipeline_enabled=True,
             )
 
+    def test_deepseek_is_opt_in_and_requires_a_local_key(self) -> None:
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                llm_provider="deepseek",
+            )
+
+        settings = AppSettings(
+            mysql_password="isolated-test-password",
+            llm_provider="deepseek",
+            llm_api_key="local-test-deepseek-key-001",
+        )
+        self.assertEqual("deepseek", settings.llm_provider)
+        self.assertEqual("deepseek-chat", settings.llm_model)
+        self.assertIsNotNone(settings.llm_api_key)
+
+    def test_external_llm_origin_must_be_https(self) -> None:
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                llm_base_url="http://127.0.0.1:9000",
+            )
+
     def test_bundle_path_is_independent_of_process_working_directory(self) -> None:
         with patch("os.getcwd", return_value="/unrelated-working-directory"):
             settings = AppSettings(
