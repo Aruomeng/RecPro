@@ -4,9 +4,9 @@ LibraMAS 是一个面向智慧图书馆知识资源推荐的研究生论文原�
 
 ## 当前状态
 
-`G0：安全与规格基线` 已完成。`G1：可启动工程骨架` 的代码与本地门禁已经实现，包含 FastAPI 健康切片、Worker、Vue 状态页、隔离 Compose 编排、最小权限 MySQL 探针和追加式验收证据。由于当前主机没有 Docker，真实五服务双次启停和三卷持久性验收仍为 `RUNTIME_PENDING`，因此 G1 Gate 保持 `IN_PROGRESS`，不虚报完成。
+G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 正在接入真实图书数据和可选检索能力。当前本机隔离 Compose 的 MySQL 与 Neo4j 均健康，但 Neo4j 仍是空图（0 节点、0 关系），没有把“容器可用”误报成“图谱已完成”。默认 HTTP/API 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
 
-G1 只诚实提供 `/api/v1/health/live` 与 `/api/v1/health/ready`；`can_recommend` 固定为 `false`。首个真实推荐闭环按计划在 G3 形成。
+书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和 `verify-book-intake` 只读门禁，再由后续追加式 ChangePlan 导入 MySQL 事实层与带 `graph_version` 的 Neo4j 影子图。当前没有外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；密钥只能通过本地忽略的环境配置注入，禁止提交到 Git。
 
 ## 核心文档
 
@@ -20,6 +20,7 @@ G1 只诚实提供 `/api/v1/health/live` 与 `/api/v1/health/ready`；`can_recom
 - [HTTP API 契约](docs/api.md)
 - [论文实验协议](docs/experiment_protocol.md)
 - [A01—A25 验收矩阵](docs/acceptance_matrix.md)
+- [图书数据接入契约](contracts/data/intake/book-intake-manifest.schema.json)
 
 ## 最高优先级安全约束
 
@@ -84,6 +85,7 @@ frontend/                             G1 只读状态页及追加式构建脚本
 infra/                                新卷专用的最小权限初始化入口
 scripts/                              安全、架构、环境与验收门禁
 tests/                                G0/G1 自动化测试
+contracts/data/intake/                 规范化书目与接入 Manifest Schema
 ```
 
 ## 版本管理

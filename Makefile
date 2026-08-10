@@ -20,19 +20,22 @@ G5_RUN_ID ?=
 G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
 G5_AUDIT_RUN_ID ?=
+G6_RUN_ID ?=
 FORMAL_AUTH_RUN_ID ?=
 FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
+BOOK_INTAKE_RUN_ID ?=
+DATA_PLANE_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
-	test-g2 test-g3 test-g4 test-g5 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
+	test-g2 test-g3 test-g4 test-g5 test-g6 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
 	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g5-runtime compose-config \
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
-	verify-experiment-freeze verify-evaluation-freeze-inputs \
+	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -72,6 +75,12 @@ test-g4:
 
 test-g5:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g5 -t tests -p 'test_*.py'
+
+test-g6:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g6 -t tests -p 'test_*.py'
+
+test-g9:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g9 -t tests -p 'test_*.py'
 
 g2-tools-install:
 	$(PYTHON) -m pip install --require-hashes -r backend/requirements-g2-tools.lock
@@ -139,6 +148,14 @@ verify-experiment-freeze:
 verify-evaluation-freeze-inputs:
 	@test -n "$(EVAL_INPUT_RUN_ID)" || { echo "EVAL_INPUT_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_evaluation_freeze_inputs --run-id "$(EVAL_INPUT_RUN_ID)"
+
+verify-book-intake:
+	@test -n "$(BOOK_INTAKE_RUN_ID)" || { echo "BOOK_INTAKE_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.inspect_book_intake --run-id "$(BOOK_INTAKE_RUN_ID)"
+
+verify-data-plane-runtime:
+	@test -n "$(DATA_PLANE_RUN_ID)" || { echo "DATA_PLANE_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_data_plane_runtime --run-id "$(DATA_PLANE_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

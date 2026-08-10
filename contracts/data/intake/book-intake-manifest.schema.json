@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/data/intake/book-intake-manifest.schema.json",
+  "title": "LibraMAS library book intake manifest",
+  "description": "Append-only intake description for user-provided or licensed book metadata before database import.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "manifest_version",
+    "intake_id",
+    "source",
+    "input_file",
+    "record_schema_version",
+    "normalization",
+    "privacy",
+    "destinations",
+    "confirmation_eligible",
+    "created_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "library-book-intake-manifest-v1"},
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^library-book-intake-v[0-9]+$"
+    },
+    "intake_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "kind", "name", "license_id", "license_evidence_ref"],
+      "properties": {
+        "source_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["user_provided_scrape", "licensed_open_data", "synthetic"]
+        },
+        "name": {"type": "string", "minLength": 1, "maxLength": 200},
+        "license_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:+/-]{1,127}$"
+        },
+        "license_evidence_ref": {"type": "string", "minLength": 1, "maxLength": 500},
+        "license_evidence_sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "input_file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes", "format", "encoding"],
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/ -]{0,255}$"
+        },
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "bytes": {"type": "integer", "minimum": 1},
+        "format": {"const": "JSONL"},
+        "encoding": {"const": "UTF-8"}
+      }
+    },
+    "record_schema_version": {"const": "library-book-record-v1"},
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "parser_version", "mapping_version"],
+      "properties": {
+        "status": {"type": "string", "enum": ["NORMALIZED", "PENDING"]},
+        "parser_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "mapping_version": {"type": "string", "minLength": 1, "maxLength": 128}
+      }
+    },
+    "privacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "contains_user_data", "identity_mapping_separated"],
+      "properties": {
+        "status": {"type": "string", "enum": ["VERIFIED", "NOT_REQUIRED", "PENDING"]},
+        "contains_user_data": {"const": false},
+        "identity_mapping_separated": {"const": true}
+      }
+    },
+    "destinations": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mysql_resource_catalog", "neo4j_graph_plan"],
+      "properties": {
+        "mysql_resource_catalog": {"const": true},
+        "neo4j_graph_plan": {"const": true}
+      }
+    },
+    "confirmation_eligible": {"type": "boolean"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

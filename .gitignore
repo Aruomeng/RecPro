@@ -12,6 +12,9 @@ htmlcov/
 node_modules/
 dist/
 artifacts/
+# User-provided scraped books and local license evidence are inspected by the
+# intake gate but are never committed as source or experiment artifacts.
+data/incoming/books/
 .env
 .env.*
 !.env.example

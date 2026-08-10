@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.2
+> 状态版本：3.3
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -19,9 +19,9 @@
 - `environment`：
   - 工作区：`/Users/tianyuhang/Documents/RecPro`
   - Git 分支：`codex/g1-runnable-skeleton`；G0 主提交：`cb926d910e8253a8b88c30ecdd656e51b1789594`；G0 交接提交：`e1c4bae03659ef43ebb81c6a6472e74ce189eef5`；远程：`https://github.com/Aruomeng/RecPro.git`。
-  - G1 最终验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0、Docker 29.3.1、Docker Compose 5.1.1、GitHub CLI 2.97.0。Docker Desktop 位于 `/Applications/编程/Docker.app`，当前需显式加入其资源目录到 PATH；`gh` 已安装但尚未认证。
+  - 当前验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0、Docker 29.3.1、Docker Compose 5.1.1、GitHub CLI 2.97.0。Docker Desktop 位于 `/Applications/编程/Docker.app`，当前需显式加入其资源目录到 PATH；`gh` 已安装但尚未认证。
   - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
-  - 当前未连接或修改任何既有业务数据库；G1 只在全新隔离 Compose 卷中创建平台探针表和唯一标记行，用于验证安全复启。
+  - 当前 Compose 项目为 `recpro-g2-tianyuhang-20260809a`。本轮只读检查了该隔离项目：MySQL 健康、业务库共有 40 张表；Neo4j 健康、节点数 0、关系数 0。未连接或修改用户未明确授权的其他业务数据库，未执行迁移、导入、清空或删除。
 - `decisions`：
   - 用户最新零删除要求优先于旧实施文档中的reset、destroy和clear语义。
   - `demo-reset`替换为新 `fixture_generation/test_run_id`。
@@ -72,6 +72,8 @@
   - 论文实验冻结前置检查已完成：`verify_experiment_freeze` 校验协议/Manifest/seed 哈希与 Git clean 状态，并以新证据报告当前 `synthetic-demo-2026-08` 只能开发/演示，缺少正式 F2 Split、标注和 F3 配置 Manifest；该检查不连接数据库、不覆盖旧 Run。
   - 已完成正式评价输入契约第一小步：新增 Dataset、License、Annotation、Split、Config 五类严格 JSON Schema；所有关键路径、输入文件、哈希、匿名化、盲标注、一致性、时间边界、Group 泄漏和 F3 配置引用均以独立 Manifest 表达，未知字段默认拒绝。
   - 已完成只读评价输入冻结校验器：`verify_evaluation_freeze_inputs` 验证五类 Manifest 的 JSON Schema、引用文件 SHA-256、跨 Manifest dataset_version、许可覆盖、标注仲裁、Split 安全属性、配置 Commit/依赖/Bundle 哈希和输入引用一致性；同名证据目录直接失败，不连接数据库、不删除或覆盖输入。
+  - 已完成数据平面只读健康门禁：`verify_data_plane_runtime` 只读取 Compose 服务状态、MySQL 表数量和 Neo4j 节点/关系数量；证据 `data-plane-20260810-002` 为 PASS，MySQL=40 张表、Neo4j=0/0，database_writes=0、actual_delete_count=0、service_start_stop_actions=0。
+  - 已完成图书数据接入前置契约：`book-record.schema.json` 固化脱离用户身份的规范化书目记录，`book-intake-manifest.schema.json` 固化来源、许可、文件 SHA-256、规范化、隐私和 MySQL/Neo4j 目标；`inspect_book_intake` 只读校验 JSONL、重复主键/ISBN/标签、许可引用和路径安全，在没有用户数据时明确阻断，不连接数据库。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -82,7 +84,9 @@
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
   - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
-- `next_step`：依据五类 Manifest 契约接收并审查真实评价数据、许可证据、盲标注和 F2 Split，再生成 F3 配置 Manifest；同时评审外部 IdP/JWKS 与 Worker 运行接线；默认 API 继续关闭。
+  - MySQL 当前已有隔离历史事实，但本轮没有导入新的书目；Neo4j 仅完成容器健康和只读计数，尚未接入图构建/图召回适配器。用户提供书目和来源许可后，必须先通过 G6 intake report，再生成 append-only MySQL 导入计划和带 `graph_version` 的 Neo4j 影子图版本。
+  - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
+- `next_step`：先接收用户授权的书目原始文件、来源/许可证据和字段说明，生成规范化 JSONL 与 intake manifest 并通过只读门禁；随后实现 MySQL 追加导入、Neo4j 版本化图导入和可选向量索引，最后再评审外部 LLM Provider 与默认 HTTP/Worker 接线。
 
 ---
 
@@ -97,7 +101,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | NOT_STARTED | — | 依赖G3/G4 |
+| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/data-plane/data-plane-20260810-002/runtime.json`；`contracts/data/intake/book-record.schema.json`；`contracts/data/intake/book-intake-manifest.schema.json`；`scripts/inspect_book_intake.py`；8 项 G6 测试 | MySQL/Neo4j 健康与只读计数 PASS；书目接入契约和导入前审查 PASS_WITH_BLOCKERS（当前无用户书目）；Neo4j 图适配器、向量索引、图召回、LLM Provider 和故障矩阵尚未完成 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -109,8 +113,8 @@
 
 ## Working Set
 
-- `current_subtask`：已建立五类正式评价输入 Manifest Schema 与只读校验器；当前 G2 合成 Fixture 和 F2/F3/许可/标注输入缺失仍被阻断，真实数据准备完成前不得开始确认性实验。
-- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G9 冻结前置 3 项、评价输入门禁 7 项和前端 33 项测试通过（累计 368 项）；安全扫描、架构扫描、文档/契约校验待本阶段最终回归；评价输入报告 `PASS_WITH_BLOCKERS`，全程 database_reads=0、database_writes=0、actual_delete_count=0、overwritten_runs=0。
+- `current_subtask`：已建立五类正式评价输入 Manifest Schema、数据平面只读检查器和书目 intake 门禁；等待用户提供真实书目、来源许可和字段说明，之前不得导入 MySQL/Neo4j，也不得启用外部 LLM。
+- `current_evidence`：G0 131 项、G1 Python 103 项、G2 13 项、G3 22 项、G4 33 项、G5 21 项、认证 5 项、G6 8 项、G9 冻结前置 3 项、评价输入门禁 7 项和前端 33 项测试通过（累计 376 项）；数据平面证据 `data-plane-20260810-002` 为 PASS，intake 缺少用户输入而为 `PASS_WITH_BLOCKERS`；本阶段数据库写入、物理删除、覆盖和服务启停动作均为 0。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -129,8 +133,8 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；production HTTP 仅能通过显式组合根构造，正式 Worker 接线和外部 IdP/JWKS 仍待补；五类输入门禁已证明当前数据只能用于合成演示，不得用于正式论文评价。
-- `next_action`：按五类 Schema 准备真实数据/许可/盲标注/F2 Split/F3 配置，并完成 Worker/外部 IdP 评审；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 还没有 Neo4j/向量/外部 LLM 适配器；真实书目、许可、脱敏确认和评价输入仍缺失；任何默认环境仍不得自动开启推荐。
+- `next_action`：由用户提供书目原始文件、来源与许可证据后，先运行 `verify-book-intake`，再设计并评审 append-only 导入 ChangePlan；同时保持外部 LLM 和默认 API 关闭。
 
 ---
 
@@ -629,6 +633,28 @@ Gate：G9 正式评价输入契约与冻结前置（第一小步）
 配置/数据/索引版本：manifest-schemas=evaluation-*-manifest-v1；freeze-report=evaluation-input-freeze-report-v1；dataset=synthetic-demo-2026-08（development-only）；default business API=disabled。
 未解决风险：真实评价数据来源、许可审批证据、匿名化、Track-I/Track-J 选择、盲标注及一致性、F2 Split、F3 配置、G8 发布候选和外部 IdP/JWKS/Worker 评审仍未完成；不能运行论文确认性测试。
 下一步唯一动作：在不提交身份映射和受限原始数据的前提下，依据五类 Schema 接收真实数据及许可/标注/Split 证据，逐项通过只读输入门禁后再进入 F3 配置冻结。
+```
+
+## G6 数据平面与图书接入前置记录
+
+```text
+交接ID：G6-DATA-INTAKE-20260810-001
+Gate：G6 可选检索与解释（数据平面、书目接入前置）
+状态：CONTRACT_PASS, LOCAL_PASS, RUNTIME_PASS / IN_PROGRESS
+时间：2026-08-10（Asia/Shanghai）
+目标：在不改动现有事实的前提下确认 MySQL/Neo4j 可用，并建立用户爬取书目进入 MySQL 事实层和 Neo4j 版本化图之前的规范化、许可、隐私、哈希和重复检查。
+新增文件：contracts/data/intake/book-record.schema.json；contracts/data/intake/book-intake-manifest.schema.json；scripts/inspect_book_intake.py；scripts/verify_data_plane_runtime.py；tests/g6/test_book_intake.py；tests/g6/test_data_plane_runtime.py。
+修改文件及原版本保存位置：Makefile 增加 `verify-book-intake`、`verify-data-plane-runtime` 和对应 Run ID；.gitignore 忽略本地 `data/incoming/books/`；README.md、docs/experiment_protocol.md 与本交接记录增加数据入口和当前依赖事实；原版本由 Git 提交历史保留。
+数据平面结果：Compose 项目 `recpro-g2-tianyuhang-20260809a` 的 MySQL/Neo4j 均 healthy；MySQL 表数量 40；Neo4j 节点/关系 0/0；报告绑定提交 `7514b1b80fc24bc61b6f62d1f8576748f8c8be42`。
+新增数据库对象和行数：0；只读检查执行 MySQL SELECT 1 次、Neo4j count 查询 2 次；没有迁移、导入或业务写入。
+受控UPDATE对象和审计ID：0；数据库物理删除数量：0；文件删除数量：0；覆盖数量：0；服务启停动作：0。
+输入边界：用户尚未提供书目 JSONL/原始抓取文件、来源许可或字段说明；未创建、伪造或导入任何书目数据。当前 intake 报告按设计为 `PASS_WITH_BLOCKERS`，阻断码为 `INTAKE_MANIFEST_MISSING`（另有工作区未提交时的 `WORKTREE_DIRTY`）。
+执行命令：`python -m unittest discover -s tests/g6 -t tests -p 'test_*.py'`；`python -m scripts.verify_data_plane_runtime --run-id data-plane-20260810-002`；`python -m scripts.inspect_book_intake --run-id books-intake-preflight-20260810-001`；`docker compose --env-file .env.compose up -d mysql neo4j`（仅启动/复用服务，未执行 down、rm、volume 删除或迁移）。
+测试结果：G6 8 项单元测试 PASS；数据平面只读报告 PASS；MySQL/Neo4j 查询与安全计数符合预期；intake 无输入时安全阻断。
+验证证据目录：`artifacts/verification/data-plane/data-plane-20260810-002/runtime.json`；`artifacts/verification/data-intake/books-intake-preflight-20260810-001/book-intake-report.json`（均为本地 `.gitignore` 保护的追加式证据）。
+配置/数据/索引版本：book-record=library-book-record-v1；intake-manifest=library-book-intake-manifest-v1；data-plane-report=data-plane-runtime-report-v1；Neo4j graph_version 尚未创建；外部 LLM=未配置，Mock/模板保持默认。
+未解决风险：Neo4j 图构建/图召回、向量索引、外部 LLM Provider、默认 HTTP/Worker 接线和真实书目导入均未完成；未经用户确认来源/许可和 intake 门禁通过，不得写入数据库。
+下一步唯一动作：接收用户授权的书目文件、来源/许可证据、字段说明和是否包含用户数据的确认；通过 intake 后再提交独立的 MySQL append-only 导入与 Neo4j 新 graph_version ChangePlan。
 ```
 
 ## 阶段交接模板

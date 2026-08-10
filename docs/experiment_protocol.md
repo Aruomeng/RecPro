@@ -870,6 +870,44 @@ EVAL_INPUT_RUN_ID=eval-inputs-<unique-id> make verify-evaluation-freeze-inputs \
 显式切换。只有报告为 `READY_FOR_FORMAL_RUN` 且 F1、F2、F3、盲标注门禁全部通过，
 才允许继续生成预测产物。
 
+### 25.3 智慧图书馆书目接入门禁
+
+论文演示所需的书目数据与正式评价数据分开管理。用户提供的爬取结果先放在本地
+`data/incoming/books/`（该目录被 `.gitignore` 保护，不进入提交），不得直接执行
+SQL/Cypher 导入。接入前必须准备：
+
+| 输入 | 契约/要求 |
+|---|---|
+| 规范化记录 | `contracts/data/intake/book-record.schema.json`；JSONL、UTF-8、无用户身份，未知字段拒绝 |
+| Intake Manifest | `contracts/data/intake/book-intake-manifest.schema.json`；来源、许可证据、输入文件字节数/SHA-256、解析/映射版本、隐私状态和 MySQL/Neo4j 目标 |
+| 许可证据 | 许可证文件的 SHA-256 或可审计的 HTTP/DOI 引用；来源不明、超出许可范围或无法核验时阻断 |
+| 安全审查 | `verify-book-intake` 只读校验路径、哈希、重复 `source_record_id`/ISBN/标签、规范化状态和用户数据标记 |
+
+执行命令：
+
+```bash
+BOOK_INTAKE_RUN_ID=books-intake-<unique-id> make verify-book-intake \
+  PYTHON=.venv-g1-release-py311/bin/python
+```
+
+检查器把新报告写入 `artifacts/verification/data-intake/<run_id>/`，不连接数据库，
+同名目录直接失败；当前未提供书目时预期为 `PASS_WITH_BLOCKERS`，不能伪造示例数据
+来消除阻断。只有报告 `can_import=true`、工作区已提交且用户确认来源/许可后，才可
+为 MySQL `resource_catalog` 生成新的 append-only 导入 ChangePlan；Neo4j 必须写入
+新的 `graph_version` 影子图，校验节点/关系计数、输入哈希和抽样结果后才允许登记
+活动版本，旧图版本不可删除或覆盖。
+
+数据平面只读健康检查：
+
+```bash
+DATA_PLANE_RUN_ID=data-plane-<unique-id> make verify-data-plane-runtime \
+  PYTHON=.venv-g1-release-py311/bin/python
+```
+
+该命令只读取 Compose 服务健康状态、MySQL 表数量和 Neo4j 节点/关系数量；不会启动、
+停止、迁移、导入、清空或删除任何服务、卷和数据。当前证据显示 MySQL 40 张表、
+Neo4j 0/0，说明数据库容器可用但图召回链路尚未完成。
+
 ## 26. 结果解释边界
 
 - RQ1 显著：可以主张在当前数据、任务和配置下改善相应排序指标，不能自动外推到所有图书馆。
