@@ -7,7 +7,7 @@ from pathlib import Path
 import re
 from typing import Literal
 
-from pydantic import Field, SecretStr, ValidationError, field_validator
+from pydantic import Field, SecretStr, ValidationError, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic_settings.exceptions import SettingsError
 
@@ -76,6 +76,24 @@ class AppSettings(BaseSettings):
     llm_provider: Literal["mock"] = "mock"
     recommendation_pipeline_enabled: Literal[False] = False
     debug_api_enabled: bool = False
+    # Formal HTTP authentication is deliberately opt-in.  The default local
+    # runtime has no bearer secret and therefore cannot accidentally expose a
+    # credential-backed route.
+    auth_enabled: bool = False
+    auth_jwt_secret: SecretStr | None = None
+    auth_jwt_issuer: str = Field(
+        default="libramas-local",
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    )
+    auth_jwt_audience: str = Field(
+        default="libramas-api",
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
+    )
+    auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
     cors_origins: tuple[str, ...] = ("http://localhost:5173",)
 
     @field_validator("config_bundle_path", mode="before")
@@ -101,6 +119,28 @@ class AppSettings(BaseSettings):
                 "mysql password must contain 16-128 approved local characters"
             )
         return value
+
+    @field_validator("auth_jwt_secret")
+    @classmethod
+    def validate_auth_jwt_secret(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        secret = value.get_secret_value()
+        if secret == "":
+            return None
+        if not 32 <= len(secret) <= 256:
+            raise ValueError("auth JWT secret must contain 32-256 characters")
+        if any(character.isspace() for character in secret):
+            raise ValueError("auth JWT secret must not contain whitespace")
+        return value
+
+    @model_validator(mode="after")
+    def validate_auth_configuration(self) -> "AppSettings":
+        if self.auth_enabled and self.auth_jwt_secret is None:
+            raise ValueError(
+                "auth JWT secret is required when formal authentication is enabled"
+            )
+        return self
 
 
 @dataclass(frozen=True, slots=True)

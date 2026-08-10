@@ -23,6 +23,10 @@ from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
 from backend.app.profile.application.refresh import ProfileOutboxWorker
 from backend.app.observability.adapters.mysql_transition import MySQLStateTransitionWriter
+from backend.app.platform.auth import (
+    HMACBearerTokenResolver,
+    build_formal_principal_resolver,
+)
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
@@ -49,6 +53,20 @@ def _mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
         return await asyncmy.connect(**options)
 
     return connect
+
+
+def build_formal_auth_resolver(
+    settings: AppSettings,
+) -> HMACBearerTokenResolver | None:
+    """Build the explicit formal Bearer resolver without enabling any route.
+
+    Authentication construction is kept in the composition root.  Callers
+    still have to opt into recommendation/interaction services and their API
+    flags separately, so setting ``RECPRO_AUTH_ENABLED=true`` alone cannot
+    expose a business endpoint.
+    """
+
+    return build_formal_principal_resolver(settings)
 
 
 def _build_mysql_orchestration_service(
@@ -159,6 +177,7 @@ def build_profile_outbox_worker(
 
 
 __all__ = [
+    "build_formal_auth_resolver",
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
     "build_research_behavior_service",

@@ -51,7 +51,20 @@ UUID：小写标准形式
 | `research_admin` | 用户能力；指定历史时点；查看评分、Trace 和策略调试数据；执行受控画像重算 |
 | `service_worker` | 只调用内部 Worker 端口，不通过公开浏览器 API |
 
-调试端点只有在 `ENABLE_DEBUG_API=true` 且调用者为 `research_admin` 时注册。
+调试端点只有在 `RECPRO_DEBUG_API_ENABLED=true` 且调用者为 `research_admin` 时注册。
+
+当前正式 Bearer 适配器使用严格的 HS256 JWT 验证，作为 Platform 组合根的
+可替换实现。它要求 `typ=JWT`、`alg=HS256`、匹配的 `iss`/`aud`、正整数
+字符串 `sub`、非空已知角色列表和 `exp`；若出现 `nbf`/`iat`/`jti` 也会做
+类型和时钟偏差校验。验证器只把匿名化后的 `AuthenticatedPrincipal` 传给
+应用层，不记录原始 Token。部署可在组合根替换为外部 OIDC/JWKS 适配器，
+不改变 API 或领域端口。
+
+正式验证默认关闭。只有同时设置 `RECPRO_AUTH_ENABLED=true` 和不小于 32
+字符的 `RECPRO_AUTH_JWT_SECRET` 时才构造 HS256 验证器；推荐/交互服务及
+对应 API 开关仍需单独显式注入。因此仅打开认证配置不会注册任何业务路由，
+默认 Compose 与 `create_app()` 继续保持业务 API 关闭。Secret 只能放在被
+忽略的部署环境文件或 Secret 管理系统中，不能提交到仓库。
 
 ### 2.3 请求追踪
 

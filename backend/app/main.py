@@ -12,6 +12,7 @@ from backend.app.api.feedback import create_feedback_router
 from backend.app.api.health import create_health_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
+from backend.app.composition import build_formal_auth_resolver
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
     CONFIG_BUNDLE_SCHEMA_SHA256,
@@ -48,6 +49,10 @@ def create_app(
         else load_configuration()
     )
     runtime = state.settings
+    formal_auth_enabled = bool(getattr(runtime, "auth_enabled", False))
+    effective_principal_resolver = principal_resolver
+    if effective_principal_resolver is None and formal_auth_enabled:
+        effective_principal_resolver = build_formal_auth_resolver(runtime)
     effective_debug_api_enabled = (
         runtime.debug_api_enabled
         if debug_api_enabled is None
@@ -97,7 +102,7 @@ def create_app(
     if (recommendation_service is not None and recommendation_api_enabled) or interaction_api_enabled:
         cors_methods.append("POST")
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
-    if principal_resolver is not None or effective_debug_api_enabled:
+    if effective_principal_resolver is not None or effective_debug_api_enabled:
         cors_headers.append("Authorization")
     application.add_middleware(
         CORSMiddleware,
@@ -120,14 +125,14 @@ def create_app(
                 app_env=runtime.app_env,
                 demo_identity_enabled=runtime.app_env == "demo",
                 pipeline_enabled=recommendation_api_enabled,
-                principal_resolver=principal_resolver,
+                principal_resolver=effective_principal_resolver,
             )
         )
         if effective_debug_api_enabled:
             application.include_router(
                 create_debug_router(
                     service=recommendation_service,
-                    principal_resolver=principal_resolver,
+                    principal_resolver=effective_principal_resolver,
                 )
             )
     if feedback_service is not None or behavior_service is not None:
@@ -138,7 +143,7 @@ def create_app(
                 app_env=runtime.app_env,
                 demo_identity_enabled=runtime.app_env == "demo",
                 pipeline_enabled=feedback_api_enabled,
-                principal_resolver=principal_resolver,
+                principal_resolver=effective_principal_resolver,
             )
         )
     return application
