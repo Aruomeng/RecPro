@@ -8,6 +8,10 @@ G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和 `verify-book-intake` 只读门禁，再由后续追加式 ChangePlan 导入 MySQL 事实层与带 `graph_version` 的 Neo4j 影子图。当前没有外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；密钥只能通过本地忽略的环境配置注入，禁止提交到 Git。
 
+数据库管理员凭据只保存在本机 `.env.user-secrets`（权限 `0600`，已被 `.gitignore` 忽略），不进入应用日志或提交。MySQL 应用运行账号仍保持最小权限；`root` 仅作为后续受控管理/迁移凭据使用。Neo4j Community 只提供默认 `neo4j` 数据库，因此 RecPro 使用独立 Compose 实例和独立数据卷隔离于本机已有 Neo4j；不会连接本机 `7474/7687` 上的既有图。
+
+当前已创建新的 RecPro Neo4j 隔离实例 `recpro-library-neo4j-20260810a`，使用独立数据卷和本地端口 `62475/62688`，初始节点/关系为 `0/0`。原有 RecPro 验证实例和本机已有大图均保留，不迁移、不复用。
+
 ## 核心文档
 
 - [可运行版实施文档](docs/LibraMAS_纯推荐模块实施文档_可运行版.md)

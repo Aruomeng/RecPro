@@ -17,6 +17,7 @@ artifacts/
 data/incoming/books/
 .env
 .env.*
+!.env.user-secrets.example
 !.env.example
 !.env.host.example
 !.env.compose.example

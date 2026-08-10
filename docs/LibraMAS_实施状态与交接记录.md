@@ -1,6 +1,6 @@
 # LibraMAS 实施状态与交接记录
 
-> 状态版本：3.4
+> 状态版本：3.6
 > 更新时间：2026-08-10
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
@@ -22,6 +22,9 @@
   - 当前验证环境：Python 3.11.14、Node 25.6.0、npm 11.8.0、MySQL 客户端 9.3.0、Docker 29.3.1、Docker Compose 5.1.1、GitHub CLI 2.97.0。Docker Desktop 位于 `/Applications/编程/Docker.app`，当前需显式加入其资源目录到 PATH；`gh` 已安装但尚未认证。
   - macOS 元数据文件已保留并由 `.gitignore` 忽略，未删除、未提交；Finder 可自动更新或新建这类文件，本项目不对其执行清理或哈希回写。
   - 当前 Compose 项目为 `recpro-g2-tianyuhang-20260809a`。本轮只读检查了该隔离项目：MySQL 健康、业务库共有 40 张表；Neo4j 健康、节点数 0、关系数 0。未连接或修改用户未明确授权的其他业务数据库，未执行迁移、导入、清空或删除。
+  - 用户提供的 MySQL/Neo4j 管理凭据已保存至本机 `.env.user-secrets`（`0600`、Git 忽略、未提交）；不会在日志、报告或 Agent 上下文中输出密码。MySQL 运行时仍使用最小权限账号，root 仅用于后续受控管理/迁移。
+  - 只读盘点发现本机另有 Homebrew Neo4j（`127.0.0.1:7474/7687`），默认 `neo4j` 库有 59,301 个节点、185,238 条关系；只读查询后未写入、清空、删除或停用该实例。RecPro 不使用该实例。
+  - 已创建新的 RecPro Neo4j 隔离实例 `recpro-library-neo4j-20260810a`，独立数据卷 `recpro-library-neo4j-20260810a_neo4j_data`、端口 `62475/62688`，用户凭据认证成功，初始节点/关系为 0/0；旧 RecPro 空实例未删除或复用。
 - `decisions`：
   - 用户最新零删除要求优先于旧实施文档中的reset、destroy和clear语义。
   - `demo-reset`替换为新 `fixture_generation/test_run_id`。
@@ -85,6 +88,8 @@
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
   - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
   - MySQL 当前已有隔离历史事实，但本轮没有导入新的书目；Neo4j 仅完成容器健康和只读计数，尚未接入图构建/图召回适配器。用户提供书目和来源许可后，必须先通过 G6 intake report，再生成 append-only MySQL 导入计划和带 `graph_version` 的 Neo4j 影子图版本。
+  - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
+  - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
 - `next_step`：先接收用户授权的书目原始文件、来源/许可证据和字段说明，生成规范化 JSONL 与 intake manifest 并通过只读门禁；随后实现 MySQL 追加导入、Neo4j 版本化图导入和可选向量索引，最后再评审外部 LLM Provider 与默认 HTTP/Worker 接线。
 
@@ -101,7 +106,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/data-plane/data-plane-20260810-003/runtime.json`；`contracts/data/intake/book-record.schema.json`；`contracts/data/intake/book-intake-manifest.schema.json`；`scripts/inspect_book_intake.py`；8 项 G6 测试 | MySQL/Neo4j 健康与只读计数 PASS；书目接入契约和导入前审查 PASS_WITH_BLOCKERS（当前无用户书目）；Neo4j 图适配器、向量索引、图召回、LLM Provider 和故障矩阵尚未完成 |
+| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/data-plane/data-plane-20260810-003/runtime.json`；`contracts/data/intake/book-record.schema.json`；`contracts/data/intake/book-intake-manifest.schema.json`；`scripts/inspect_book_intake.py`；8 项 G6 测试 | RecPro 隔离 MySQL/Neo4j 健康与只读计数 PASS；书目接入契约和导入前审查 PASS_WITH_BLOCKERS（当前无用户书目）；本机已有 59,301 节点图被明确排除；Neo4j 图适配器、向量索引、图召回、LLM Provider 和故障矩阵尚未完成 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -134,6 +139,7 @@
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 还没有 Neo4j/向量/外部 LLM 适配器；真实书目、许可、脱敏确认和评价输入仍缺失；任何默认环境仍不得自动开启推荐。
+- `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
 - `next_action`：由用户提供书目原始文件、来源与许可证据后，先运行 `verify-book-intake`，再设计并评审 append-only 导入 ChangePlan；同时保持外部 LLM 和默认 API 关闭。
 
 ---
@@ -655,6 +661,26 @@ Gate：G6 可选检索与解释（数据平面、书目接入前置）
 配置/数据/索引版本：book-record=library-book-record-v1；intake-manifest=library-book-intake-manifest-v1；data-plane-report=data-plane-runtime-report-v1；Neo4j graph_version 尚未创建；外部 LLM=未配置，Mock/模板保持默认。
 未解决风险：Neo4j 图构建/图召回、向量索引、外部 LLM Provider、默认 HTTP/Worker 接线和真实书目导入均未完成；未经用户确认来源/许可和 intake 门禁通过，不得写入数据库。
 下一步唯一动作：接收用户授权的书目文件、来源/许可证据、字段说明和是否包含用户数据的确认；通过 intake 后再提交独立的 MySQL append-only 导入与 Neo4j 新 graph_version ChangePlan。
+```
+
+## G6 外部 Neo4j 只读盘点与凭据隔离记录
+
+```text
+交接ID：G6-DB-BOUNDARY-20260810-002
+Gate：G6 数据库边界与凭据隔离
+状态：READ_ONLY_AUDIT_PASS / IN_PROGRESS
+时间：2026-08-10（Asia/Shanghai）
+目标：保存用户提供的本地管理凭据，识别本机已有 Neo4j 数据库，并确保 RecPro 不复用或修改该数据库。
+凭据保存：实际凭据仅写入本机 `.env.user-secrets`，权限 0600，Git 忽略；仅提交无值模板 `.env.user-secrets.example`，密码未进入代码、日志、证据或提交。
+外部实例识别：Homebrew Neo4j Community 进程，Bolt `127.0.0.1:7687`、HTTP `127.0.0.1:7474`；只读 `SHOW DATABASES` 返回 `neo4j` 与 `system`，默认 `neo4j` 库在线。
+外部数据计数：`neo4j` 库节点 59,301、关系 185,238；标签 10 类、关系类型 13 类。查询使用 `--access-mode read`，未执行写 Cypher、DDL、导入、清空或删除。
+RecPro 边界：RecPro 使用独立 Compose Neo4j 容器和独立数据卷，当前隔离库节点/关系为 0/0；不得连接本机 `7474/7687`。Neo4j Community 不能在同一实例提供额外独立命名库，因此以独立实例/卷作为新数据库边界。
+新目标实例：`recpro-library-neo4j-20260810a-neo4j-1`，数据卷 `recpro-library-neo4j-20260810a_neo4j_data`，HTTP/Bolt 主机端口 `62475/62688`；使用用户提供的 Neo4j 凭据认证成功，`SHOW DATABASES` 仅有空的 `neo4j` 与 `system`。
+临时容器处理：为核对旧 `agentsystem-neo4j-1` 容器曾安全启动后执行只读计数（0/0），随后恢复为 stopped；未删除容器、卷或数据。Homebrew Neo4j 外部实例始终保持运行，未停止或重启。
+新增数据库对象和行数：0；外部 Neo4j 只读查询，不写入 RecPro 或外部数据库。
+文件删除数量：0；数据库物理删除数量：0；覆盖数量：0；容器删除动作：0；临时 `agentsystem-neo4j-1` 停止动作：1（恢复其原 stopped 状态）；Homebrew Neo4j 外部实例未停止。
+未解决风险：应用组合根尚未切换到新目标实例，当前旧 RecPro 验证实例仍保留；正式图书导入前必须在配置 Bundle 中显式选择新目标实例，并保留旧隔离卷，不原地改密或复用外部大图。
+下一步唯一动作：把新目标实例的端口/凭据引用接入独立配置 Bundle，完成只读健康门禁后，再接收书目导入。
 ```
 
 ## 阶段交接模板
