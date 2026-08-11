@@ -35,8 +35,12 @@ from backend.app.platform.auth import (
     build_formal_principal_resolver,
 )
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
+from backend.app.recommendation.adapters.g4_mysql import (
+    MySQLG4RecommendationTaskService,
+)
 from backend.app.recommendation.adapters.mysql import MySQLRecommendationTaskService
 from backend.app.recommendation.agents.base import RetryPolicy
+from backend.app.recommendation.agents.orchestrator import RecommendationOrchestrator
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
 from backend.app.recommendation.application.persistent_orchestration import (
     ConnectionFactory,
@@ -306,6 +310,66 @@ def build_research_orchestration_service(
     )
 
 
+def build_research_g4_recommendation_service(
+    settings: AppSettings,
+    *,
+    dataset_version: str = "lib-books-v1-20260810",
+    connection_factory: ConnectionFactory | None = None,
+    graph: GraphRecallPort | None = None,
+    graph_version: str | None = None,
+    vector: VectorRecallPort | None = None,
+    query_embedder: QueryEmbeddingPort | None = None,
+    embedding_version: str | None = None,
+    index_version: str | None = None,
+    enable_llm_provider: bool = False,
+    deadline_seconds: float = 30.0,
+) -> MySQLG4RecommendationTaskService:
+    """Build the explicit G4 RecommendationTaskService without HTTP wiring.
+
+    This composition root is intentionally separate from
+    ``build_demo_mysql_http_app``.  It opens no connection during construction;
+    the caller must explicitly pass the resulting service to a reviewed HTTP
+    graph and keep the default health-only app unchanged.
+    """
+
+    if settings.app_env == "production":
+        raise ValueError("G4 recommendation composition requires a non-production environment")
+    llm_provider = build_llm_provider(settings) if enable_llm_provider else None
+
+    def orchestrator_factory(connection: Any) -> RecommendationOrchestrator:
+        return build_port_orchestrator(
+            MySQLCatalogRepository(connection),
+            MySQLProfileSnapshotReader(connection),
+            graph=graph,
+            graph_version=graph_version,
+            vector=vector,
+            query_embedder=query_embedder,
+            embedding_version=embedding_version,
+            index_version=index_version,
+            retry_policy=RetryPolicy(max_attempts=2),
+            llm_provider=llm_provider,
+        )
+
+    return MySQLG4RecommendationTaskService(
+        host=settings.mysql_host,
+        port=settings.mysql_port,
+        database=settings.mysql_database,
+        user=settings.mysql_user,
+        password=settings.mysql_password.get_secret_value(),
+        catalog_repository_factory=MySQLCatalogRepository,
+        orchestrator_factory=orchestrator_factory,
+        config_bundle_version=getattr(settings, "config_bundle_version", "rec-1.0.0"),
+        dataset_version=dataset_version,
+        graph_version=graph_version,
+        embedding_version=embedding_version,
+        index_version=index_version,
+        prompt_version=getattr(settings, "prompt_bundle_version", None),
+        deadline_seconds=deadline_seconds,
+        connect_timeout=settings.mysql_connect_timeout_seconds,
+        connection_factory=connection_factory,
+    )
+
+
 def build_research_feedback_service(
     settings: AppSettings,
     *,
@@ -371,4 +435,5 @@ __all__ = [
     "build_research_behavior_service",
     "build_research_feedback_service",
     "build_research_orchestration_service",
+    "build_research_g4_recommendation_service",
 ]

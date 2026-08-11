@@ -1141,6 +1141,28 @@ Gate：G4 多智能体系统（HTTP 投影边界设计，不写库）
 下一步唯一动作：实现显式、未接入默认路由的 MySQL G4 投影适配器，并先以独立 ChangePlan 预演 SQL 与回滚/幂等测试；在用户批准前不执行新的业务 POST。
 ```
 
+## G4 MySQL 单事务投影 writer 与显式服务记录
+
+```text
+交接ID：G4-MYSQL-PROJECTION-WRITER-20260811-025
+Gate：G4 多智能体系统（单事务投影 writer / 显式服务，未接入默认 HTTP）
+状态：WRITE_PLAN_PASS / APPEND_REPLAY_READBACK_PASS / TRANSACTION_OWNER_PASS / DEFAULT_HTTP_OFF
+时间：2026-08-11（Asia/Shanghai）
+目标：把已经冻结的 G4→HTTP 契约落到可审查的 MySQL append-only writer；Agent message/result/artifact/orchestration_result 与 G3 task/transition/candidate/record/item/explanation/policy/trace 在同一个调用方事务内追加，writer 本身不 commit/rollback。
+新增文件：`backend/app/recommendation/application/g4_persistence.py`；`backend/app/recommendation/adapters/g4_mysql.py`；`tests/g4/test_g4_persistence.py`；`tests/g4/test_g4_mysql_writer.py`。
+修改文件：`backend/app/recommendation/agents/orchestrator.py` 将 intent 纳入可追溯 payload；`backend/app/recommendation/agents/real_agents.py` 为真实候选补齐 channel_scores/channel_ranks/primary_channel/evidence_confidence；`backend/app/composition.py` 新增显式 `build_research_g4_recommendation_service`；`tests/g4/test_composition_root_contract.py` 增加组合根门禁；旧版本由 Git 提交历史保留。
+事务设计：`MySQLG4ProjectionWriter` 先追加 task 与 transitions，再追加 G4 Agent 事实和 trace artifact，随后追加候选通道行、record、item、explanation、policy、trace；每个关键 INSERT IGNORE 后读取并核对身份/JSON/分数，冲突直接抛错交由上层 rollback。writer 不执行 UPDATE、DELETE、DROP、TRUNCATE、迁移或索引切换。
+显式服务边界：`MySQLG4RecommendationTaskService` 复用 G3 的只读 GET/debug/replay 查询，但 create 只在显式组合根调用时运行 G4；澄清 continuation 暂时 fail-closed，避免把 G4 WAITING 状态错误地交给 G3 规则路径。默认 `backend.app.main:app`、Demo HTTP 和 Worker 均未改变。
+测试结果：G4 全量 `49` 项 PASS；架构扫描 `113` 文件 PASS；安全扫描 `289` 文件 PASS；所有 fake-connection writer 测试确认 `commit=0`、`rollback=0`，事务由调用方拥有；无外部 LLM 请求。真实隔离只读融合复核也通过，新增证据 `artifacts/verification/g4/g4-readonly-fusion-20260811-003/readonly.json`，7 dispatches、8 candidates、MYSQL+GRAPH+VECTOR，且新增四类 writer 所需候选字段均存在。
+真实运行边界：只读复核连接了隔离 MySQL/Neo4j/Chroma 并最终 rollback；MySQL/Neo4j/Chroma writes 均为 `0`，Chroma 前后均 `14,983`，资源/G4 事实表计数不变。没有执行新的 ChangePlan、迁移、seed 或业务 POST；未改变既有 G7 task/record 与 G4 事实计数。
+新增数据库对象和行数：0。
+受控UPDATE对象和审计ID：0。
+文件删除数量：0。
+数据库物理删除数量：0。
+未解决风险：尚未在隔离 MySQL 上执行新的 G4 writer 真实 ChangePlan；必须先生成独立 dry-run/预期 delta 清单，确认 G4 候选通道与资源摘要完整，再由用户批准一次新的 request_id 真实 POST。G4 澄清续跑、跨 Agent 超时恢复和正式认证部署仍未完成。
+下一步唯一动作：生成 G4 writer 独立 ChangePlan 与只读基线/回滚预演，先不执行 `--apply`；批准前继续保持默认 HTTP/Worker 关闭。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

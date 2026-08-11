@@ -214,6 +214,20 @@ async def execute(args: argparse.Namespace) -> int:
     channels = recall_payload.get("channels")
     if channels != ["MYSQL", "GRAPH", "VECTOR"]:
         raise ValueError(f"G4 read-only orchestration channels are not fully enabled: {channels!r}")
+    required_projection_fields = {
+        "channel_scores",
+        "channel_ranks",
+        "primary_channel",
+        "evidence_confidence",
+    }
+    if any(
+        not isinstance(candidate, dict)
+        or not required_projection_fields.issubset(candidate)
+        for candidate in candidates
+    ):
+        raise ValueError(
+            "G4 read-only candidates are missing the projection fields required by MySQL writer"
+        )
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -239,6 +253,12 @@ async def execute(args: argparse.Namespace) -> int:
         "dispatch_count": len(first.dispatches),
         "candidate_count": len(candidates),
         "channels": channels,
+        "candidate_enrichment": {
+            "channel_scores": True,
+            "channel_ranks": True,
+            "primary_channel": True,
+            "evidence_confidence": True,
+        },
         "versions": {
             "graph_version": GRAPH_VERSION,
             "embedding_version": EMBEDDING_VERSION,

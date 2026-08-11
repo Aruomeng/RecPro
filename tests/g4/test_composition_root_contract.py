@@ -7,7 +7,11 @@ from pydantic import SecretStr
 
 from backend.app.composition import (
     build_demo_orchestration_service,
+    build_research_g4_recommendation_service,
     build_research_orchestration_service,
+)
+from backend.app.recommendation.adapters.g4_mysql import (
+    MySQLG4RecommendationTaskService,
 )
 from backend.app.recommendation.application.persistent_orchestration import (
     PersistentOrchestrationService,
@@ -53,6 +57,24 @@ class CompositionRootContractTests(unittest.TestCase):
             settings(app_env="demo"), connection_factory=lambda: _never()
         )
         self.assertIsInstance(service, PersistentOrchestrationService)
+
+    def test_g4_recommendation_root_is_explicit_and_does_not_open_connection(self) -> None:
+        opened = False
+
+        async def factory():
+            nonlocal opened
+            opened = True
+            raise AssertionError("composition must not connect during construction")
+
+        service = build_research_g4_recommendation_service(
+            settings(app_env="development"), connection_factory=factory
+        )
+        self.assertIsInstance(service, MySQLG4RecommendationTaskService)
+        self.assertFalse(opened)
+
+    def test_g4_recommendation_root_rejects_production(self) -> None:
+        with self.assertRaisesRegex(ValueError, "non-production"):
+            build_research_g4_recommendation_service(settings(app_env="production"))
 
 
 async def _never():

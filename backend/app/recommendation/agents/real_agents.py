@@ -383,6 +383,7 @@ class CatalogCandidateRecallAgent:
         graph_channel_ready = self._graph is not None and not graph_warning and bool(terms)
         vector_channel_ready = vector_configured and not vector_warning and bool(query_text)
         candidates: list[dict[str, object]] = []
+        resources_by_id = {resource.id: resource for resource in eligible}
         for resource in eligible:
             searchable = " ".join((resource.title, *resource.keywords)).lower()
             keyword_score = (
@@ -401,7 +402,8 @@ class CatalogCandidateRecallAgent:
             graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
             vector_hit = vector_hits.get(resource.external_id)
             vector_score = float(vector_hit.score) if vector_hit is not None else 0.0
-            weighted_score = 0.50 * keyword_score + 0.25 * profile_score
+            mysql_weighted_score = 0.50 * keyword_score + 0.25 * profile_score
+            weighted_score = mysql_weighted_score
             effective_weight = 0.75
             if graph_channel_ready:
                 weighted_score += 0.15 * graph_score
@@ -411,12 +413,17 @@ class CatalogCandidateRecallAgent:
                 effective_weight += 0.10
             score = weighted_score / effective_weight if optional_channel_configured else weighted_score
             channels = ["MYSQL"]
+            channel_scores: dict[str, float] = {
+                "MYSQL": round(min(1.0, mysql_weighted_score / 0.75), 6)
+            }
             evidence_ref = f"catalog:resource:{resource.id}:metadata:{resource.metadata_version}"
             if graph_hit is not None:
                 channels.append("GRAPH")
+                channel_scores["GRAPH"] = round(max(0.0, min(1.0, graph_score)), 6)
                 evidence_ref += f":graph:{graph_hit.graph_version}"
             if vector_hit is not None:
                 channels.append("VECTOR")
+                channel_scores["VECTOR"] = round(max(0.0, min(1.0, vector_score)), 6)
                 evidence_ref += f":vector:{vector_hit.index_version}"
             candidates.append(
                 {
@@ -424,7 +431,59 @@ class CatalogCandidateRecallAgent:
                     "channel": "+".join(channels),
                     "score": round(score, 6),
                     "evidence_ref": evidence_ref,
+                    "channel_scores": channel_scores,
                 }
+            )
+        channel_ranks: dict[str, dict[int, int]] = {}
+        for channel in sorted(
+            {
+                str(name)
+                for candidate in candidates
+                for name in dict(candidate["channel_scores"]).keys()
+            }
+        ):
+            ranked = sorted(
+                candidates,
+                key=lambda item: (
+                    -float(dict(item["channel_scores"]).get(channel, 0.0)),
+                    int(item["resource_id"]),
+                ),
+            )
+            channel_ranks[channel] = {
+                int(item["resource_id"]): index
+                for index, item in enumerate(ranked, start=1)
+            }
+        for candidate in candidates:
+            resource_id = int(candidate["resource_id"])
+            scores = {
+                str(name): float(value)
+                for name, value in dict(candidate["channel_scores"]).items()
+            }
+            ranks = {
+                channel: channel_ranks[channel][resource_id]
+                for channel in scores
+            }
+            metadata_quality = max(
+                0.0,
+                min(1.0, float(resources_by_id[resource_id].metadata_quality)),
+            )
+            coverage = len(scores) / 3.0
+            candidate["channel_ranks"] = ranks
+            candidate["primary_channel"] = max(
+                scores,
+                key=lambda channel: (scores[channel], -ranks[channel], channel),
+            )
+            candidate["evidence_confidence"] = round(
+                max(
+                    0.0,
+                    min(
+                        1.0,
+                        0.55 * metadata_quality
+                        + 0.25 * max(scores.values(), default=0.0)
+                        + 0.20 * coverage,
+                    ),
+                ),
+                6,
             )
         candidates.sort(key=lambda item: (-float(item["score"]), int(item["resource_id"])))
         selected = candidates[:limit]

@@ -243,6 +243,33 @@ def _candidate_items(
         evidence_refs = [str(ref).strip() for ref in refs]
         if not evidence_refs or any(not ref for ref in evidence_refs):
             raise G4ProjectionError("explanation.evidence_refs must be non-empty")
+        raw_channel_scores = item.get("channel_scores")
+        raw_channel_ranks = item.get("channel_ranks")
+        channel_scores: dict[str, float] | None = None
+        channel_ranks: dict[str, int] | None = None
+        if raw_channel_scores is not None or raw_channel_ranks is not None:
+            score_map = _required_mapping(raw_channel_scores, "ranked item.channel_scores")
+            rank_map = _required_mapping(raw_channel_ranks, "ranked item.channel_ranks")
+            if set(str(key).upper() for key in score_map) != set(channels) or set(
+                str(key).upper() for key in rank_map
+            ) != set(channels):
+                raise G4ProjectionError(
+                    "channel_scores and channel_ranks must match candidate channels"
+                )
+            channel_scores = {
+                str(key).upper(): _bounded_number(value, "channel score")
+                for key, value in score_map.items()
+            }
+            channel_ranks = {}
+            for key, value in rank_map.items():
+                if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                    raise G4ProjectionError("channel ranks must be positive integers")
+                channel_ranks[str(key).upper()] = value
+        primary_channel = item.get("primary_channel")
+        if primary_channel is not None:
+            if not isinstance(primary_channel, str) or primary_channel.upper() not in channels:
+                raise G4ProjectionError("primary_channel must be one candidate channel")
+            primary_channel = primary_channel.upper()
         projected.append(
             {
                 "rank_no": rank_no,
@@ -260,6 +287,9 @@ def _candidate_items(
                 "evidence_confidence": evidence_confidence,
                 "reason_summary": summary,
                 "evidence_refs": evidence_refs,
+                "channel_scores": channel_scores,
+                "channel_ranks": channel_ranks,
+                "primary_channel": primary_channel,
             }
         )
     if set(explanations) != seen_resources:
@@ -280,6 +310,48 @@ def extract_candidate_projections(
     """
 
     return tuple(_candidate_items(result, resources=resources))
+
+
+def extract_candidate_rows_for_persistence(
+    result: OrchestrationResult,
+    *,
+    resources: Mapping[int, G4ResourceProjection],
+) -> tuple[dict[str, Any], ...]:
+    """Expand enriched Agent candidates into append-only SQL row facts.
+
+    HTTP can render a candidate with only its overall score, but the G3
+    candidate table intentionally stores one row per recall channel.  This
+    function requires channel-specific scores and ranks, so a result that has
+    not been enriched by the real recall Agent cannot reach SQL.
+    """
+
+    rows: list[dict[str, Any]] = []
+    for candidate in _candidate_items(result, resources=resources):
+        scores = candidate.get("channel_scores")
+        ranks = candidate.get("channel_ranks")
+        if not isinstance(scores, dict) or not isinstance(ranks, dict):
+            raise G4ProjectionError(
+                "persistence projection requires channel_scores and channel_ranks"
+            )
+        for channel in candidate["channels"]:
+            score = float(scores[channel])
+            channel_rank = int(ranks[channel])
+            rows.append(
+                {
+                    "resource_id": candidate["resource_id"],
+                    "channel": channel,
+                    "channel_rank": channel_rank,
+                    "raw_score": score,
+                    "normalized_score": score,
+                    "rrf_contribution": score / (60.0 + channel_rank),
+                    "evidence": {
+                        "resource_id": candidate["resource_id"],
+                        "channel": channel,
+                        "evidence_refs": list(candidate["evidence_refs"]),
+                    },
+                }
+            )
+    return tuple(rows)
 
 
 def build_http_execution_payload(
@@ -408,5 +480,6 @@ __all__ = [
     "build_orchestration_request",
     "derive_task_identity",
     "extract_candidate_projections",
+    "extract_candidate_rows_for_persistence",
     "split_recall_channels",
 ]
