@@ -1437,6 +1437,26 @@ Gate：G4 版本锁定 runtime 的 operator-only collection loader 与 HTTP 组�
 下一步唯一动作：基于本次 host 预演证据生成新的 G4 HTTP/幂等 `S1_APPEND/DRY_RUN` ChangePlan；在用户批准精确 plan_id/hash 前不执行业务 POST、不启用 DeepSeek。
 ```
 
+## G4 HTTP 推荐投影批准追加与独立只读回读
+
+```text
+交接ID：G4-HTTP-PROJECTION-RECONCILE-20260811-004
+Gate：G4 版本锁定 runtime 的真实推荐投影、HTTP GET 回读与追加边界
+状态：APPROVED_APPEND_PASS / READONLY_HTTP_GET_PASS / EXACT_DELTA_PASS / DEFAULT_HTTP_OFF
+时间：2026-08-11（Asia/Shanghai）
+授权边界：用户明确批准 plan_id=`3591f2e9-33c8-5f77-842b-d6c02cba413b`、plan_hash=`8b26a12776796b5884bbf44efb28743eb7a04b2883fabf262da7a24c140642ce`；执行器只允许对 Compose project=`recpro-g2-tianyuhang-20260809a`、隔离 MySQL `recpro`（本地端口=`62306`）执行一个 `S1_APPEND`，不触碰既有 Neo4j 数据库或其他数据库。
+请求与结果：请求 run=`g4-http-projection-plan-20260811-002`，`scene=SEARCH_AFTER`、`resource_types=BOOK`、`output_type=TOPIC_RESOURCES`、`limit=8`；服务返回 `201`、`replayed=false`、状态=`COMPLETED`、context_version=`1`，task=`7f71efa9-1557-5e9d-8d5c-633d1b85bb4f`，record=`23`，trace=`aeecebd3-4758-569f-afda-3059998c5fac`，8 个 item。
+精确追加：数据库只追加 `57` 行：task=`+1`、transition=`+8`、candidate=`+13`、record=`+1`、item=`+8`、explanation=`+8`、policy=`+1`、trace=`+1`、Agent message/result=`+7/+7`、artifact=`+1`、orchestration_result=`+1`。资源事实表、用户/画像/反馈/上下文等非目标表均未变化；所有目标表均达到计划下界且没有计数下降。
+独立回读：新增脚本 `scripts/verify_g4_recommendation_projection_result.py` 与 Make 目标 `verify-g4-recommendation-projection-result` 不重放业务 POST，仅 SELECT 当前全表计数、读取 request/task/record/各目标行族、在显式 G4 组合根调用 health live/ready 与 `GET /api/v1/recommendation-tasks/{task_id}`，并校验 task/status/trace/record identity。live=`200`、ready=`200`（`can_recommend=true`）、task GET=`200`、状态=`COMPLETED`、context_version=`1`。
+数据平面回读：MySQL 当前计数与批准追加证据逐表完全一致；Chroma 前后均=`14,983`，版本 metadata 与 namespace 一致。Neo4j writes=`0`、Chroma writes=`0`、business POST=`0`、external_requests=`0`、external_llm_requests=`0`。
+证据：执行证据=`artifacts/verification/g4/g4-http-projection-apply-20260811-002/g4-recommendation-projection-apply.json`；独立回读证据=`artifacts/verification/g4/g4-http-projection-reconcile-20260811-002/reconciliation.json`。
+配置边界：执行环境虽配置 `RECPRO_LLM_PROVIDER=deepseek`，本次执行器和回读器均显式 `enable_llm_provider=false`，没有发送 DeepSeek 请求，也没有读取或输出密钥；默认 `backend.app.main:app`、Compose HTTP、Worker 仍保持关闭。
+安全边界：本阶段未删除文件、artifact、容器、卷或数据库对象；文件删除数量=`0`、数据库物理删除数量=`0`、UPDATE=`0`、补偿写入=`0`、覆盖输入=`0`。追加是用户批准范围内的一次性事实写入，之后只读回读。
+测试与版本：新增回读器后需重新执行全量 Python、G4、架构、安全、文档、契约和前端门禁；本条记录提交后不复用已执行 ChangePlan，任何下一次业务追加必须重新生成并批准新的 plan_id/hash。
+剩余核心工作量：按“真实可用而非模拟”口径，G4 初始推荐投影已完成；仍需 3 个 Gate：前端真实推荐/澄清浏览器闭环与 feedback/behavior 受控验证；Worker/Outbox、正式认证和 production 组合根部署验收；DeepSeek 外部调用的脱敏、费用/超时/审计与单次 opt-in 验证（或论文演示明确继续 MockLLM）。本地隔离论文演示还需前端 Gate；生产级验收还需后两 Gate。
+下一步唯一动作：先复核并通过代码/文档/安全门禁，再进入前端真实 GET/POST 受控闭环设计；未生成并批准新的前端或续跑 ChangePlan 前不追加新的业务行、不启用 DeepSeek。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
