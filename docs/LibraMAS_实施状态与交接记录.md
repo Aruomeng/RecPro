@@ -1271,6 +1271,23 @@ Gate：G4 动态多智能体闭环（HOME 空请求等待态只读验证）
 下一步唯一动作：完成本交接提交后重新生成最终等待任务 DRY_RUN ChangePlan，向用户报告新的精确 `plan_id/plan_hash`；在批准前不执行 `--apply`、不创建等待任务、不提交澄清答案。
 ```
 
+## G4 等待任务批准执行器完成记录
+
+```text
+交接ID：G4-CLARIFICATION-EXECUTOR-20260811-032
+Gate：G4 动态多智能体闭环（等待任务 ChangePlan 的 fail-closed 执行器）
+状态：APPROVED_EXECUTOR_CODE_PASS / PREPOST_COUNT_GUARD_PASS / NO_APPLY_YET
+时间：2026-08-11（Asia/Shanghai）
+新增文件：`scripts/execute_g4_clarification_plan.py`、`tests/g4/test_g4_clarification_executor.py`。
+修改文件：`Makefile` 增加 `execute-g4-clarification-plan`，要求显式 `--apply`、plan_id、plan_hash、只读 evidence、request run id 和新的 apply run id。
+执行器边界：只接受 S1_APPEND/DRY_RUN 且目标集严格等于 19 行等待事实；执行前核对 canonical plan hash、reviewed Git commit、只读 evidence/config hash、Compose/MySQL 身份、runtime probe、最小权限 grants、幂等 request_id 不存在和全部目标 before counts。服务只使用 MySQL Catalog/Profile 读端口，`enable_llm_provider=false`；成功后要求 WAITING response、问题列表、任务 GET 回读和每张表精确 delta。任何漂移、重放、非 append 目标、非 WAITING 返回或未计划表变化都会失败，不重试、不补偿、不删除。
+测试结果：全量 Python unittest=`438` 项 PASS；架构扫描=`114` files PASS；安全扫描=`301` files PASS；文档校验=`18` Markdown/42 blocks PASS；`py_compile`、`git diff --check` PASS。
+版本提交：`f89bdae feat(g4): add approved clarification append executor`，已推送 `origin/codex/g1-runnable-skeleton`。
+数据库与外部副作用：本阶段没有调用执行器 `--apply`；database_writes=`0`、Neo4j/Chroma writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`；既有只读 evidence 和计划 artifact 未覆盖。
+计划边界：此前计划 `...-002` 因本提交改变 reviewed Git commit，不能批准或执行；需在本提交后重新生成最终等待任务计划，再报告新的精确 plan_id/hash。
+下一步唯一动作：重新生成最终 DRY_RUN ChangePlan；用户明确批准未变更的 plan_id/hash 后，才可执行一次等待任务追加并做只读回读。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
