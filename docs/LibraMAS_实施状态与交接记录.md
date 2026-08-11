@@ -1184,6 +1184,39 @@ Gate：G4 动态多智能体闭环（澄清续跑输入契约，不写库）
 下一步唯一动作：实现未接入默认 HTTP 的 G4 continuation writer/service 适配器，先完成 fake 事务的提交、回滚、幂等和 stale-context 测试，再单独生成 DRY_RUN 计划；用户批准前不执行任何新的业务 POST。
 ```
 
+## G4 首轮投影计划偏差隔离记录
+
+```text
+交接ID：G4-PROJECTION-QUARANTINE-20260811-027
+Gate：G4 多智能体闭环（首轮受控追加后的计划偏差隔离）
+状态：APPLY_QUARANTINED / NO_COMPENSATION_WRITE / DATA_PRESERVED / SUCCESSOR_REQUIRED
+时间：2026-08-11（Asia/Shanghai）
+触发：已批准的旧 ChangePlan `g4-projection-plan-20260811-002` 使用了与执行请求不同的只读基线文本；基线文本为“多智能体 智慧图书馆”，执行请求为“多智能体系统与智慧图书馆”。
+安全动作：执行器在提交事务后发现 `recommendation_candidate` 实际增量为 `13`，而旧计划要求 `24`，立即停止后续动作；未重试、未删除、未 UPDATE、未补偿、未回滚其他事实，也未连接写入 Neo4j/Chroma 或外部 LLM。
+实际结果：该次事务本身完整提交并返回 `COMPLETED`，task=`3ab10789-56ae-5fd5-904a-12d0ac28d4b3`，8 个 item，实际追加 `57` 行；`MYSQL=8`、`VECTOR=5`、`GRAPH=0` 是该精确请求的真实候选通道结果。该批次被标记为审计隔离，不对既有事实做任何破坏性处理。
+验证证据：`artifacts/verification/g4/g4-projection-apply-20260811-001/g4-recommendation-projection-quarantine.json`；证据状态=`QUARANTINED`，明确记录预期/实际增量、前后计数、通道拆分、Chroma 前后=`14,983` 及零删除/零补偿断言。
+根因修复：`scripts/verify_g4_readonly_fusion_runtime.py` 现在记录完整 `query_spec`、候选通道组件和候选持久化行数；计划构建器与执行器按该只读事实动态计算 candidate delta/max_changes，并要求精确请求一致；只读校验允许合法的候选通道子集，但拒绝未知、重复或非规范顺序。
+未解决风险：旧隔离批次保留为有效追加事实但不作为新计划的补偿对象；后续任何新追加必须使用新的幂等键和独立批准的 successor plan。
+```
+
+## G4 successor ChangePlan 真实追加与回读记录
+
+```text
+交接ID：G4-PROJECTION-APPLY-20260811-028
+Gate：G4 多智能体闭环（精确请求、单事务投影与隔离目标回读）
+状态：REAL_G4_APPEND_PASS / PLAN_DELTA_EXACT / READONLY_RECHECK_PASS / DEFAULT_HTTP_OFF
+时间：2026-08-11（Asia/Shanghai）
+授权边界：用户明确批准 plan_id=`784de60f-3db5-504b-a222-4a3d979a2dac`、plan_hash=`ea73755d0d51819693612dea45097e87f89e52e904fda29209eaf17e8ac90a53`；仅允许对 Compose project=`recpro-g2-tianyuhang-20260809a`、MySQL `recpro`（本地端口=`62306`）执行一个新的 `S1_APPEND` 请求；不触碰既有 Neo4j、Chroma 或其他数据库。
+计划与基线：ChangePlan=`artifacts/verification/g4/g4-projection-plan-20260811-003/g4-recommendation-projection-change-plan.json`；git_commit=`0bafbfb84f1edc6fb6361a00f18a39a0d99e3bc4`；MySQL 基线=`artifacts/verification/g7/g7-mysql-http-readonly-20260811-008/readonly.json`；G4 精确请求基线=`artifacts/verification/g4/g4-readonly-fusion-20260811-007/readonly.json`；请求文本=`多智能体系统与智慧图书馆`，resource_types=`BOOK`，output_type=`TOPIC_RESOURCES`，limit=`8`。
+真实结果：HTTP/服务返回 `201`、`replayed=false`、状态=`COMPLETED`；task=`b9e9bfc0-6e3f-5d43-9205-9e5103af97d2`，record=`21`，trace=`5fa5028a-726c-57c7-8b31-c9fdadb754a4`，8 个条目。数据库追加精确 `57` 行：task=`+1`、transition=`+8`、candidate=`+13`、record=`+1`、item=`+8`、explanation=`+8`、policy=`+1`、trace=`+1`、agent_message=`+7`、agent_result=`+7`、artifact=`+1`、orchestration_result=`+1`。
+计数回读：目标表均达到计划下界，追加后 task=`21`、transition=`180`、candidate=`311`、record=`21`、item=`111`、explanation=`111`、policy=`21`、trace=`21`、agent_message/result=`28/28`、artifact/orchestration_result=`4/4`；资源事实表、上下文表和其他非目标表未变化。执行前后 Chroma count 均=`14,983`，Neo4j writes=`0`，Chroma writes=`0`，external_llm_requests=`0`，actual_delete_count=`0`，files_deleted=`0`，overwritten_inputs=`0`。
+执行证据：`artifacts/verification/g4/g4-projection-apply-20260811-002/g4-recommendation-projection-apply.json`；后置只读证据：`artifacts/verification/g4/g4-readonly-fusion-20260811-008/readonly.json`、`artifacts/verification/g7/g7-mysql-http-readonly-20260811-009/readonly.json`。后置 G4 仍为 7 dispatches、8 candidates、`MYSQL+VECTOR`，MySQL/Chroma 计数不变；后置 G7 live/ready=`200`，`can_recommend=true`，业务 POST=`0`。
+配置边界：执行环境中配置的 LLM provider=`deepseek`，本次安全执行器强制 `enable_llm_provider=false`，因此没有发送 DeepSeek 请求或暴露密钥；默认 HTTP/API/Worker 继续关闭，G4 仍为显式组合根能力。
+告警处理：首次执行输出 MySQL `Data truncated for column 'confidence' at row 1`；只读回查确认该 task 的 7 条 Agent confidence 均在 `0.800000—1.000000`、无 NULL，列类型为 `DECIMAL(7,6)`，未观察到已提交值丢失。随后提交 `d70118b`，将 Agent confidence 固定为六位小数文本后再写入，并新增回归测试；该修复不修改既有数据库行，后续追加需重新生成并批准新的计划。
+测试与版本：本阶段执行前后完整 Python unittest=`423` 项 PASS；修复后的 G4 回归=`60` 项 PASS；安全扫描=`295` files PASS；架构扫描=`114` files PASS；未删除文件、artifact、容器、卷或数据库对象。
+下一步唯一动作：进入 G4 continuation（澄清续跑）和真实 HTTP 接线设计；先完成 fake 事务/幂等/stale-context 测试与新的 DRY_RUN 计划，默认 HTTP/Worker 不变，用户批准前不得追加新的业务行。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
