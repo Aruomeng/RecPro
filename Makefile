@@ -1,6 +1,19 @@
 PYTHON ?= python3.11
 NPM ?= npm
-COMPOSE ?= docker compose
+# Prefer a working PATH Docker CLI, but keep a read-only fallback for Docker
+# Desktop installations whose macOS application bundle is outside the default
+# /Applications path.  This does not start, stop, or mutate any container.
+DOCKER_CLI ?= $(shell \
+	if command -v docker >/dev/null 2>&1 && docker version >/dev/null 2>&1; then \
+		printf '%s' docker; \
+	elif [ -x "/Applications/Docker.app/Contents/Resources/bin/docker" ]; then \
+		printf '%s' "/Applications/Docker.app/Contents/Resources/bin/docker"; \
+	elif [ -x "/Applications/编程/Docker.app/Contents/Resources/bin/docker" ]; then \
+		printf '%s' "/Applications/编程/Docker.app/Contents/Resources/bin/docker"; \
+	else \
+		printf '%s' docker; \
+	fi)
+COMPOSE ?= $(DOCKER_CLI) compose
 COMPOSE_ENV_FILE ?= .env.compose
 COMPOSE_EXAMPLE_ENV_FILE ?= .env.compose.example
 DEMO_BACKEND_ENV_FILE ?= .env.host
@@ -90,9 +103,11 @@ CHROMA_IMPORT_IDEMPOTENCY_RUN_ID ?=
 CHROMA_IMPORT_PLAN ?=
 CHROMA_IMPORT_CHROMA_PATH ?= data/chroma
 CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
+HOST_ENV_SYNC_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
+	plan-host-env-sync sync-host-env-from-compose verify-host-env \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
 	test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
@@ -114,6 +129,18 @@ bootstrap-check:
 
 bootstrap:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/bootstrap.py --create-config
+
+plan-host-env-sync:
+	@test -n "$(HOST_ENV_SYNC_RUN_ID)" || { echo "HOST_ENV_SYNC_RUN_ID is required and must identify a new configuration plan"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.sync_host_env_from_compose --run-id "$(HOST_ENV_SYNC_RUN_ID)"
+
+sync-host-env-from-compose:
+	@test -n "$(HOST_ENV_SYNC_RUN_ID)" || { echo "HOST_ENV_SYNC_RUN_ID is required and must identify a new configuration apply"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.sync_host_env_from_compose --run-id "$(HOST_ENV_SYNC_RUN_ID)" --apply
+
+verify-host-env:
+	@test -f .env.host || { echo ".env.host is missing; run make bootstrap after installing prerequisites"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/validate_runtime_env.py --mode host --env-file .env.host
 
 safety-check:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/safety_scan.py --root .

@@ -370,6 +370,52 @@ def build_research_g4_recommendation_service(
     )
 
 
+def build_research_g4_http_app(
+    settings: AppSettings,
+    *,
+    recommendation_service: object | None,
+    feedback_service: object | None = None,
+    behavior_service: object | None = None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+    feedback_api_enabled: bool = False,
+) -> FastAPI:
+    """Compose the explicit G4 HTTP graph around injected application ports.
+
+    This boundary deliberately does not construct a Neo4j/Chroma client or
+    enable the DeepSeek provider. The caller must inject version-pinned,
+    read-only graph/vector ports into ``recommendation_service`` and choose
+    the LLM policy in the separate G4 service composition. The default
+    ``backend.app.main:app`` and Compose command never call this function.
+    """
+
+    if settings.app_env == "production":
+        raise ValueError("G4 research HTTP composition requires a non-production environment")
+    if not bool(getattr(settings, "g4_http_enabled", False)):
+        raise ValueError("G4 HTTP composition is disabled by configuration")
+    if recommendation_service is None:
+        raise ValueError("G4 HTTP composition requires recommendation service")
+    if feedback_api_enabled and (feedback_service is None or behavior_service is None):
+        raise ValueError(
+            "G4 feedback API requires both feedback and behavior services"
+        )
+
+    from backend.app.main import create_app
+
+    return create_app(
+        settings=settings,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        recommendation_service=recommendation_service,
+        recommendation_api_enabled=True,
+        recommendation_readiness_enabled=True,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        feedback_api_enabled=feedback_api_enabled,
+        debug_api_enabled=False,
+    )
+
+
 def build_research_feedback_service(
     settings: AppSettings,
     *,
@@ -436,4 +482,5 @@ __all__ = [
     "build_research_feedback_service",
     "build_research_orchestration_service",
     "build_research_g4_recommendation_service",
+    "build_research_g4_http_app",
 ]

@@ -7,9 +7,11 @@ from pydantic import SecretStr
 
 from backend.app.composition import (
     build_demo_orchestration_service,
+    build_research_g4_http_app,
     build_research_g4_recommendation_service,
     build_research_orchestration_service,
 )
+from backend.app.config import AppSettings
 from backend.app.recommendation.adapters.g4_mysql import (
     MySQLG4RecommendationTaskService,
 )
@@ -75,6 +77,28 @@ class CompositionRootContractTests(unittest.TestCase):
     def test_g4_recommendation_root_rejects_production(self) -> None:
         with self.assertRaisesRegex(ValueError, "non-production"):
             build_research_g4_recommendation_service(settings(app_env="production"))
+
+    def test_g4_http_root_is_fail_closed_without_explicit_switch(self) -> None:
+        with self.assertRaisesRegex(ValueError, "disabled by configuration"):
+            build_research_g4_http_app(
+                AppSettings(
+                    app_env="demo",
+                    mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
+                ),
+                recommendation_service=object(),
+            )
+
+    def test_g4_http_root_mounts_only_an_injected_service(self) -> None:
+        application = build_research_g4_http_app(
+            AppSettings(
+                app_env="demo",
+                mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
+                g4_http_enabled=True,
+            ),
+            recommendation_service=object(),
+        )
+        self.assertIn("/api/v1/recommendation-tasks", application.openapi()["paths"])
+        self.assertIn("/api/v1/health/ready", application.openapi()["paths"])
 
 
 async def _never():

@@ -108,6 +108,10 @@ class AppSettings(BaseSettings):
     llm_timeout_seconds: float = Field(default=20.0, gt=0.0, le=120.0)
     llm_max_output_tokens: int = Field(default=512, ge=1, le=8192)
     recommendation_pipeline_enabled: Literal[False] = False
+    # The real G4 HTTP graph is an explicit research composition. Keeping a
+    # separate switch prevents a configured G4 service from being exposed by
+    # the default health-only app or by the Compose command.
+    g4_http_enabled: bool = False
     debug_api_enabled: bool = False
     # A production HTTP composition must opt in separately from authentication
     # and from the default health-only application.

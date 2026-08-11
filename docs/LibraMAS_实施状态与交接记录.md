@@ -1381,6 +1381,24 @@ G7/G6 当前回读：`g7-mysql-http-readonly-20260811-010` PASS，推荐路由�
 下一步唯一动作：在不清理现有 `frontend/node_modules` 的前提下提供锁定依赖的可复现启动入口；随后单独设计/审查 G4 HTTP（真实多智能体、图/向量读取、澄清续跑、幂等）DRY_RUN 计划，获批前不发送新的业务 POST。
 ```
 
+## 配置修复与健康检查稳定化记录
+
+```text
+交接ID：CONFIG-FIX-20260811-001
+Gate：本机配置同步、前端锁定依赖恢复与 Compose 健康检查稳定化
+状态：HOST_ENV_SYNC_PASS / FRONTEND_LOCKED_RUNTIME_PASS / COMPOSE_HEALTHCHECK_TUNED / NEO4J_RESOURCE_CONTENTION_REPORTED
+时间：2026-08-11（Asia/Shanghai）
+安全边界：本阶段未执行业务 POST、迁移、UPDATE、DELETE、DROP、TRUNCATE 或外部 DeepSeek 请求；没有删除文件、容器、卷、数据库对象或数据库数据。
+主机环境：新增 `scripts/sync_host_env_from_compose.py`，默认只做 DRY_RUN，显式 `--apply` 才同步；仅复制已审查的运行时/迁移/LLM/Prompt 键，强制 host MySQL 使用 `127.0.0.1` 与隔离 Compose 映射端口 `62306`，并保持 Demo/Auth/Production HTTP/Debug/G4 HTTP 闸门为 `false`。`HOST_ENV_SYNC_RUN_ID=host-env-sync-20260811-001` 的首次 DRY_RUN 与 APPLY 均通过；随后 `host-env-sync-20260811-004` 将新增 G4 闸门同步到 `.env.host`，主机预检仍 PASS。两次原文件均先备份到权限 `0600` 的 `/tmp/recpro-env-host-before-host-env-sync-*` 路径，未进入 Git。
+前端依赖：发现旧 `frontend/node_modules` 的 TypeScript=`7.0.2` 与 `package-lock.json` 的 TypeScript=`5.9.3` 漂移；旧目录仅移动到 `/tmp/recpro-frontend-node_modules-drift-backup-20260811-001` 保留，未删除。按锁文件重新安装后，Vitest=`6 files/40 tests PASS`，vue-tsc=`PASS`，生产构建=`PASS`，构建产物写入新的 `frontend/dist/config-fix-20260811-002/`。
+Docker CLI：Makefile 增加只读探测并自动回退到实际 Docker Desktop 二进制 `/Applications/编程/Docker.app/Contents/Resources/bin/docker`；没有修改或替换系统 `docker` 符号链接。`make status` 与 `make compose-config` 均可执行。
+健康检查：MySQL timeout 调整为 `5s`；backend/worker timeout 调整为 `10s`、start_period=`20s`；Neo4j 使用轻量 HTTP(`7474`)+Bolt(`7687`) 探测，timeout=`10s`、start_period=`60s`，避免启动期反复拉起 `cypher-shell` JVM。配置已通过 Compose 语法门禁；MySQL、backend、frontend 与本项目隔离 Neo4j 当前均为 `healthy`，live/ready 与前端 `/healthz` GET 均通过。
+Neo4j 运行态：本项目隔离 `neo4j_data` 卷在容器重建前后保持同一命名卷，未执行卷删除或数据清理。短暂初始化期间的资源竞争已自行缓解，当前隔离 Neo4j 已恢复 `healthy`。独立图书 Neo4j `recpro-library-neo4j-20260810a` 始终未停止、未重启、未访问写入；其运行态仍与本项目隔离。
+自动化验证：新增 host-env-sync 单元测试 `2` 项 PASS；全量 Python unittest、safety/architecture/docs/contracts/prompt 门禁与 `git diff --check` 均通过；同步脚本报告 `database_writes=0`、`external_requests=0`、`files_deleted=0`、`overwritten_inputs=0`。
+G4 HTTP 组合边界：新增 `RECPRO_G4_HTTP_ENABLED=false` 配置与 `build_research_g4_http_app()`；构造期要求非 production、显式开关和调用方注入 G4 service，默认 API/Compose/Worker 不变。该组合根尚未接入真实 Graph/Vector 客户端或 DeepSeek，也未启动或发送任何 HTTP 业务请求；新增构造契约测试覆盖“关闭即拒绝”和“仅挂载注入 service”。
+下一阶段：在默认 HTTP/Worker/LLM 继续 fail-closed 的前提下，进入 G4 HTTP 真实投影入口的纯只读/DRY_RUN 设计，先冻结 graph/vector 读取、澄清续跑、幂等与认证边界，再生成独立 ChangePlan；未获新的精确批准前不提交新的业务写入。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

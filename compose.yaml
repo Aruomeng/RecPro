@@ -60,7 +60,7 @@ services:
           --database="$${MYSQL_DATABASE}"
           --execute='SELECT 1' >/dev/null 2>&1
       interval: 5s
-      timeout: 3s
+      timeout: 5s
       retries: 20
       start_period: 30s
     restart: unless-stopped
@@ -83,14 +83,13 @@ services:
       test:
         - "CMD-SHELL"
         - >-
-          cypher-shell --address neo4j://127.0.0.1:7687
-          --username "$${RECPRO_NEO4J_USER}"
-          --password "$${RECPRO_NEO4J_PASSWORD}"
-          'RETURN 1' >/dev/null 2>&1
+          bash -ec 'wget --quiet --spider --timeout=5 --tries=1
+          http://127.0.0.1:7474/ >/dev/null 2>&1 &&
+          (echo > /dev/tcp/127.0.0.1/7687)'
       interval: 10s
-      timeout: 5s
+      timeout: 10s
       retries: 20
-      start_period: 30s
+      start_period: 60s
     restart: unless-stopped
     networks:
       - data-plane
@@ -126,9 +125,9 @@ services:
           from urllib.request import urlopen;
           urlopen('http://127.0.0.1:8000/api/v1/health/live', timeout=2).read()
       interval: 10s
-      timeout: 3s
+      timeout: 10s
       retries: 12
-      start_period: 10s
+      start_period: 20s
     init: true
     restart: unless-stopped
     networks:
@@ -161,9 +160,9 @@ services:
           b'backend.app.worker' in pathlib.Path(path).read_bytes()
           for path in glob.glob('/proc/[0-9]*/cmdline')) else 1)
       interval: 10s
-      timeout: 3s
+      timeout: 10s
       retries: 12
-      start_period: 10s
+      start_period: 20s
     init: true
     restart: unless-stopped
     networks:

@@ -72,6 +72,13 @@ Bearer Secret、Recommendation/Feedback/Behavior 三个应用服务和完整 API
 开关；缺少任一条件都会在构造阶段 fail-closed。该组合根不在模块级
 `backend.app.main:app` 中自动调用，Compose 默认值仍为 `false`。
 
+G4 研究 HTTP 图只能由 `build_research_g4_http_app()` 创建，并要求
+`RECPRO_G4_HTTP_ENABLED=true`、非 production 环境和调用方显式注入
+`MySQLG4RecommendationTaskService`。该组合根只负责 API 与应用端口的组装，
+不会自行创建 Neo4j/Chroma 客户端或启用 DeepSeek；Graph/Vector 端口、版本
+和 LLM 策略必须在更上层的研究组合根中冻结并注入。默认模块级应用、Compose
+服务和 Worker 均不调用它。
+
 ### 2.3 请求追踪
 
 客户端可以发送：
