@@ -1255,6 +1255,22 @@ Gate：G4 动态多智能体闭环（初始 WAITING 任务的只读基线与 Cha
 下一步唯一动作：恢复可用 Docker CLI，执行 `make verify-g4-clarification-readonly G4_CLARIFICATION_READONLY_RUN_ID=<new-run-id>`；只读证据 PASS 后再执行 `make build-g4-clarification-plan ...`，向用户报告精确 plan hash，等待批准。
 ```
 
+## G4 等待态只读验证通过记录
+
+```text
+交接ID：G4-CLARIFICATION-READONLY-20260811-031
+Gate：G4 动态多智能体闭环（HOME 空请求等待态只读验证）
+状态：REAL_MYSQL_READONLY_PASS / FOUR_AGENTS_PASS / COUNTS_UNCHANGED / PLAN_PENDING_APPROVAL
+时间：2026-08-11（Asia/Shanghai）
+执行：`make verify-g4-clarification-readonly PYTHON=.venv-g1-release-py311/bin/python G4_CLARIFICATION_READONLY_RUN_ID=g4-clarification-readonly-20260811-001`；虽然 Docker CLI 断链，隔离 MySQL 62306、Neo4j 62688 和 62475 端口仍可访问，本次仅连接 MySQL 读取。
+真实结果：HOME 空请求（scene=`HOME`、input_text=`null`、resource_types=`[]`、output_type=`null`、limit=`5`）稳定返回 `WAITING_CLARIFICATION`；4 个 Agent 依次为 IntentUnderstanding、UserProfile、ResourceSemantic、RecommendationPolicy，4 条 transition，问题为 resource_types/topic 两个 required slots；同一请求重复编排 payload/trace 一致。
+只读计数：resource_catalog=`14,989`、resource_book_detail=`14,986`、tag_dictionary=`8,522`、resource_tag=`70,762`、resource_index_state=`14,989`；recommendation_task/transition/candidate/record/item/explanation/policy/trace=`21/180/311/21/111/111/21/21`；trace_revision/context/clarification=`3/6/6`；Agent message/result/artifact/orchestration=`28/28/4/4`。19 张表 before/after 完全相同。
+验证证据：`artifacts/verification/g4/g4-clarification-readonly-20260811-001/clarification-readonly.json`；任务/Trace 只读演练 ID=`d6f81ae1-27a5-5776-8e7e-62159d02e175`/`390a17bb-0979-50fd-81a6-c5004c546d9b`，不写入数据库。
+安全计数：`mysql_mode=SELECT_ONLY_ROLLBACK`、MySQL writes=`0`、Neo4j/Chroma writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`。
+计划预演：构建器已生成 `artifacts/verification/g4/g4-clarification-plan-20260811-001/g4-clarification-waiting-change-plan.json`，当时 `plan_id=e90c1714-c409-57a0-847a-ccd527468cb3`、`plan_hash=2c16ff9de7a4e69f011a0a05ca99a4652848afa9feae4e19833ee42870724209`、`max_changes=19`；由于本交接记录提交会改变 reviewed git commit，该 hash 仅作为预演记录，提交后会重新生成最终 hash，旧 hash 不得批准或执行。
+下一步唯一动作：完成本交接提交后重新生成最终等待任务 DRY_RUN ChangePlan，向用户报告新的精确 `plan_id/plan_hash`；在批准前不执行 `--apply`、不创建等待任务、不提交澄清答案。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
