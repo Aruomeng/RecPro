@@ -1119,6 +1119,28 @@ Gate：G4 多智能体系统（真实隔离端口融合与确定性验收）
 下一步唯一动作：设计并测试 G4→RecommendationTaskService 的单事务投影适配器（任务、候选、record、解释、Agent 日志同一事务）；完成前不把 G4 编排挂到默认 HTTP/Worker，也不发送新的业务 POST。
 ```
 
+## G4→HTTP 投影契约与 fail-closed 设计记录
+
+```text
+交接ID：G4-PROJECTION-CONTRACT-20260811-024
+Gate：G4 多智能体系统（HTTP 投影边界设计，不写库）
+状态：PURE_CONTRACT_PASS / SCENE_PRESERVED / CHANNEL_SPLIT_PASS / FAIL_CLOSED_PASS / G4_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在实现单事务 MySQL 适配器前，先冻结 G4 Agent 事实到 RecommendationTaskService 的纯函数边界，避免 HTTP 层直接依赖 Agent 实现或把不完整候选伪装成可用响应。
+新增文件：`backend/app/recommendation/application/g4_projection.py`；`tests/g4/test_g4_projection.py`。
+修改文件：`backend/app/recommendation/agents/orchestrator.py` 新增显式 `scene` 字段并在 Intent 消息中透传；旧版本由 Git 提交历史保留。
+契约结果：命令映射要求显式、带时区的 `evaluation_at/deadline_at`，使用与 G3 一致的 UUID5 task/trace 身份；`MYSQL+GRAPH+VECTOR` 会拆分为独立、长度受控的候选通道；HTTP 完成态要求目录资源摘要、`evidence_confidence`、解释证据和已持久化 `item_id` 全部存在。
+安全边界：本阶段只执行纯函数单元测试和静态检查；未连接 MySQL/Neo4j/Chroma，未执行迁移、seed、INSERT、UPDATE、DELETE、索引切换或外部 LLM 请求。
+执行命令：`python -m unittest tests.g4.test_g4_projection tests.g4.test_orchestrator tests.g4.test_persistent_orchestration`；`python -m unittest tests.architecture.test_dependency_rules`；`python -m py_compile backend/app/recommendation/application/g4_projection.py backend/app/recommendation/agents/orchestrator.py tests/g4/test_g4_projection.py`。
+测试结果：G4 定向回归 `14` 项 PASS；既有编排/持久化回归 `28` 项 PASS；架构依赖检查 PASS；`database_reads=0`、`database_writes=0`、`external_requests=0`、`actual_delete_count=0`、`files_deleted=0`。
+新增数据库对象和行数：0。
+受控UPDATE对象和审计ID：0。
+文件删除数量：0。
+数据库物理删除数量：0。
+未解决风险：当前真实 G4 Agent 候选仍缺少 HTTP 所需的资源摘要、证据置信度和持久化 item identity；投影契约因此不会接入默认 HTTP。单事务适配器还需要先定义任务创建、Agent 日志、候选/record/item/trace 写入的顺序及并发幂等回读。
+下一步唯一动作：实现显式、未接入默认路由的 MySQL G4 投影适配器，并先以独立 ChangePlan 预演 SQL 与回滚/幂等测试；在用户批准前不执行新的业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

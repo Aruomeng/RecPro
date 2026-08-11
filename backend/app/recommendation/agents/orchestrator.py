@@ -27,6 +27,7 @@ class OrchestrationRequest:
     context_version: int = 1
     evaluation_at: datetime | None = None
     deadline_at: datetime | None = None
+    scene: str = "HOME"
 
     def __post_init__(self) -> None:
         if not isinstance(self.task_id, UUID) or not isinstance(self.trace_id, UUID):
@@ -49,6 +50,8 @@ class OrchestrationRequest:
             self.deadline_at.tzinfo is None or self.deadline_at.utcoffset() is None
         ):
             raise ValueError("deadline_at must be timezone-aware")
+        if not isinstance(self.scene, str) or not self.scene.strip():
+            raise ValueError("scene must be a non-blank string")
 
 
 @dataclass(frozen=True, slots=True)
@@ -159,7 +162,7 @@ class RecommendationOrchestrator:
                 "input_text": request.input_text,
                 "resource_types": list(request.resource_types),
                 "output_type": request.output_type,
-                "scene": "HOME",
+                "scene": request.scene,
                 "evaluation_at": evaluation_at.isoformat(),
             },
         )
