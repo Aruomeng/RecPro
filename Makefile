@@ -21,6 +21,11 @@ G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
 G5_AUDIT_RUN_ID ?=
 G6_RUN_ID ?=
+G6_READONLY_RUN_ID ?=
+G6_READONLY_MYSQL_ENV_FILE ?= .env.compose
+G6_READONLY_SECRETS_ENV_FILE ?= .env.user-secrets
+G6_READONLY_CHROMA_PATH ?= data/chroma
+G6_READONLY_CHROMA_SITE_PACKAGES ?= .venv-chroma-g6-20260811/lib/python3.11/site-packages
 FORMAL_AUTH_RUN_ID ?=
 FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
@@ -67,7 +72,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
-	preflight-chroma-import import-chroma-vectors import-chroma-vectors-idempotency verify-chroma-import \
+	preflight-chroma-import import-chroma-vectors import-chroma-vectors-idempotency verify-chroma-import verify-g6-readonly-fusion \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -183,6 +188,10 @@ verify-evaluation-freeze-inputs:
 
 verify-prompt-bundle:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_prompt_bundle
+
+verify-g6-readonly-fusion:
+	@test -n "$(G6_READONLY_RUN_ID)" || { echo "G6_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g6_readonly_fusion --run-id "$(G6_READONLY_RUN_ID)" --env-file "$(G6_READONLY_MYSQL_ENV_FILE)" --secrets-file "$(G6_READONLY_SECRETS_ENV_FILE)" --chroma-path "$(G6_READONLY_CHROMA_PATH)" --chroma-site-packages "$(G6_READONLY_CHROMA_SITE_PACKAGES)"
 
 verify-book-intake:
 	@test -n "$(BOOK_INTAKE_RUN_ID)" || { echo "BOOK_INTAKE_RUN_ID is required and must identify a new evidence run"; exit 2; }

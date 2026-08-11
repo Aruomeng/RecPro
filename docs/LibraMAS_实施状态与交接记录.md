@@ -970,6 +970,42 @@ Gate：G7 前端与论文演示
 下一步唯一动作：先固定前端依赖复现方式，再实现推荐/澄清/解释/反馈的只读或显式 API 页面，不改变默认 API 关闭策略。
 ```
 
+## G6 隔离目标真实只读融合验证记录
+
+```text
+交接ID：G6-RETRIEVAL-FUSION-READONLY-20260811-016
+Gate：G6 可选检索与解释（隔离 MySQL/Neo4j/Chroma 真实只读融合）
+状态：REAL_READONLY_FUSION_PASS / COUNTS_UNCHANGED / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在已授权且独立的 RecPro 目标上，只读执行一次 MySQL 目录、Neo4j 图召回和 Chroma 向量召回的融合，验证版本绑定、证据引用和通道状态；不启动默认 API/Worker，不改变索引状态。
+固定版本：graph_version=`lib-books-v1-20260810`；embedding_version=`hash-char-ngram-v1`；index_version=`lib-books-vector-v1-20260811`；namespace=`library_resources__hash_char_ngram_v1`；dimension=384。
+目标边界：MySQL Compose project=`recpro-g2-tianyuhang-20260809a`、host port=`62306`；Neo4j 独立 project=`recpro-library-neo4j-20260810a`、HTTP port=`62475`；Chroma 仅读取本地 `data/chroma` 正式 collection，未访问 `data/chroma-probe-g6-20260811`。
+执行脚本：`scripts/verify_g6_readonly_fusion.py`；唯一证据目录：`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-001/readonly.json`。脚本只调用 MySQL SELECT、Neo4j HTTP transaction 查询和 Chroma count/query，并对 MySQL 事务执行 rollback；不存在写、删除、upsert、reset、collection lifecycle 或版本切换代码。
+结果：MySQL `resource_catalog/resource_book_detail/tag_dictionary/resource_tag/resource_index_state` 计数分别为 `14,989/14,986/8,522/70,762/14,989`，前后完全一致；Neo4j 图通道 READY 并返回命中；Chroma count 前后均为 `14,983`，向量通道 READY；候选融合返回 8 条，channels=`MYSQL+GRAPH+VECTOR`，fallback=`false`，warnings=`[]`，evidence_ref 带 graph/index version。
+安全计数：MySQL SELECT=`12`（计数与目录召回）；Neo4j reads=`1`；Chroma reads=`3`；MySQL/Neo4j/Chroma writes=`0/0/0`；actual_delete_count=`0`；files_deleted=`0`；overwritten_inputs=`0`；外部 LLM requests=`0`。
+回归：G6 真实只读 verifier PASS；正式目标容器仅做读取，未启动或触碰本机既有 Neo4j、旧 RecPro 目标、旧 MySQL 容器或任何 Docker volume。
+未解决风险：默认 HTTP/Worker 仍未挂载图/向量组合根；MySQL `embedding_status` 仍为 `PENDING`；真实 DeepSeek 仍未联网；生产化前需要独立评审索引 READY 投影、API 闸门和解释证据链。
+下一步唯一动作：推进 G7 推荐工作台前端，保持真实 API 显式闸门关闭并先完成本地演示、契约客户端和浏览器冒烟。
+```
+
+## G7 推荐工作台首个可运行切片记录
+
+```text
+交接ID：G7-FRONTEND-RECOMMENDATION-20260811-017
+Gate：G7 前端与论文演示（推荐请求/澄清首个闭环）
+状态：UI_WORKBENCH_PASS / API_CLIENT_PASS / DEFAULT_PIPELINE_GATED / G7_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在既有 G1 状态页基础上提供低耦合推荐工作台：研究问题输入、BOOK/PAPER 选择、数量限制、本地演示、类型化推荐 API 客户端、澄清问题渲染、证据置信度与理由展示；默认不调用真实推荐 API。
+新增文件：`frontend/src/domain/recommendation.ts`；`frontend/src/api/recommendationClient.ts` 及其测试；`frontend/src/components/RecommendationWorkbench.vue` 及其测试；`scripts/verify_g6_readonly_fusion.py`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-001/readonly.json`；`artifacts/verification/g7/g7-recommendation-ui-20260811-001/frontend.json`。
+修改文件：`frontend/src/App.vue`、`frontend/src/styles.css`；原 G1 状态页与健康客户端接口保持存在，未删除旧实现。
+低耦合边界：组件只依赖 `RecommendationClient` 端口；请求/错误/响应在 API adapter 内校验；`pipelineEnabled=false` 时 submit 只显示闸门提示，不触发 fetch；本地演示是静态、明确标注的 UI fixture，不访问 MySQL、Neo4j、Chroma 或 DeepSeek。
+真实 API 契约：POST `/api/v1/recommendation-tasks` 携带 `Idempotency-Key=request_id` 和 `X-Demo-User-Id`；澄清走 `/api/v1/recommendation-tasks/{task_id}/clarifications`；响应必须包含 task/trace/status/context/decision/warnings，items/questions 通过运行时校验后才渲染；稳定错误码转为用户文案，不直接展示服务端本地化文本。
+验证：前端 Vitest=`38` 项 PASS（6 files）；临时锁定 TypeScript=`5.9.3`、vue-tsc=`3.3.9` 类型检查 PASS；追加式安全构建 `frontend/dist/g7-recommendation-ui-20260811-003/` PASS；架构扫描确认组件到 API adapter 的直接依赖为 `0`，由 `App.vue` 组合根注入 `RecommendationClient`，组件卸载时会中止未完成请求；浏览器本地冒烟 PASS，点击“查看本地演示”显示三张推荐卡片并明确“不访问 API，不写入 MySQL、Neo4j 或 Chroma”；后端未启动时健康错误只显示连接状态。
+安全计数：本切片 database_reads=`0`、database_writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`；未清理或重装现有 `frontend/node_modules`，未覆盖旧 build artifact。
+当前限制：后端健康契约仍以 `can_recommend=false` 为默认安全事实；真实推荐 API、反馈/画像/解释详情、research-admin 调试页和六场景论文演示仍需后续 Gate；现有 node_modules 的 TypeScript 实际版本漂移，直接 `npm run build` 仍需在干净依赖环境执行。
+下一步唯一动作：在用户确认后端推荐组合根/API Gate 后，使用同一 RecommendationClient 连接真实结果，并为反馈/解释增加独立端口与只读/显式写边界测试；不得默认打开或绕过健康闸门。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

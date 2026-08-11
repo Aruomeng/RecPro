@@ -2,6 +2,8 @@
 import { onBeforeUnmount, onMounted, ref } from "vue";
 
 import { healthClient } from "./api/healthClient";
+import { recommendationClient } from "./api/recommendationClient";
+import RecommendationWorkbench from "./components/RecommendationWorkbench.vue";
 import SystemStatus from "./components/SystemStatus.vue";
 import type { LivenessResponse, Loadable, ReadinessResponse } from "./domain/health";
 
@@ -61,14 +63,16 @@ onBeforeUnmount(() => activeController?.abort());
 
     <aside class="scope-note" aria-label="当前阶段说明">
       <span class="scope-note__mark" aria-hidden="true">i</span>
-      <p><strong>阶段边界：</strong>G1 不提供推荐结果。推荐链路将在后续 Gate 完成并通过验收后启用。</p>
+      <p><strong>运行边界：</strong>默认运行时仍不会自动启用推荐链；下面的本地演示不访问后端，也不写入任何数据库。</p>
     </aside>
 
     <SystemStatus :liveness="liveness" :readiness="readiness" />
 
+    <RecommendationWorkbench :pipeline-enabled="false" :client="recommendationClient" />
+
     <footer>
       <span>LibraMAS · Multi-Agent System for Smart Library</span>
-      <span>健康接口 /api/v1/health</span>
+      <span>状态核验 + 推荐工作台</span>
     </footer>
   </main>
 </template>
