@@ -1307,6 +1307,20 @@ Gate：G4 动态多智能体闭环（已批准等待任务追加的失败隔离�
 下一步唯一动作：基于同一 PASS 只读 evidence 和新 Git commit 生成新的 G4 WAITING `S1_APPEND/DRY_RUN` ChangePlan，报告新的精确 plan_id/plan_hash，等待用户重新批准后再执行一次。
 ```
 
+## G4 successor 等待任务计划预演记录
+
+```text
+交接ID：G4-CLARIFICATION-PLAN-PREVIEW-20260811-035
+Gate：G4 动态多智能体闭环（失败修复后的 successor DRY_RUN）
+状态：DRY_RUN_PASS / NO_DATABASE_WRITE / FINAL_PLAN_AFTER_DOC_COMMIT_REQUIRED
+时间：2026-08-11（Asia/Shanghai）
+计划预演：已基于 PASS 只读 evidence `artifacts/verification/g4/g4-clarification-readonly-20260811-001/clarification-readonly.json` 和 Git `343a2b094d4d463f71cf8434605226e56d0aa993` 生成 `artifacts/verification/g4/g4-clarification-plan-20260811-004/g4-clarification-waiting-change-plan.json`；预演 plan_id=`83470675-8956-5bd4-aedb-1cb84a76182f`、plan_hash=`5caeb6cb787db7f3b0cc08c583f15fba3a8be51a2e06aa0f5e90ffda1732d071`、max_changes=`19`。
+边界：该文件仅为 DRY_RUN，未连接 MySQL、Neo4j、Chroma 或外部 LLM，不产生业务 POST；目标仍严格为 19 行 MySQL APPEND，预期 task/transition/policy/trace/context/clarification=`+1/+4/+1/+1/+1/+1`，Agent message/result=`+4/+4`，artifact/orchestration=`+1/+1`，不追加 candidate/record/item/explanation/trace revision。
+失效规则：本交接记录的追加提交会改变 reviewed Git commit，因此 plan 004 仅作审计预演，不得批准或执行；提交完成后必须重新生成最终 successor plan，并只报告最终 plan_id/plan_hash。
+安全计数：database_writes=`0`、Neo4j/Chroma writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`。
+下一步唯一动作：提交本交接记录后生成 final `g4-clarification-plan-20260811-005` DRY_RUN，用户重新批准其精确 hash 后才可执行一次等待任务追加。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
