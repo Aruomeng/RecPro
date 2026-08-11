@@ -18,6 +18,7 @@ G4_RUN_ID ?=
 G4_AGENT_RUN_ID ?=
 G4_PORT_RUN_ID ?=
 G4_COMPOSITION_RUN_ID ?=
+G4_READONLY_FUSION_RUN_ID ?=
 G5_RUN_ID ?=
 G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
@@ -79,7 +80,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
 	test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
-	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g5-runtime compose-config \
+	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g4-readonly-fusion verify-g5-runtime compose-config \
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
@@ -347,6 +348,10 @@ verify-g4-real-ports:
 verify-g4-composition:
 	@test -n "$(G4_COMPOSITION_RUN_ID)" || { echo "G4_COMPOSITION_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_composition_runtime --run-id "$(G4_COMPOSITION_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+
+verify-g4-readonly-fusion:
+	@test -n "$(G4_READONLY_FUSION_RUN_ID)" || { echo "G4_READONLY_FUSION_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 migrate-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }

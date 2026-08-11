@@ -1102,6 +1102,23 @@ Gate：G7 前端与论文演示（显式 MySQL HTTP 入口、Vite 代理和浏�
 下一步唯一动作：为 `RecommendationClient` 增加一次经过单独 ChangePlan 授权的浏览器真实请求验收，或先进入 G4 MAS 编排 HTTP 适配；两者均不得默认开启、不得复用已完成 request_id。
 ```
 
+## G4 真实多智能体图/向量只读融合记录
+
+```text
+交接ID：G4-READONLY-FUSION-20260811-023
+Gate：G4 多智能体系统（真实隔离端口融合与确定性验收）
+状态：REAL_G4_READONLY_FUSION_PASS / SEVEN_AGENTS_PASS / COUNTS_UNCHANGED / G4_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在已导入且已授权的隔离数据平面上，使用真实 MySQL Catalog/Profile 只读端口、独立 Neo4j 图读端口和版本化 Chroma 向量读端口，运行完整 G4 `build_port_orchestrator`；不构造 HTTP 业务写服务，不执行迁移、seed、INSERT、UPDATE、DELETE 或索引切换。
+执行脚本：`scripts/verify_g4_readonly_fusion_runtime.py`；Make 目标：`verify-g4-readonly-fusion`；唯一证据：`artifacts/verification/g4/g4-readonly-fusion-20260811-001/readonly.json`。
+真实结果：Orchestrator 状态=`COMPLETED`；dispatch=`7`，依次覆盖 IntentUnderstanding、UserProfile、ResourceSemantic、RecommendationPolicy、CandidateRecall、Ranking、Explanation；同一固定请求重复运行的 payload/trace 一致；返回 `8` 条候选，CandidateRecall 通道=`MYSQL+GRAPH+VECTOR`，无 fallback/warnings。
+固定版本：graph_version=`lib-books-v1-20260810`；embedding_version=`hash-char-ngram-v1`；index_version=`lib-books-vector-v1-20260811`；namespace=`library_resources__hash_char_ngram_v1`；dimension=`384`。
+计数核验：MySQL `resource_catalog=14,989`、`resource_book_detail=14,986`、`tag_dictionary=8,522`、`resource_tag=70,762`、`resource_index_state=14,989` 前后完全一致；G4 `recommendation_agent_message/result/artifact/orchestration_result` 分别为 `14/14/2/2` 前后完全一致；Chroma 前后均=`14,983`。
+安全计数：MySQL writes=`0`（连接最终 rollback）、Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`；未删除或覆盖任何文件、artifact、容器、卷或数据库数据。
+当前边界：本阶段证明的是 G4 真实 Agent/图/向量只读融合和确定性，不等同于 G4 HTTP 持久化投影已完成；现有 Demo HTTP 仍使用 G3 `MySQLRecommendationTaskService`，避免在没有新的 ChangePlan 时增加业务行。
+下一步唯一动作：设计并测试 G4→RecommendationTaskService 的单事务投影适配器（任务、候选、record、解释、Agent 日志同一事务）；完成前不把 G4 编排挂到默认 HTTP/Worker，也不发送新的业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
