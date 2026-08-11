@@ -47,8 +47,9 @@
   - 已完成 MySQL 计划严格 Schema、行级校验和显式双确认导入器；默认干跑不连接数据库，实际写入必须同时提供 `--apply --confirm-mysql-write`，非空目标还需单独 `--allow-nonempty-target`。用户确认后已在隔离 Compose MySQL 追加 14,983 本书、8,516 个标签和 70,750 条标签关系，并完成幂等复跑与独立只读计数核验。
   - 已完成 Neo4j 只读图召回端口与可选 Agent 通道：使用参数化 Cypher、固定 `graph_version` 和外部稳定 ID 映射，不提供任何图写操作；对独立图目标的只读查询已返回命中结果，未写入 Neo4j。
   - 已完成确定性向量索引 ChangePlan 与离线构建器：从已审核 MySQL ChangePlan 生成 14,983 条 `hash-char-ngram-v1`/384 维向量记录；两次独立构建哈希一致，质量提示和向量完整性均有证据；本阶段未写入 MySQL、Chroma 或 Neo4j。
-  - 已完成向量计划 Schema、逐行哈希/维度校验器和数据库无关完整性报告；已新增版本化只读 `VectorRecallPort`/`ChromaVectorReader`、cosine 分数映射、元数据版本隔离和故障降级测试；未创建 collection，当前仍保持 `embedding_status=PENDING`。
-  - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、预计 14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端状态明确为 `NOT_INSTALLED`，本计划不授予写入授权。
+  - 已完成向量计划 Schema、逐行哈希/维度校验器和数据库无关完整性报告；已新增版本化只读 `VectorRecallPort`/`ChromaVectorReader`、cosine 分数映射、元数据版本隔离和故障降级测试；MySQL `embedding_status` 仍保持 `PENDING`。
+  - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端已锁定 `chromadb==1.5.9` 并仅用于隔离 operator venv。
+  - 已在用户明确授权后创建正式 Chroma collection 并追加 14,983 条向量；全量回读验证、版本/元数据验证、数值容差验证、召回冒烟、幂等复跑和独立只读 verifier 均 PASS。首次验证因 Chroma 1.5.9 的 NumPy 返回类型兼容性阻断，现场和失败证据均保留，未执行任何清理或覆盖。
   - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；尚未提供或保存 DeepSeek 密钥，未发起外部请求。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
   - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
@@ -99,11 +100,12 @@
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
   - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
-  - MySQL 已有隔离历史事实；本轮经用户授权后已将书目 ChangePlan 追加写入同一隔离 Compose 项目并完成幂等复验。Neo4j 图构建、实际导入和只读图召回端口均已完成；向量离线构建、只读 Chroma adapter 和 collection ChangePlan 已完成，但 Chroma 写入、图/向量召回接线尚未接入默认 HTTP/Worker。
+  - MySQL 已有隔离历史事实；本轮经用户授权后已将书目 ChangePlan 追加写入同一隔离 Compose 项目并完成幂等复验。Neo4j 图构建、实际导入和只读图召回端口均已完成；确定性向量与 Chroma collection 已完成版本化导入和独立只读核验，但图/向量召回尚未接入默认 HTTP/Worker。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
+  - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
   - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
-- `next_step`：评审已生成的 Chroma collection ChangePlan；先由用户单独确认客户端/collection 版本、预计记录数和追加写入范围，再执行新 collection 构建、只读回读和幂等核验，最后才评审 MySQL `embedding_status` 的受控状态投影。DeepSeek key/外部请求授权仍单独等待。
+- `next_step`：进入 G6 的只读检索接线评审：把 Neo4j/Chroma 作为可选端口接入 Agent 组合根，保持默认 HTTP/Worker 关闭，并先以 fake/隔离运行态验证版本过滤、超时降级和解释证据；MySQL `embedding_status` 的 READY 投影、DeepSeek key/模型/Base URL 和外部请求授权仍需单独确认。
 
 ---
 
@@ -118,7 +120,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | `artifacts/verification/book-graph/lib-graph-plan-20260810-003/graph-plan.json`；`artifacts/verification/book-graph-import/lib-graph-import-20260810-001/import-report.json`；`artifacts/verification/book-graph-import/lib-graph-import-idempotency-20260810-001/import-report.json`；`artifacts/verification/mysql-book-plan/mysql-book-plan-20260810-002/mysql-book-plan.json`；`artifacts/verification/mysql-book-import/mysql-book-import-20260810-002/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-idempotency-20260810-004/import.json`；`artifacts/verification/mysql-book-import/mysql-book-import-integrity-20260810-001/readonly.json`；`artifacts/verification/vector-index-plan/vector-index-plan-20260811-001/vector-index-plan.json`；`artifacts/verification/vector-index-plan/vector-index-verify-20260811-002/verification.json`；`artifacts/verification/chroma-collection-plan/chroma-collection-plan-20260811-001/chroma-collection-plan.json`；`artifacts/verification/chroma-collection-plan/chroma-collection-verify-20260811-001/verification.json`；`contracts/data/intake/vector-index-plan.schema.json`；`contracts/data/intake/chroma-collection-plan.schema.json`；`backend/app/catalog/adapters/chroma.py`；`backend/app/catalog/ports/public.py`；`tests/g6/test_vector_recall.py`；`tests/g6/test_chroma_collection_plan.py`；`docs/book_graph_model.md`；G6 测试 | Lib 图计划 PASS_WITH_WARNINGS；独立 Neo4j 首轮导入与幂等复验 PASS（63,388/191,865）；MySQL 书目 ChangePlan 授权后追加导入 PASS（本次新增 14,983/8,516/70,750），幂等复跑和只读完整性 PASS；确定性向量离线构建 PASS_WITH_WARNINGS（14,983 条、384 维，两次 SHA-256 一致）；只读 VectorRecallPort/Chroma adapter 契约与故障测试 PASS；Chroma collection ChangePlan/独立校验 PASS_WITH_WARNINGS/PASS；Chroma 写入、MySQL embedding READY 投影、图/向量默认接线和 DeepSeek key 仍待后续配置 |
+| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`scripts/import_chroma_vectors.py`、`scripts/verify_chroma_import.py`、`backend/app/catalog/adapters/chroma.py`、`tests/g6/test_chroma_import.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；MySQL `embedding_status` 仍 PENDING，图/向量默认接线和 DeepSeek key 仍待后续配置 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -130,8 +132,8 @@
 
 ## Working Set
 
-- `current_subtask`：双库书目事实、确定性向量离线产物、只读 Chroma adapter/VectorRecallPort 和 collection ChangePlan 均已完成版本化验证；下一步是等待用户单独确认 Chroma 客户端/collection 追加写入范围，在不改变 MySQL `embedding_status=PENDING` 的前提下继续。默认 API/Worker 和外部 LLM 仍关闭。
-- `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS；Chroma collection ChangePlan `chroma-collection-plan-20260811-001` 与 verifier PASS_WITH_WARNINGS/PASS，预计记录数 14,983、客户端状态 `NOT_INSTALLED`、写入授权仍需单独确认；VectorRecallPort/Chroma adapter 四项契约与故障测试 PASS；本阶段数据库读写、外部存储写入、文件删除和数据库物理删除均为 0。全量 Python `unittest` 当前为 372 项 PASS；Neo4j 最终计数 63,388/191,865。
+- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；下一步是只读接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
   - `backend/app/`
@@ -150,9 +152,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 collection ChangePlan 已冻结但 collection 尚未创建，Chroma 客户端状态 `NOT_INSTALLED`，MySQL embedding 状态仍 PENDING，图/向量召回默认策略、DeepSeek key 和外部请求授权仍缺失；任何默认环境仍不得自动开启推荐。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek key 和外部请求授权仍缺失；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：向用户汇报并等待 `chroma-collection-plan-20260811-001` 的单独追加写入授权；授权前不安装/锁定 Chroma 客户端、不创建/写入 collection、不更新 MySQL。授权后仍需先做目标 collection 只读冲突检查、逐批追加、全量只读计数/版本核验和幂等复跑。DeepSeek key/模型/Base URL 及外部调用授权仍不假设。
+- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek key/模型/Base URL 和外部调用授权仍不假设。
 
 ---
 
@@ -854,6 +856,30 @@ metadata 契约：必须含 `external_id`、`vector_id`、`resource_type`、`con
 验证证据目录：`artifacts/verification/chroma-collection-plan/chroma-collection-plan-20260811-001/`；`artifacts/verification/chroma-collection-plan/chroma-collection-verify-20260811-001/`。
 未解决风险：Chroma 客户端及版本尚未锁定/安装；未执行 collection 冲突只读检查、追加写入、回读计数和幂等复验；MySQL `embedding_status=READY` 投影、向量通道 Agent 融合、默认 HTTP/Worker 接线和 DeepSeek key/外部请求授权仍未完成。
 下一步唯一动作：向用户提交本 ChangePlan，等待明确的 Chroma 客户端/版本、目标 collection 追加写入和本阶段写入范围授权；授权前不得安装、连接、创建或写入 Chroma，不得更新 MySQL，不得删除任何数据。
+```
+
+## G6 Chroma collection 实际追加与只读复核记录
+
+```text
+交接ID：G6-CHROMA-IMPORT-20260811-010
+Gate：G6 可选检索与解释（Chroma 版本化 collection 实际追加）
+状态：IMPORT_PASS / READONLY_VERIFY_PASS / IDEMPOTENCY_PASS / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在用户明确授权后，将已验证的 14,983 条确定性向量追加到全新、版本隔离的 Chroma collection；完成全量回读、版本/元数据验证、召回冒烟、幂等重跑和独立只读验证，不修改 MySQL 索引状态或默认推荐接线。
+输入绑定：`chroma-collection-plan-20260811-002/chroma-collection-plan.json`；plan SHA-256=`a055fb93e64245ec63b8e6048ddcf048eccce5c881eea6bd067dae43139c58c4`；source vector plan SHA-256=`8672ef594d6ecce7c5c026b197d4f0212ef6bd9bf880535af392ec5c54c249ba`；vector artifact SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`。
+新增文件：`backend/requirements-g6-chroma.in`；`backend/requirements-g6-chroma.lock`（operator-only，`chromadb==1.5.9`）；`scripts/import_chroma_vectors.py`；`scripts/verify_chroma_import.py`；`tests/g6/test_chroma_import.py`；Makefile 的干跑/导入/幂等/只读校验目标；`.gitignore` 追加 `data/chroma*/` 运行态边界。默认 backend/worker 依赖未改变。
+正式目标：本地忽略路径 `data/chroma`；collection=`library_resources__hash_char_ngram_v1`；distance=`cosine`；dimension=384；embedding_version=`hash-char-ngram-v1`；index_version=`lib-books-vector-v1-20260811`；graph_version=`lib-books-v1-20260810`。仅创建 1 个新 collection，首轮追加 14,983 条，最终计数 14,983；未覆盖或修改既有 collection。
+执行过程：`chroma-import-dryrun-20260811-001` 仅验证计划并确认目标路径不存在；`chroma-import-20260811-001` 创建新 collection 并成功追加 59 个批次/14,983 条，首次回读因 Chroma 1.5.9 `get(include=["embeddings", ...])` 返回 NumPy 数组而非 list 被安全阻断，现场未清理并生成 `FAILED_NO_CLEANUP` 证据；修正为只读容差校验后，`chroma-import-idempotency-20260811-002` 复核新增 0、跳过既有 14,983、最终 14,983/14,983，完整回读与 query smoke PASS。
+独立验证：`chroma-import-integrity-20260811-001/readonly.json` 在独立进程中只执行 list/get/count/query；ID 集合 expected/actual=`14,983/14,983`，unexpected/missing=`0/0`，向量/文档/metadata 验证=`14,983`，client=`chromadb 1.5.9`，query top-1 score=`1.0`。Chroma cosine 持久化归一化的最大绝对误差=`2.9802322387695312e-08`，严格阈值=`2e-6`，源向量 SHA-256 全量验证=`14,983`。
+幂等性：二次运行没有调用 `add`，`added_count=0`、`write_batches_attempted=0`、`external_store_writes=0`；collection 元数据、版本过滤和最终计数保持一致。
+数据库与默认接线：MySQL、Neo4j 均未在本阶段写入；`resource_index_state.embedding_status` 全部保持 `PENDING`；图/向量端口未接入默认 HTTP/Worker，`can_recommend` 不因 collection 创建而改变；DeepSeek 未联网、未读取或保存 key。
+安全计数：本阶段数据库读/写=`0/0`；正式 collection 创建=`1`；Chroma 向量追加=`14,983`（幂等复核追加=`0`）；actual_delete_count=`0`；files_deleted=`0`；overwritten_inputs=`0`；没有 reset、清空、覆盖、删除或活动版本切换。
+保留的探查产物：此前为读取 Chroma API 签名而创建的独立路径 `data/chroma-probe-g6-20260811` 中保留空 collection `probe_signature_20260811`，count=`0`；它不属于正式 collection，未删除、未合并、未复用。
+测试结果：G6 定向测试 8 项 PASS；G6 其他测试 PASS；operator lock `uv pip check` PASS；安全扫描 260 files PASS；架构扫描 106 files PASS；contracts 22 documents PASS；docs 17 Markdown/42 blocks PASS；`git diff --check` PASS。首次失败证据不被覆盖，修复后的幂等与只读证据另建唯一 run 目录。
+验证证据目录：`artifacts/verification/chroma-collection-plan/chroma-collection-plan-20260811-002/`；`artifacts/verification/chroma-collection-plan/chroma-collection-verify-20260811-002/`；`artifacts/verification/chroma-import/chroma-import-dryrun-20260811-001/`；`artifacts/verification/chroma-import/chroma-import-20260811-001/`；`artifacts/verification/chroma-import/chroma-import-idempotency-20260811-002/`；`artifacts/verification/chroma-import/chroma-import-integrity-20260811-001/`。
+配置/数据/索引版本：graph_version=`lib-books-v1-20260810`；embedding_version=`hash-char-ngram-v1`；index_version=`lib-books-vector-v1-20260811`；collection=`library_resources__hash_char_ngram_v1`；MySQL embedding status=`PENDING`；LLM default=`mock`；DeepSeek 未联网。
+未解决风险：Neo4j/Chroma 端口仍需在可选 Agent 组合根中接线并验证融合/解释证据；默认 HTTP/Worker、MySQL `embedding_status=READY` 受控投影、DeepSeek key/模型/Base URL 和外部请求授权仍待单独评审；operator Chroma 依赖不得进入默认运行镜像。
+下一步唯一动作：实施低耦合的只读检索接线 Gate，先验证图/向量版本过滤、超时 fail-closed、候选融合和解释引用，再由用户另行确认 MySQL READY 投影和 DeepSeek 外部调用。
 ```
 
 ## 阶段交接模板

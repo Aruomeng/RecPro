@@ -47,6 +47,12 @@ CHROMA_COLLECTION_PLAN_RUN_ID ?=
 CHROMA_COLLECTION_VECTOR_PLAN ?=
 CHROMA_COLLECTION_VERIFY_RUN_ID ?=
 CHROMA_COLLECTION_PLAN ?=
+CHROMA_IMPORT_RUN_ID ?=
+CHROMA_IMPORT_VERIFY_RUN_ID ?=
+CHROMA_IMPORT_IDEMPOTENCY_RUN_ID ?=
+CHROMA_IMPORT_PLAN ?=
+CHROMA_IMPORT_CHROMA_PATH ?= data/chroma
+CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -60,6 +66,7 @@ CHROMA_COLLECTION_PLAN ?=
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
+	preflight-chroma-import import-chroma-vectors import-chroma-vectors-idempotency verify-chroma-import \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -236,6 +243,30 @@ verify-chroma-collection-plan:
 	@test -n "$(CHROMA_COLLECTION_PLAN)" || { echo "CHROMA_COLLECTION_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
 	@test -n "$(CHROMA_COLLECTION_VERIFY_RUN_ID)" || { echo "CHROMA_COLLECTION_VERIFY_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_chroma_collection_plan --run-id "$(CHROMA_COLLECTION_VERIFY_RUN_ID)" --plan "$(CHROMA_COLLECTION_PLAN)"
+
+preflight-chroma-import:
+	@test -n "$(CHROMA_IMPORT_RUN_ID)" || { echo "CHROMA_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(CHROMA_IMPORT_PLAN)" || { echo "CHROMA_IMPORT_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
+	@test -x "$(CHROMA_OPERATOR_PYTHON)" || { echo "CHROMA_OPERATOR_PYTHON is missing; install backend/requirements-g6-chroma.lock in the isolated operator venv"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 "$(CHROMA_OPERATOR_PYTHON)" -m scripts.import_chroma_vectors --run-id "$(CHROMA_IMPORT_RUN_ID)" --collection-plan "$(CHROMA_IMPORT_PLAN)" --chroma-path "$(CHROMA_IMPORT_CHROMA_PATH)"
+
+import-chroma-vectors:
+	@test -n "$(CHROMA_IMPORT_RUN_ID)" || { echo "CHROMA_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(CHROMA_IMPORT_PLAN)" || { echo "CHROMA_IMPORT_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
+	@test -x "$(CHROMA_OPERATOR_PYTHON)" || { echo "CHROMA_OPERATOR_PYTHON is missing; install backend/requirements-g6-chroma.lock in the isolated operator venv"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 "$(CHROMA_OPERATOR_PYTHON)" -m scripts.import_chroma_vectors --run-id "$(CHROMA_IMPORT_RUN_ID)" --collection-plan "$(CHROMA_IMPORT_PLAN)" --chroma-path "$(CHROMA_IMPORT_CHROMA_PATH)" --apply --confirm-chroma-write
+
+import-chroma-vectors-idempotency:
+	@test -n "$(CHROMA_IMPORT_IDEMPOTENCY_RUN_ID)" || { echo "CHROMA_IMPORT_IDEMPOTENCY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(CHROMA_IMPORT_PLAN)" || { echo "CHROMA_IMPORT_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
+	@test -x "$(CHROMA_OPERATOR_PYTHON)" || { echo "CHROMA_OPERATOR_PYTHON is missing; install backend/requirements-g6-chroma.lock in the isolated operator venv"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 "$(CHROMA_OPERATOR_PYTHON)" -m scripts.import_chroma_vectors --run-id "$(CHROMA_IMPORT_IDEMPOTENCY_RUN_ID)" --collection-plan "$(CHROMA_IMPORT_PLAN)" --chroma-path "$(CHROMA_IMPORT_CHROMA_PATH)" --apply --confirm-chroma-write --allow-existing-collection
+
+verify-chroma-import:
+	@test -n "$(CHROMA_IMPORT_VERIFY_RUN_ID)" || { echo "CHROMA_IMPORT_VERIFY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(CHROMA_IMPORT_PLAN)" || { echo "CHROMA_IMPORT_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
+	@test -x "$(CHROMA_OPERATOR_PYTHON)" || { echo "CHROMA_OPERATOR_PYTHON is missing; install backend/requirements-g6-chroma.lock in the isolated operator venv"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 "$(CHROMA_OPERATOR_PYTHON)" -m scripts.verify_chroma_import --run-id "$(CHROMA_IMPORT_VERIFY_RUN_ID)" --collection-plan "$(CHROMA_IMPORT_PLAN)" --chroma-path "$(CHROMA_IMPORT_CHROMA_PATH)"
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

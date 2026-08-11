@@ -20,7 +20,7 @@ import struct
 from typing import Any, Mapping, Sequence
 import unicodedata
 
-from scripts.import_mysql_book_catalog import PROJECT_ROOT, verify_plan
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
@@ -229,7 +229,12 @@ def build_vector_records(
 
 
 def build_plan(*, mysql_plan_dir: Path, output_dir: Path, embedding_version: str, index_version: str, namespace_name: str) -> Path:
-    mysql_plan, rows_by_table = verify_plan(mysql_plan_dir)
+    # Keep the deterministic/vector operator environment independent from the
+    # optional MySQL driver.  The MySQL plan verifier is loaded only when this
+    # build command is explicitly asked to consume a MySQL ChangePlan.
+    from scripts.import_mysql_book_catalog import verify_plan as verify_mysql_plan
+
+    mysql_plan, rows_by_table = verify_mysql_plan(mysql_plan_dir)
     _safe(embedding_version, label="embedding_version", pattern=VERSION_PATTERN)
     _safe(index_version, label="index_version", pattern=VERSION_PATTERN)
     if not re.fullmatch(r"^[a-z][a-z0-9_]{2,254}$", namespace_name):

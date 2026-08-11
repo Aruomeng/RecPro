@@ -15,6 +15,8 @@ artifacts/
 # User-provided scraped books and local license evidence are inspected by the
 # intake gate but are never committed as source or experiment artifacts.
 data/incoming/books/
+# Local Chroma persistent stores are runtime data and are never committed.
+data/chroma*/
 # User-provided scraped library data stays local; only normalized contracts and
 # hashes are versioned.
 Lib/

@@ -1,0 +1,2 @@
+# G6 operator-only Chroma build environment; never part of the default backend/worker image.
+chromadb==1.5.9

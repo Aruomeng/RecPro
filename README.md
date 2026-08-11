@@ -4,7 +4,7 @@ LibraMAS 是一个面向智慧图书馆知识资源推荐的研究生论文原�
 
 ## 当前状态
 
-G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 正在接入真实图书数据和可选检索能力。`Lib` 已完成 76 个 CSV 的只读规范化，并将版本化图 `lib-books-v1-20260810` 追加导入独立 Neo4j（15,538 条来源记录、63,388 个节点、191,865 条关系）；在用户明确授权后，同一书目已按 append-only ChangePlan 写入隔离 Compose MySQL（14,983 本书、8,516 个标签、70,750 条标签关系），并完成幂等复跑与只读计数核验。当前已基于同一 MySQL ChangePlan 离线构建 14,983 条确定性向量记录（`hash-char-ngram-v1`、384 维），两次独立构建哈希一致；只读 Chroma adapter/VectorRecallPort 契约和故障降级测试已完成，但尚未写入 Chroma，也未修改 MySQL 的 `embedding_status=PENDING`。Neo4j 只读图召回端口已实现并完成独立查询验证，图/向量通道尚未默认接线。默认 HTTP/API 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
+G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 正在接入真实图书数据和可选检索能力。`Lib` 已完成 76 个 CSV 的只读规范化，并将版本化图 `lib-books-v1-20260810` 追加导入独立 Neo4j（15,538 条来源记录、63,388 个节点、191,865 条关系）；在用户明确授权后，同一书目已按 append-only ChangePlan 写入隔离 Compose MySQL（14,983 本书、8,516 个标签、70,750 条标签关系），并完成幂等复跑与只读计数核验。当前已基于同一 MySQL ChangePlan 离线构建 14,983 条确定性向量记录（`hash-char-ngram-v1`、384 维），两次独立构建哈希一致；用户授权后已在独立本地 Chroma 路径创建新 collection `library_resources__hash_char_ngram_v1`，追加 14,983 条向量，并完成全量回读、版本/元数据核验、召回冒烟和幂等复核（`chromadb==1.5.9`）。MySQL 的 `embedding_status=PENDING` 未修改。Neo4j/Chroma 只读召回端口已实现，但图/向量通道尚未默认接线。默认 HTTP/API 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和图计划只读校验，再由 `scripts/import_book_graph.py` 以显式 `--apply` 追加到带 `graph_version` 的 Neo4j 影子图；实体/关系见 [图书图谱模型与导入契约](docs/book_graph_model.md)。当前没有外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；DeepSeek 适配器已准备但默认关闭，密钥只能通过本地忽略的环境配置注入，禁止提交到 Git。
 
