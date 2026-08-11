@@ -30,6 +30,11 @@ G7_RUN_ID ?=
 G7_MYSQL_READONLY_RUN_ID ?=
 G7_RECOMMENDATION_PLAN_RUN_ID ?=
 G7_RECOMMENDATION_PLAN_BASELINE ?=
+G7_RECOMMENDATION_APPLY_RUN_ID ?=
+G7_RECOMMENDATION_PLAN ?=
+G7_RECOMMENDATION_BASELINE ?=
+G7_RECOMMENDATION_PLAN_HASH ?=
+G7_RECOMMENDATION_REQUEST_RUN_ID ?=
 FORMAL_AUTH_RUN_ID ?=
 FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
@@ -73,7 +78,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle \
-	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan \
+	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -209,6 +214,14 @@ build-g7-recommendation-post-plan:
 	@test -n "$(G7_RECOMMENDATION_PLAN_RUN_ID)" || { echo "G7_RECOMMENDATION_PLAN_RUN_ID is required and must identify a new plan run"; exit 2; }
 	@test -n "$(G7_RECOMMENDATION_PLAN_BASELINE)" || { echo "G7_RECOMMENDATION_PLAN_BASELINE is required and must point to a PASS read-only evidence file"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g7_recommendation_post_plan --run-id "$(G7_RECOMMENDATION_PLAN_RUN_ID)" --baseline "$(G7_RECOMMENDATION_PLAN_BASELINE)"
+
+execute-g7-recommendation-post:
+	@test -n "$(G7_RECOMMENDATION_APPLY_RUN_ID)" || { echo "G7_RECOMMENDATION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
+	@test -n "$(G7_RECOMMENDATION_PLAN)" || { echo "G7_RECOMMENDATION_PLAN is required and must point to the reviewed ChangePlan"; exit 2; }
+	@test -n "$(G7_RECOMMENDATION_BASELINE)" || { echo "G7_RECOMMENDATION_BASELINE is required and must point to the matching PASS read-only evidence"; exit 2; }
+	@test -n "$(G7_RECOMMENDATION_PLAN_HASH)" || { echo "G7_RECOMMENDATION_PLAN_HASH is required and must be the exact approved hash"; exit 2; }
+	@test -n "$(G7_RECOMMENDATION_REQUEST_RUN_ID)" || { echo "G7_RECOMMENDATION_REQUEST_RUN_ID is required and must identify the reviewed request payload"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g7_recommendation_post --apply --approved-plan-hash "$(G7_RECOMMENDATION_PLAN_HASH)" --plan "$(G7_RECOMMENDATION_PLAN)" --baseline "$(G7_RECOMMENDATION_BASELINE)" --request-run-id "$(G7_RECOMMENDATION_REQUEST_RUN_ID)" --run-id "$(G7_RECOMMENDATION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g6-readonly-fusion:
 	@test -n "$(G6_READONLY_RUN_ID)" || { echo "G6_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
