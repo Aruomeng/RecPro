@@ -1084,6 +1084,24 @@ Gate：G7 真实 MySQL 推荐 POST（一次受控追加与事务回读）
 下一步唯一动作：进入真实前端 API/浏览器闭环，将同一 `RecommendationClient` 接到显式 HTTP 组合根；继续保持默认 API/Worker 关闭，不在此阶段重复推荐请求或开放 DeepSeek 外部调用。
 ```
 
+## G7 显式 Demo HTTP 入口与浏览器接线记录
+
+```text
+交接ID：G7-FRONTEND-API-BROWSER-20260811-022
+Gate：G7 前端与论文演示（显式 MySQL HTTP 入口、Vite 代理和浏览器冒烟）
+状态：EXPLICIT_DEMO_ENTRYPOINT_PASS / BROWSER_HEALTH_PASS / LOCAL_DEMO_SAFE / G7_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+新增文件：`backend/app/demo_main.py`；`tests/g7/test_demo_http_entrypoint.py`；证据 `artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`。
+修改文件：`Makefile` 增加 `demo-backend` 显式目标；`.env.host.example` 增加 `RECPRO_DEMO_HTTP_ENABLED=false` 默认关闭开关；`frontend/README.md` 固化默认 health-only 与 demo 入口边界。
+安全设计：默认 `backend.app.main:app` 不变，仍只提供 health 路由；`demo_main` 只有同时满足 `RECPRO_APP_ENV=demo` 和 `RECPRO_DEMO_HTTP_ENABLED=true` 才构造 `build_demo_mysql_http_app`。Make 目标先校验环境，再启动可替换的本地入口，不修改 Compose 默认命令，不连接既有 Neo4j。
+真实浏览器结果：临时启动显式 Demo HTTP（MySQL host port=`62306`）与 Vite（`127.0.0.1:5173`）；live/ready 均 `200`，ready=`DEGRADED`、`can_recommend=true`、MySQL=`UP`、推荐管线=`UP`；前端工作台显示“真实接口已就绪”；点击“查看本地演示”渲染 3 张明确标注的本地 fixture，浏览器控制台错误=`0`。
+请求边界：浏览器冒烟只通过 Vite 代理执行健康 GET；未点击“请求真实推荐”，业务 HTTP POST=`0`，未重放已完成的 request；真实推荐 POST 的 MySQL 事务闭环由 `G7-RECOMMENDATION-APPLY-20260811-021` 和只读回读证据覆盖。
+安全计数：browser smoke database_writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`；临时 backend/Vite 进程已停止；未删除文件、容器、卷或数据库数据。
+测试结果：Demo 入口定向测试 `2` 项 PASS；全量 Python `401` 项 PASS；浏览器 DOM 冒烟和控制台错误检查 PASS；Make 目标展开检查 PASS。
+未解决风险：前端还未执行新的真实推荐 POST（避免重复业务写入）；G4 多智能体持久化编排、图/向量接线、反馈/画像 API 和 DeepSeek 外部调用仍未接入该 Demo HTTP 入口。
+下一步唯一动作：为 `RecommendationClient` 增加一次经过单独 ChangePlan 授权的浏览器真实请求验收，或先进入 G4 MAS 编排 HTTP 适配；两者均不得默认开启、不得复用已完成 request_id。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
