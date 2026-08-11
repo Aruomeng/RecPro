@@ -50,7 +50,7 @@
   - 已完成向量计划 Schema、逐行哈希/维度校验器和数据库无关完整性报告；已新增版本化只读 `VectorRecallPort`/`ChromaVectorReader`、cosine 分数映射、元数据版本隔离和故障降级测试；MySQL `embedding_status` 仍保持 `PENDING`。
   - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端已锁定 `chromadb==1.5.9` 并仅用于隔离 operator venv。
   - 已在用户明确授权后创建正式 Chroma collection 并追加 14,983 条向量；全量回读验证、版本/元数据验证、数值容差验证、召回冒烟、幂等复跑和独立只读 verifier 均 PASS。首次验证因 Chroma 1.5.9 的 NumPy 返回类型兼容性阻断，现场和失败证据均保留，未执行任何清理或覆盖。
-  - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；尚未提供或保存 DeepSeek 密钥，未发起外部请求。
+  - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；用户提供的 DeepSeek 密钥已写入本机被 Git 忽略且权限为 `0600` 的 `.env.host`/`.env.compose`，未写入仓库，未发起外部请求。
   - 已完成版本化 Prompt Bundle：`contracts/prompts/rec-prompts-v1.0.0.json`（`prompt-v1`）及严格 Schema、变量白名单、上下文上限、输出 Schema、工具零授权和 SHA-256 绑定；新增只读 `verify_prompt_bundle` 门禁与 Prompt 配置文档。
   - 已完成 DeepSeek Prompt 接入：四个能力统一使用 Prompt Bundle，LLMResult 增加 `prompt_id/prompt_sha256/request_id/attempts` 审计字段；无效 JSON/结构输出最多一次重试，证据引用越权 fail-closed。
   - 已完成显式 LLM Intent Agent：`LLMIntentUnderstandingAgent` 只消费文本分类结果，主题词/资源类型仍由规则生成；外部 provider 异常、超时或空输入自动降级，默认规则编排和默认 HTTP/Worker 不改变。
@@ -107,8 +107,8 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
-  - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，但未授权真实外部调用。
-- `next_step`：进入 G6 的只读检索接线评审：把 Neo4j/Chroma 作为可选端口接入 Agent 组合根，保持默认 HTTP/Worker 关闭，并先以 fake/隔离运行态验证版本过滤、超时降级和解释证据；MySQL `embedding_status` 的 READY 投影、DeepSeek key/模型/Base URL 和外部请求授权仍需单独确认。
+  - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
+- `next_step`：进入 G6 的只读检索接线评审：把 Neo4j/Chroma 作为可选端口接入 Agent 组合根，保持默认 HTTP/Worker 关闭，并先以 fake/隔离运行态验证版本过滤、超时降级和解释证据；MySQL `embedding_status` 的 READY 投影以及真实 DeepSeek 请求仍需单独评审。
 
 ---
 
@@ -123,7 +123,7 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`scripts/import_chroma_vectors.py`、`scripts/verify_chroma_import.py`、`backend/app/catalog/adapters/chroma.py`、`tests/g6/test_chroma_import.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；MySQL `embedding_status` 仍 PENDING，图/向量默认接线和 DeepSeek key 仍待后续配置 |
+| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`scripts/import_chroma_vectors.py`、`scripts/verify_chroma_import.py`、`backend/app/catalog/adapters/chroma.py`、`tests/g6/test_chroma_import.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；MySQL `embedding_status` 仍 PENDING，图/向量默认接线待完成；DeepSeek 本机配置和离线构造校验已 PASS，外部调用仍为 0 |
 | G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -135,7 +135,7 @@
 
 ## Working Set
 
-- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle 和显式 LLM Intent Agent 已完成，下一步仍是只读检索接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle、显式 LLM Intent Agent 以及 DeepSeek 本机密钥配置已完成，下一步仍是只读检索接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -155,9 +155,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek key 和外部请求授权仍缺失；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek key/模型/Base URL 和外部调用授权仍不假设；需要真实 LLM 时先由用户确认脱敏、伦理、费用和外部请求范围。
+- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek 本机 key/模型/Base URL 已完成配置和离线构造校验；需要真实 LLM 时仍先确认脱敏、伦理、费用和外部请求范围。
 
 ---
 
@@ -908,6 +908,22 @@ Agent接线：仅 `build_rule_orchestrator(..., llm_provider=...)` / `build_port
 验证证据：命令输出；`docs/LLM_PROMPT_CONFIGURATION.md`；本记录；旧 G6 artifact 未覆盖。
 未解决风险：没有真实 DeepSeek key/外部调用授权；Prompt Bundle 尚未接入 Explanation EvidenceValidator 和 Feedback 持久化事务；Neo4j/Chroma 仍待只读融合接线；MySQL `embedding_status` 仍为 `PENDING`。
 下一步唯一动作：先完成 Neo4j/Chroma 只读端口与版本过滤/超时降级的 fake/隔离验证；若需要真实 LLM，先由用户确认脱敏、伦理、费用和外部请求范围，不得默认启用。
+```
+
+## G6 DeepSeek 本机密钥配置记录
+
+```text
+交接ID：G6-DEEPSEEK-CONFIG-20260811-012
+Gate：G6 可选检索与解释（DeepSeek 运行配置）
+状态：LOCAL_CONFIGURED / OFFLINE_CONSTRUCTION_PASS / EXTERNAL_CALLS_ZERO / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：将用户提供的 DeepSeek 凭据安全注入本机 opt-in 运行环境，同时保持默认 HTTP/Worker、数据库和外部请求关闭。
+本机配置文件：`.env.host`、`.env.compose`；均被 `.gitignore` 忽略，权限 `0600`，不进入 Git。真实 key 值不在此记录、代码、日志、Prompt、Agent 消息或验证 artifact 中。
+运行参数：provider=`deepseek`；model=`deepseek-chat`；base_url=`https://api.deepseek.com`；timeout=`20s`；max_output_tokens=`512`；Prompt Bundle=`prompt-v1`；Prompt SHA-256=`bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a`。
+验证结果：Compose 环境结构校验 PASS；DeepSeek provider 离线构造 PASS（未打印 key）；host 校验仍被既有 MySQL 运行时缺失字段和占位探针阻断，与 DeepSeek 配置无关。
+外部请求：0；数据库读取：0；数据库写入：0；数据库物理删除：0；文件删除：0；Docker/容器/卷变更：0。
+安全边界：默认 provider 仍为 `mock`，默认 API/Worker 不挂载 LLM；本阶段不做连通性请求。任何真实 DeepSeek 调用仍需单独确认脱敏、论文伦理、费用上限、超时/降级和数据出境范围。
+下一步唯一动作：完成 Neo4j/Chroma 只读端口与版本过滤、超时 fail-closed、候选融合和解释引用的 fake/隔离验证，再评审是否需要一次受控外部 LLM 请求。
 ```
 
 ## 阶段交接模板

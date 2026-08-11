@@ -37,6 +37,33 @@ class RuntimeEnvironmentContractTests(unittest.TestCase):
     def test_distinct_isolated_compose_environment_passes(self) -> None:
         self.assertEqual((), validate_compose(valid_values()))
 
+    def test_deepseek_requires_a_bounded_local_key(self) -> None:
+        values = valid_values()
+        values["RECPRO_LLM_PROVIDER"] = "deepseek"
+        self.assertIn(
+            "RECPRO_LLM_API_KEY is required when RECPRO_LLM_PROVIDER=deepseek",
+            validate_compose(values),
+        )
+        values["RECPRO_LLM_API_KEY"] = "local-deepseek-key-001"
+        self.assertNotIn(
+            "RECPRO_LLM_API_KEY is required when RECPRO_LLM_PROVIDER=deepseek",
+            validate_compose(values),
+        )
+
+    def test_llm_and_prompt_paths_fail_closed(self) -> None:
+        values = valid_values()
+        values["RECPRO_LLM_BASE_URL"] = "http://127.0.0.1:9000"
+        values["RECPRO_PROMPT_BUNDLE_PATH"] = "../outside/prompts.json"
+        issues = validate_compose(values)
+        self.assertIn(
+            "RECPRO_LLM_BASE_URL must be an HTTPS origin without path, query, or fragment",
+            issues,
+        )
+        self.assertIn(
+            "RECPRO_PROMPT_BUNDLE_PATH must stay inside the repository",
+            issues,
+        )
+
     def test_checked_in_project_placeholder_is_rejected(self) -> None:
         values = valid_values()
         values["COMPOSE_PROJECT_NAME"] = EXAMPLE_PROJECT_NAME

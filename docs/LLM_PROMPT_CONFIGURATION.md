@@ -13,7 +13,9 @@ RECPRO_PROMPT_BUNDLE_PATH=contracts/prompts/rec-prompts-v1.0.0.json
 RECPRO_PROMPT_BUNDLE_SHA256=bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a
 ```
 
-DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROVIDER=deepseek` 和 `RECPRO_LLM_API_KEY` 后才允许构造。密钥不能写入仓库、Prompt Bundle、Agent 消息、日志、实验 Manifest 或验证 artifact；本仓库当前没有保存真实密钥，也没有发起外部调用。
+DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROVIDER=deepseek` 和 `RECPRO_LLM_API_KEY` 后才允许构造。密钥不能写入仓库、Prompt Bundle、Agent 消息、日志、实验 Manifest 或验证 artifact；仓库不保存真实密钥。
+
+当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-chat`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。已完成离线 provider 构造验证和 Compose 环境结构校验，尚未发起任何 DeepSeek 网络请求。
 
 要让一个研究组合根使用文本能力，还必须显式传入 `enable_llm_provider=True`。默认规则编排、默认 FastAPI 和 Worker 都不因设置文件存在而改变：
 
@@ -74,6 +76,13 @@ PYTHONPATH=. .venv-g1-final-py311/bin/python -m unittest \
   tests.g1.backend.test_prompt_bundle \
   tests.g1.backend.test_deepseek_llm \
   tests.g4.test_llm_intent_agent
+```
+
+验证本机 Compose 配置（只检查结构，不显示密钥）：
+
+```bash
+PYTHONPATH=. .venv-g1-final-py311/bin/python scripts/validate_runtime_env.py \
+  --mode compose --env-file .env.compose
 ```
 
 验证失败时不得修改旧 artifact 或旧 Prompt Bundle；应新建版本文件和新的验证记录。任何真实 DeepSeek 调用都必须先记录数据脱敏、学校/论文伦理要求、费用上限、超时、回退和审计方案，再由用户明确授权。

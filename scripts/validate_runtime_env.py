@@ -6,6 +6,7 @@ import argparse
 import re
 from pathlib import Path
 from typing import Mapping, Sequence
+from urllib.parse import urlsplit
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,11 @@ DATABASE_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,63}$")
 MYSQL_USER_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,31}$")
 LOCAL_SECRET_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{16,128}$")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+LLM_KEY_PATTERN = re.compile(r"^\S{16,256}$")
+DEFAULT_PROMPT_BUNDLE_PATH = "contracts/prompts/rec-prompts-v1.0.0.json"
+DEFAULT_PROMPT_BUNDLE_SHA256 = (
+    "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a"
+)
 EXAMPLE_PROJECT_NAME = "libramas-g1-researcher01-local01"
 PORT_KEYS = (
     "RECPRO_MYSQL_PORT",
@@ -48,8 +54,59 @@ def _missing(values: Mapping[str, str], required: set[str]) -> list[str]:
     return sorted(key for key in required if not values.get(key, "").strip())
 
 
+def validate_llm(values: Mapping[str, str]) -> tuple[str, ...]:
+    """Validate optional LLM and Prompt settings without exposing secrets."""
+
+    issues: list[str] = []
+    provider = values.get("RECPRO_LLM_PROVIDER", "mock").strip()
+    if provider not in {"mock", "deepseek"}:
+        issues.append("RECPRO_LLM_PROVIDER must be mock or deepseek")
+
+    base_url = values.get("RECPRO_LLM_BASE_URL", "https://api.deepseek.com").strip()
+    parsed = urlsplit(base_url)
+    if parsed.scheme != "https" or not parsed.netloc or parsed.query or parsed.fragment or parsed.path not in ("", "/"):
+        issues.append("RECPRO_LLM_BASE_URL must be an HTTPS origin without path, query, or fragment")
+
+    api_key = values.get("RECPRO_LLM_API_KEY", "")
+    if provider == "deepseek" and not api_key.strip():
+        issues.append("RECPRO_LLM_API_KEY is required when RECPRO_LLM_PROVIDER=deepseek")
+    if api_key and not LLM_KEY_PATTERN.fullmatch(api_key):
+        issues.append("RECPRO_LLM_API_KEY must be 16-256 non-whitespace characters")
+
+    timeout_text = values.get("RECPRO_LLM_TIMEOUT_SECONDS", "20")
+    try:
+        timeout = float(timeout_text)
+    except ValueError:
+        issues.append("RECPRO_LLM_TIMEOUT_SECONDS must be numeric")
+    else:
+        if not 0 < timeout <= 120:
+            issues.append("RECPRO_LLM_TIMEOUT_SECONDS must be greater than 0 and at most 120")
+
+    token_text = values.get("RECPRO_LLM_MAX_OUTPUT_TOKENS", "512")
+    try:
+        tokens = int(token_text)
+    except ValueError:
+        issues.append("RECPRO_LLM_MAX_OUTPUT_TOKENS must be an integer")
+    else:
+        if not 1 <= tokens <= 8192:
+            issues.append("RECPRO_LLM_MAX_OUTPUT_TOKENS must be between 1 and 8192")
+
+    prompt_path = values.get("RECPRO_PROMPT_BUNDLE_PATH", DEFAULT_PROMPT_BUNDLE_PATH)
+    prompt_candidate = Path(prompt_path)
+    if prompt_candidate.is_absolute() or ".." in prompt_candidate.parts:
+        issues.append("RECPRO_PROMPT_BUNDLE_PATH must stay inside the repository")
+    prompt_hash = values.get("RECPRO_PROMPT_BUNDLE_SHA256", DEFAULT_PROMPT_BUNDLE_SHA256)
+    if not SHA256_PATTERN.fullmatch(prompt_hash):
+        issues.append("RECPRO_PROMPT_BUNDLE_SHA256 must be 64 lowercase hex characters")
+    prompt_version = values.get("RECPRO_PROMPT_BUNDLE_VERSION", "prompt-v1")
+    if not re.fullmatch(r"^[A-Za-z0-9][A-Za-z0-9._-]*$", prompt_version):
+        issues.append("RECPRO_PROMPT_BUNDLE_VERSION has an unsafe format")
+    return tuple(issues)
+
+
 def validate_common(values: Mapping[str, str]) -> tuple[str, ...]:
     issues: list[str] = []
+    issues.extend(validate_llm(values))
     required = {
         "RECPRO_CONFIG_BUNDLE_VERSION",
         "RECPRO_CONFIG_BUNDLE_PATH",
