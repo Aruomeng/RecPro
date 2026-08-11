@@ -1051,6 +1051,20 @@ ChangePlan 证据：`artifacts/verification/g7/g7-recommendation-post-plan-20260
 下一步唯一动作：审阅上述 `S1_APPEND/DRY_RUN` ChangePlan（基于上述 `...-004` 基线，含用户、输入、幂等键、预计新增表行、前置条件和安全断言）；只有用户明确批准未变更的 plan hash 和写入范围后，才可执行一次隔离 Demo 请求及只读复核；默认应用继续保持关闭。
 ```
 
+## G7 真实推荐执行前性能阻断与新计划记录
+
+```text
+交接ID：G7-RECOMMENDATION-PERF-20260811-020
+Gate：G7 真实 MySQL 推荐 POST（性能与事务边界）
+状态：APPLY_ABORTED_BEFORE_COMMIT / COUNTS_UNCHANGED / NEW_PLAN_PENDING_APPROVAL
+时间：2026-08-11（Asia/Shanghai）
+触发：按已批准的旧 plan hash 启动一次唯一 POST 前置执行；健康、目标身份、权限、基线计数和请求唯一性均通过，但 G3 计算在 14,989 本书规模上进入每资源/每通道重复全量排序，形成不可接受的长事务风险。
+安全动作：在事务写入阶段前终止进程；随后 `g7-mysql-http-readonly-20260811-005` 只读复核 PASS，13 张表计数仍为 `recommendation_task=18`、`recommendation_record=18`、`recommendation_item=90`、`recommendation_trace=18` 及原书目计数；未生成 apply evidence，未提交任何业务行。
+修复：提交 `4915351 perf(g3): precompute recommendation channel ranks`；三个通道各只生成一次排名映射，保留负向偏好惩罚与确定性排序；15,000 条离线资源基准约 `0.137s`，G3 服务测试 4 项 PASS。
+新计划：基于只读基线 `artifacts/verification/g7/g7-mysql-http-readonly-20260811-005/readonly.json` 生成 `artifacts/verification/g7/g7-recommendation-post-plan-20260811-004/recommendation-post-change-plan.json`；git_commit=`4915351ea61a6194d77fc319d346c378211aa06b`；plan_hash=`2b115b3790a6281f4725be7fe29a5448e674c92570cdaac766cc0f40eb961d53`；仍为 `S1_APPEND/DRY_RUN`、`max_changes=37`，不包含 apply 授权。
+下一步唯一动作：确认上述新 plan hash 后，才重新执行一次受控 POST；若成功，再核验 13 张推荐/资源表及三个上下文表的前后计数、响应 GET 回读、幂等重放和事务闭环。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
