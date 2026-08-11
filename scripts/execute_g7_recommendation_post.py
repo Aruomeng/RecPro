@@ -97,7 +97,7 @@ def current_git_commit() -> str:
 
 def changed_paths_since(commit: str) -> tuple[str, ...]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", f"{commit}..HEAD"],
+        ["git", "-c", "core.quotePath=false", "diff", "--name-only", f"{commit}..HEAD"],
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
