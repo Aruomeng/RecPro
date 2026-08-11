@@ -36,6 +36,12 @@ def _status(value: object) -> str:
     return str(getattr(value, "value", value))
 
 
+def _decimal(value: float | int) -> str:
+    """Send bounded confidence values as fixed-scale DECIMAL text."""
+
+    return f"{float(value):.6f}"
+
+
 def _same_json(actual: object, expected: object) -> bool:
     try:
         return _canonical(_json_value(actual)) == _canonical(expected)
@@ -132,7 +138,7 @@ class MySQLAgentExecutionLogWriter(AgentExecutionLogPort):
                     result.agent_name,
                     result.agent_version,
                     result.status.value,
-                    result.confidence,
+                    _decimal(result.confidence),
                     payload_json,
                     _canonical(list(result.evidence_refs)),
                     _canonical(list(result.warnings)),

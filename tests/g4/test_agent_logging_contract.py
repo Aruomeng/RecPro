@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import UUID, uuid4
 
-from backend.app.recommendation.adapters.agent_logging_mysql import _naive_utc
+from backend.app.recommendation.adapters.agent_logging_mysql import _decimal, _naive_utc
 from backend.app.recommendation.agents.orchestrator import OrchestrationRequest
 from backend.app.recommendation.application.orchestration import (
     build_rule_orchestrator,
@@ -132,6 +132,10 @@ class AgentLoggingContractTests(unittest.TestCase):
     def test_aware_times_are_stored_as_utc_naive_values(self) -> None:
         value = datetime(2026, 8, 9, 8, 0, tzinfo=UTC)
         self.assertEqual(datetime(2026, 8, 9, 8, 0), _naive_utc(value))
+
+    def test_confidence_is_serialized_at_mysql_column_scale(self) -> None:
+        self.assertEqual("0.958287", _decimal(0.958287))
+        self.assertEqual("1.000000", _decimal(1.0))
 
 
 if __name__ == "__main__":
