@@ -50,6 +50,13 @@ const readinessErrorCopies: Record<string, StatusCopy> = {
 };
 
 export function presentReadiness(readiness: ReadinessResponse): StatusCopy {
+  if (readiness.can_recommend) {
+    return {
+      label: "推荐能力已就绪",
+      detail: "核心推荐链已就绪；可选增强组件状态见下方。",
+      tone: "positive",
+    };
+  }
   if (isRecommendationPipelineDisabled(readiness)) {
     return {
       label: "推荐能力尚未启用",

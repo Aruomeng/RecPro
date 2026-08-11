@@ -1006,6 +1006,30 @@ Gate：G7 前端与论文演示（推荐请求/澄清首个闭环）
 下一步唯一动作：在用户确认后端推荐组合根/API Gate 后，使用同一 RecommendationClient 连接真实结果，并为反馈/解释增加独立端口与只读/显式写边界测试；不得默认打开或绕过健康闸门。
 ```
 
+## G7 后端显式 HTTP/API 闸门记录
+
+```text
+交接ID：G7-OPTIN-HTTP-GATE-20260811-018
+Gate：G7 前端与论文演示（显式推荐 HTTP 组合根与健康闸门）
+状态：OPTIN_COMPOSITION_PASS / DEFAULT_HEALTH_ONLY / FRONTEND_CONTRACT_PASS / G7_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：将真实推荐请求从前端本地演示接入一个可审计的显式 HTTP 组合根；默认模块级 FastAPI 应用继续只提供健康接口，只有调用方同时提供推荐服务、启用 API 和推荐 readiness 闸门时，健康响应才允许声明 can_recommend=true。
+新增文件：`tests/g7/__init__.py`、`tests/g7/test_optin_http_composition.py`、`scripts/verify_g7_optin_http.py`。
+修改文件：`backend/app/composition.py` 新增 `build_demo_http_app` 并让 production 组合根显式开启 readiness；`backend/app/main.py` 增加 `recommendation_readiness_enabled` 保护和中性 OpenAPI 描述；`backend/app/observability/application/public.py` 让 readiness 组件版本/状态随显式组合根输出；`frontend/src/domain/health.ts`、`frontend/src/api/healthClient.ts`、`frontend/src/App.vue`、`frontend/src/presentation/healthPresentation.ts` 和相关测试支持严格的 opt-in readiness 响应。
+低耦合边界：组合根负责装配服务与端口；ReadinessService 只聚合配置/MySQL 探针及显式能力状态；前端 App 只把经过契约校验的 `can_recommend` 注入 RecommendationWorkbench，组件仍只依赖 `RecommendationClient` 端口；默认应用不会构造业务服务、连接数据库或注册推荐路由。
+行为验证：Demo 组合根在构造阶段不打开数据库连接，GET `/api/v1/health/ready` 在两个 UP 探针下返回 `DEGRADED/can_recommend=true`、推荐管线 `UP/required=true/active_version=recommendation-g3-mysql-v1`；默认 `create_app` 无推荐服务、无推荐路由并返回 `can_recommend=false`；缺少服务、API 闸门或错误环境时 fail-closed。
+新增数据库对象和行数：0；本阶段未连接 MySQL、Neo4j 或 Chroma，也未改变任何索引状态。
+受控UPDATE对象和审计ID：0。
+文件删除数量：0。
+数据库物理删除数量：0。
+执行命令：`PYTHONDONTWRITEBYTECODE=1 .venv-g1-final-py311/bin/python -m unittest tests.g7.test_optin_http_composition`；`PYTHONDONTWRITEBYTECODE=1 .venv-g1-final-py311/bin/python -m scripts.verify_g7_optin_http --run-id g7-optin-http-20260811-001`；`PATH=... npm --prefix frontend run test`；临时锁定 TypeScript 5.9.3/vue-tsc 3.3.9 执行 `vue-tsc --project frontend/tsconfig.json --noEmit`。
+测试结果：G7 后端 opt-in 定向 4 项 PASS；全量 Python unittest 398 项 PASS；前端 6 个文件/40 项 Vitest PASS；临时锁定 TypeScript 5.9.3/vue-tsc 3.3.9 类型检查 PASS；安全扫描 276 files PASS；架构扫描 109 files PASS；contracts 24 documents PASS；docs 18 Markdown/42 blocks PASS；`git diff --check` PASS。
+验证证据目录：`artifacts/verification/g7/g7-optin-http-20260811-001/evidence.json`；本阶段使用定向 unittest、前端测试和类型检查输出；未覆盖既有 artifact。
+配置/数据/索引版本：recommendation_version=`recommendation-g3-mysql-v1`；现有 graph/index/vector 版本不变；MySQL `embedding_status=PENDING` 不变；LLM/DeepSeek 外部请求数=0。
+未解决风险：默认 HTTP/Worker 仍未挂载真实 MySQL 编排服务；生产/演示 API 真实请求仍需独立运行态验收、反馈/画像事务与解释证据链；DeepSeek 外部调用和 MySQL READY 投影仍未授权；前端真实 API 只有健康闸门通过才会发送。
+下一步唯一动作：在不触碰既有数据库数据的前提下，为显式 Demo 组合根增加隔离 MySQL 真实请求冒烟和只读计数前后核验，再评审是否开放论文演示流量；默认应用继续保持关闭。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

@@ -150,7 +150,15 @@ function isReadinessResponse(value: unknown): value is ReadinessResponse {
     return false;
   }
   if (value.can_recommend === true) {
-    return false;
+    const pipeline = value.components.recommendation_pipeline;
+    if (
+      value.status === "NOT_READY" ||
+      !isComponentReadiness(pipeline) ||
+      pipeline.status !== "UP" ||
+      pipeline.required !== true
+    ) {
+      return false;
+    }
   }
   return true;
 }

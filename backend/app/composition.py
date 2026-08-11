@@ -118,10 +118,55 @@ def build_production_http_app(
         config_bundle_probe=config_bundle_probe,
         recommendation_service=recommendation_service,
         recommendation_api_enabled=True,
+        recommendation_readiness_enabled=True,
         feedback_service=feedback_service,
         behavior_service=behavior_service,
         feedback_api_enabled=True,
         principal_resolver=principal_resolver,
+        debug_api_enabled=False,
+    )
+
+
+def build_demo_http_app(
+    settings: AppSettings,
+    *,
+    recommendation_service: object | None,
+    feedback_service: object | None = None,
+    behavior_service: object | None = None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+    feedback_api_enabled: bool = False,
+) -> FastAPI:
+    """Build an explicitly enabled local demo HTTP graph.
+
+    The module-level ``backend.app.main:app`` remains health-only.  This
+    builder is the only non-production path that marks recommendation
+    readiness true, and it still requires the caller to provide the concrete
+    service.  Construction opens no database connection; request execution
+    retains the service's normal transaction boundary.
+    """
+
+    if settings.app_env != "demo":
+        raise ValueError("demo HTTP composition requires RECPRO_APP_ENV=demo")
+    if recommendation_service is None:
+        raise ValueError("demo HTTP composition requires recommendation service")
+    if feedback_api_enabled and (feedback_service is None or behavior_service is None):
+        raise ValueError(
+            "demo feedback API requires both feedback and behavior services"
+        )
+
+    from backend.app.main import create_app
+
+    return create_app(
+        settings=settings,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        recommendation_service=recommendation_service,
+        recommendation_api_enabled=True,
+        recommendation_readiness_enabled=True,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        feedback_api_enabled=feedback_api_enabled,
         debug_api_enabled=False,
     )
 
@@ -279,6 +324,7 @@ def build_profile_outbox_worker(
 __all__ = [
     "build_formal_auth_resolver",
     "build_production_http_app",
+    "build_demo_http_app",
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
     "build_research_behavior_service",

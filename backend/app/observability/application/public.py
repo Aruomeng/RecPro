@@ -13,7 +13,14 @@ from backend.app.shared_kernel.contracts.errors import ErrorCode
 
 
 class ReadinessService:
-    """Aggregate dependency health while reporting G1 capability truthfully."""
+    """Aggregate dependency health while keeping capability opt-in.
+
+    The default constructor represents the health-only G1 application.  An
+    explicit composition root may set ``recommendation_enabled=True`` after it
+    has supplied a recommendation service and enabled its HTTP route.  This
+    keeps the health response truthful for both graphs without changing the
+    module-level default app.
+    """
 
     def __init__(
         self,
@@ -23,15 +30,23 @@ class ReadinessService:
         config_bundle_version: str,
         configuration_valid: bool,
         configuration_error_code: str | None = None,
+        recommendation_enabled: bool = False,
+        recommendation_version: str = "recommendation-g3-mysql-v1",
     ) -> None:
         self._mysql_probe = mysql_probe
         self._config_bundle_probe = config_bundle_probe
         self._config_bundle_version = config_bundle_version
         self._configuration_valid = configuration_valid
         self._configuration_error_code = configuration_error_code
+        if not isinstance(recommendation_enabled, bool):
+            raise ValueError("recommendation_enabled must be boolean")
+        if not recommendation_version.strip():
+            raise ValueError("recommendation_version must not be blank")
+        self._recommendation_enabled = recommendation_enabled
+        self._recommendation_version = recommendation_version
 
     async def evaluate(self) -> ReadinessAssessment:
-        components = self._g1_static_components()
+        components = self._static_components()
         if not self._configuration_valid:
             components["config_bundle"] = ComponentReadiness(
                 status=ComponentStatus.DOWN,
@@ -42,6 +57,9 @@ class ReadinessService:
                 status=ComponentStatus.UNKNOWN,
                 required=True,
                 error_code=ErrorCode.CONFIG_BUNDLE_INVALID.value,
+            )
+            self._mark_pipeline_unavailable(
+                components, ErrorCode.CONFIG_BUNDLE_INVALID.value
             )
             return ReadinessAssessment(
                 status=ServiceReadinessStatus.NOT_READY,
@@ -69,6 +87,9 @@ class ReadinessService:
                 required=True,
                 error_code=ErrorCode.CONFIG_BUNDLE_INVALID.value,
             )
+            self._mark_pipeline_unavailable(
+                components, ErrorCode.CONFIG_BUNDLE_INVALID.value
+            )
             return ReadinessAssessment(
                 status=ServiceReadinessStatus.NOT_READY,
                 can_recommend=False,
@@ -87,6 +108,10 @@ class ReadinessService:
             )
         components["mysql"] = mysql
         if mysql.status is not ComponentStatus.UP:
+            self._mark_pipeline_unavailable(
+                components,
+                mysql.error_code or ErrorCode.CORE_STORAGE_UNAVAILABLE.value,
+            )
             return ReadinessAssessment(
                 status=ServiceReadinessStatus.NOT_READY,
                 can_recommend=False,
@@ -99,13 +124,12 @@ class ReadinessService:
 
         return ReadinessAssessment(
             status=ServiceReadinessStatus.DEGRADED,
-            can_recommend=False,
+            can_recommend=self._recommendation_enabled,
             components=components,
             config_bundle_version=self._config_bundle_version,
         )
 
-    @staticmethod
-    def _g1_static_components() -> dict[str, ComponentReadiness]:
+    def _static_components(self) -> dict[str, ComponentReadiness]:
         return {
             "chroma": ComponentReadiness(
                 status=ComponentStatus.DISABLED,
@@ -123,8 +147,35 @@ class ReadinessService:
                 provider="MockLLMProvider",
             ),
             "recommendation_pipeline": ComponentReadiness(
-                status=ComponentStatus.DISABLED,
-                required=False,
-                error_code="G1_NOT_IMPLEMENTED",
+                status=(
+                    ComponentStatus.UP
+                    if self._recommendation_enabled
+                    else ComponentStatus.DISABLED
+                ),
+                required=self._recommendation_enabled,
+                active_version=(
+                    self._recommendation_version
+                    if self._recommendation_enabled
+                    else None
+                ),
+                error_code=(
+                    None
+                    if self._recommendation_enabled
+                    else "G1_NOT_IMPLEMENTED"
+                ),
             ),
         }
+
+    def _mark_pipeline_unavailable(
+        self,
+        components: dict[str, ComponentReadiness],
+        error_code: str,
+    ) -> None:
+        if not self._recommendation_enabled:
+            return
+        components["recommendation_pipeline"] = ComponentReadiness(
+            status=ComponentStatus.UNKNOWN,
+            required=True,
+            active_version=self._recommendation_version,
+            error_code=error_code,
+        )

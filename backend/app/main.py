@@ -37,12 +37,19 @@ def create_app(
     configuration_state: ConfigurationState | None = None,
     recommendation_service: object | None = None,
     recommendation_api_enabled: bool = False,
+    recommendation_readiness_enabled: bool = False,
     feedback_service: object | None = None,
     behavior_service: object | None = None,
     feedback_api_enabled: bool = False,
     principal_resolver: PrincipalResolver | None = None,
     debug_api_enabled: bool | None = None,
 ) -> FastAPI:
+    if recommendation_readiness_enabled and (
+        recommendation_service is None or not recommendation_api_enabled
+    ):
+        raise ValueError(
+            "recommendation readiness requires an explicit service and API enable flag"
+        )
     state = configuration_state or (
         ConfigurationState(settings=settings, is_valid=True)
         if settings is not None
@@ -82,13 +89,15 @@ def create_app(
         config_bundle_version=runtime.config_bundle_version,
         configuration_valid=state.is_valid,
         configuration_error_code=state.error_code,
+        recommendation_enabled=recommendation_readiness_enabled,
     )
 
     application = FastAPI(
         title="LibraMAS Recommendation API",
         version=runtime.app_version,
         description=(
-            "G1 runnable skeleton. Recommendation execution is intentionally disabled."
+            "Health API plus an explicitly composed recommendation graph. "
+            "The module-level default remains health-only."
         ),
     )
     application.state.configuration = state

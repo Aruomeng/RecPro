@@ -130,17 +130,20 @@ describe("healthClient", () => {
     {
       status: "NOT_READY",
       can_recommend: true,
-      components: { mysql: { status: "UP", required: true } },
-    },
-    {
-      status: "READY",
-      can_recommend: true,
       components: {
         mysql: { status: "UP", required: true },
         recommendation_pipeline: { status: "UP", required: true },
       },
     },
-  ])("rejects any premature G1 recommendation claim: %o", async (contradiction) => {
+    {
+      status: "DEGRADED",
+      can_recommend: true,
+      components: {
+        mysql: { status: "UP", required: true },
+        recommendation_pipeline: { status: "DISABLED", required: false },
+      },
+    },
+  ])("rejects any recommendation claim without an UP required pipeline: %o", async (contradiction) => {
     const fetcher = vi.fn().mockResolvedValue(jsonResponse({
       ...contradiction,
       config_bundle_version: "rec-1.0.0",
@@ -150,6 +153,31 @@ describe("healthClient", () => {
 
     await expect(client.getReadiness()).rejects.toMatchObject({
       code: "INVALID_HEALTH_RESPONSE",
+    });
+  });
+
+  it("accepts an explicit opt-in recommendation readiness claim", async () => {
+    const fetcher = vi.fn().mockResolvedValue(jsonResponse({
+      status: "DEGRADED",
+      can_recommend: true,
+      components: {
+        mysql: { status: "UP", required: true },
+        recommendation_pipeline: {
+          status: "UP",
+          required: true,
+          active_version: "recommendation-g3-mysql-v1",
+        },
+        chroma: { status: "DISABLED", required: false, error_code: "G1_NOT_IMPLEMENTED" },
+        neo4j: { status: "DISABLED", required: false, error_code: "G1_NOT_IMPLEMENTED" },
+      },
+      config_bundle_version: "rec-1.0.0",
+      checked_at: "2026-08-02T10:30:00.000Z",
+    }));
+    const client = createHealthClient({ fetcher });
+
+    await expect(client.getReadiness()).resolves.toMatchObject({
+      status: "DEGRADED",
+      can_recommend: true,
     });
   });
 });

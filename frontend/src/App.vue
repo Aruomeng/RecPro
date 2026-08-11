@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import { healthClient } from "./api/healthClient";
 import { recommendationClient } from "./api/recommendationClient";
@@ -11,6 +11,10 @@ const liveness = ref<Loadable<LivenessResponse>>({ phase: "loading" });
 const readiness = ref<Loadable<ReadinessResponse>>({ phase: "loading" });
 const isRefreshing = ref(false);
 let activeController: AbortController | undefined;
+
+const recommendationPipelineEnabled = computed(
+  () => readiness.value.phase === "success" && readiness.value.value.can_recommend,
+);
 
 async function refresh(): Promise<void> {
   activeController?.abort();
@@ -63,12 +67,15 @@ onBeforeUnmount(() => activeController?.abort());
 
     <aside class="scope-note" aria-label="当前阶段说明">
       <span class="scope-note__mark" aria-hidden="true">i</span>
-      <p><strong>运行边界：</strong>默认运行时仍不会自动启用推荐链；下面的本地演示不访问后端，也不写入任何数据库。</p>
+      <p><strong>运行边界：</strong>默认运行时仍不会自动启用推荐链；只有显式组合根的健康闸门通过后，工作台才会发送真实请求。</p>
     </aside>
 
     <SystemStatus :liveness="liveness" :readiness="readiness" />
 
-    <RecommendationWorkbench :pipeline-enabled="false" :client="recommendationClient" />
+    <RecommendationWorkbench
+      :pipeline-enabled="recommendationPipelineEnabled"
+      :client="recommendationClient"
+    />
 
     <footer>
       <span>LibraMAS · Multi-Agent System for Smart Library</span>

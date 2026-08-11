@@ -63,6 +63,34 @@ describe("SystemStatus", () => {
     expect(wrapper.text()).not.toContain("server-localized message");
   });
 
+  it("shows the explicit recommendation-ready state", () => {
+    const wrapper = mount(SystemStatus, {
+      props: {
+        liveness: live,
+        readiness: {
+          phase: "success",
+          value: {
+            status: "DEGRADED",
+            can_recommend: true,
+            components: {
+              mysql: { status: "UP", required: true },
+              recommendation_pipeline: {
+                status: "UP",
+                required: true,
+                active_version: "recommendation-g3-mysql-v1",
+              },
+            },
+            config_bundle_version: "rec-1.0.0",
+            checked_at: "2026-08-02T10:30:00.000Z",
+          },
+        },
+      },
+    });
+
+    expect(wrapper.text()).toContain("推荐能力已就绪");
+    expect(wrapper.text()).toContain("核心推荐链已就绪");
+  });
+
   it("labels a core storage 503 as dependency not ready", () => {
     const wrapper = mount(SystemStatus, {
       props: {

@@ -18,7 +18,7 @@ export interface ComponentReadiness {
 
 export interface ReadinessResponse {
   status: ReadinessStatus;
-  can_recommend: false;
+  can_recommend: boolean;
   components: Record<string, ComponentReadiness>;
   config_bundle_version: string;
   checked_at: string;
