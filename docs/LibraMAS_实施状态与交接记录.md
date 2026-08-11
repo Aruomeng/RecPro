@@ -1237,6 +1237,24 @@ Gate：G4 动态多智能体闭环（澄清续跑适配器与追加式事务边�
 下一步唯一动作：基于新的只读基线生成 G4 WAITING 任务创建 DRY_RUN 计划；未得到该计划的精确 hash 和用户批准前，不执行任何续跑业务 POST。
 ```
 
+## G4 等待态只读验证与计划门禁记录
+
+```text
+交接ID：G4-CLARIFICATION-PLAN-GATE-20260811-030
+Gate：G4 动态多智能体闭环（初始 WAITING 任务的只读基线与 ChangePlan）
+状态：READONLY_GATE_CODE_PASS / HOME_EMPTY_FIX_PASS / RUNTIME_BASELINE_PENDING
+时间：2026-08-11（Asia/Shanghai）
+目标：为真实澄清续跑准备第一步“创建一个 G4 WAITING_CLARIFICATION 任务”的只读验证器和 DRY_RUN 计划构建器；不在本阶段创建任务、不提交业务 POST。
+新增文件：`scripts/verify_g4_clarification_readonly.py`、`scripts/build_g4_clarification_plan.py`、`tests/g4/test_g4_clarification_plan.py`。
+修改文件：`backend/app/recommendation/application/g4_projection.py` 保留 HOME 空请求的显式空 resource_types；`Makefile` 增加 `verify-g4-clarification-readonly` 与 `build-g4-clarification-plan`。
+门禁设计：只读验证器通过真实 MySQL Catalog/Profile 端口运行 HOME 空请求，要求 4 次 Agent dispatch、4 条 transition、问题列表、确定性重复结果和全表计数前后不变；MySQL 连接最终 rollback，不接入 writer，不连接 Neo4j/Chroma，不启用 DeepSeek。计划构建器只接受上述 PASS evidence，冻结新的 request/session/idempotency identity、基线计数和版本 commit，目标集仅允许 19 行 append：task=`+1`、transition=`+4`、policy=`+1`、trace=`+1`、task_context=`+1`、clarification=`+1`、Agent message/result=`+4/+4`、artifact=`+1`、orchestration_result=`+1`。
+代码验证：全量 Python unittest=`435` 项 PASS；架构扫描=`114` files PASS；安全扫描=`299` files PASS；文档校验=`18` Markdown/42 blocks PASS；`py_compile` 与 `git diff --check` PASS。提交=`ad02c16 feat(g4): add clarification read-only plan gates`，已推送 `origin/codex/g1-runnable-skeleton`。
+运行态阻断：本机 `/usr/local/bin/docker` 是指向不存在 `/Applications/Docker.app/Contents/Resources/bin/docker` 的断链，当前 shell 无可用 Docker CLI；因此没有执行 MySQL 只读验证、没有生成新的 clarification-readonly evidence 或 ChangePlan artifact，也没有连接/写入任何数据库。
+数据库与文件安全：本阶段 database_reads=`0`、database_writes=`0`、Neo4j/Chroma writes=`0`、external_requests=`0`；新增数据库对象和行数=`0`；文件删除数量=`0`；数据库物理删除数量=`0`。已有 artifact、容器、卷和数据库数据均未修改。
+未解决风险：恢复 Docker Desktop/CLI 后需重新读取完整表计数（包含上下文与 Agent 表），确认 Docker Compose 项目和 least-privilege 账号，再运行只读 verifier；若基线漂移，旧计划不得复用。等待任务创建计划获批并成功回读后，才能为具体 task/context_version 生成第二份澄清答案 DRY_RUN 计划。
+下一步唯一动作：恢复可用 Docker CLI，执行 `make verify-g4-clarification-readonly G4_CLARIFICATION_READONLY_RUN_ID=<new-run-id>`；只读证据 PASS 后再执行 `make build-g4-clarification-plan ...`，向用户报告精确 plan hash，等待批准。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
