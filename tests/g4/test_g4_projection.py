@@ -74,6 +74,22 @@ class G4ProjectionTests(unittest.TestCase):
         self.assertEqual(("BOOK",), actual.resource_types)
         self.assertEqual(evaluation_at, actual.evaluation_at)
 
+    def test_home_empty_request_preserves_clarification_shape(self) -> None:
+        evaluation_at = datetime(2026, 8, 11, 1, 0, tzinfo=UTC)
+        home_command = replace(
+            command(),
+            scene="HOME",
+            input_text=None,
+            resource_types=(),
+            output_type=None,
+        )
+        actual = build_orchestration_request(
+            home_command,
+            evaluation_at=evaluation_at,
+            deadline_at=evaluation_at + timedelta(minutes=1),
+        )
+        self.assertEqual((), actual.resource_types)
+
     def test_request_mapping_requires_frozen_aware_times(self) -> None:
         evaluation_at = datetime(2026, 8, 11, 1, 0, tzinfo=UTC)
         with self.assertRaisesRegex(G4ProjectionError, "timezone-aware"):

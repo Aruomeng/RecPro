@@ -131,9 +131,18 @@ def build_orchestration_request(
     if isinstance(context_version, bool) or context_version < 1:
         raise G4ProjectionError("context_version must be positive")
     resolved_identity = identity or derive_task_identity(command)
-    resource_types = tuple(command.resource_types or ("BOOK", "PAPER"))
-    if not resource_types:
-        raise G4ProjectionError("at least one resource type is required")
+    # Preserve the explicit HOME-empty shape so the policy Agent can ask for
+    # the missing resource/topic slots.  For an otherwise meaningful request,
+    # an omitted resource filter keeps the public default of BOOK+PAPER.
+    clarification_shape = (
+        command.scene == "HOME"
+        and not (command.input_text or "").strip()
+        and not command.resource_types
+        and command.output_type is None
+    )
+    resource_types = (
+        () if clarification_shape else tuple(command.resource_types or ("BOOK", "PAPER"))
+    )
     return OrchestrationRequest(
         task_id=resolved_identity.task_id,
         trace_id=resolved_identity.trace_id,
