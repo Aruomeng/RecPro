@@ -28,6 +28,8 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 import asyncmy
 from jsonschema import Draft202012Validator, FormatChecker
 
+from scripts.g4_projection_contract import validate_g4_projection_query_spec
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "contracts" / "safety" / "change-plan.schema.json"
@@ -492,13 +494,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
     if int(g4_baseline.get("candidate_persistence_rows", -1)) != target_candidate_delta:
         raise ValueError("G4 baseline candidate row count does not match the plan")
-    if g4_baseline.get("query_spec") != {
-        "input_text": "多智能体系统与智慧图书馆",
-        "resource_types": ["BOOK"],
-        "output_type": "TOPIC_RESOURCES",
-        "limit": 8,
-    }:
-        raise ValueError("G4 baseline query_spec does not match the approved request")
+    validate_g4_projection_query_spec(g4_baseline.get("query_spec"))
     if sha256_bytes(CONFIG_PATH.read_bytes()) != plan["input_hashes"]["config_bundle"]:
         raise ValueError("config bundle hash does not match the approved plan")
     request_payload = load_request_payload(plan, request_run_id=args.request_run_id)

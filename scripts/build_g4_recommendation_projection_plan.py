@@ -20,6 +20,8 @@ from uuid import NAMESPACE_URL, uuid5
 
 from jsonschema import Draft202012Validator, FormatChecker
 
+from scripts.g4_projection_contract import validate_g4_projection_query_spec
+
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "contracts" / "safety" / "change-plan.schema.json"
@@ -150,14 +152,7 @@ def build_plan(
         "evidence_confidence": True,
     }:
         raise ValueError("G4 baseline does not prove the writer candidate enrichment")
-    query_spec = g4_baseline.get("query_spec")
-    if query_spec != {
-        "input_text": "多智能体系统与智慧图书馆",
-        "resource_types": ["BOOK"],
-        "output_type": "TOPIC_RESOURCES",
-        "limit": 8,
-    }:
-        raise ValueError("G4 baseline query_spec does not match the approved request")
+    validate_g4_projection_query_spec(g4_baseline.get("query_spec"))
     channel_counts = g4_baseline.get("candidate_channel_counts")
     if (
         not isinstance(channel_counts, dict)

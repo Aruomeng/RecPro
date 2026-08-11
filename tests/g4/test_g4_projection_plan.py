@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from scripts.build_g4_recommendation_projection_plan import count_targets
+from scripts.g4_projection_contract import validate_g4_projection_query_spec
 
 
 class G4ProjectionPlanTests(unittest.TestCase):
@@ -18,6 +19,39 @@ class G4ProjectionPlanTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     count_targets(candidate_rows=value)
+
+    def test_query_spec_accepts_bounded_deadline_metadata(self) -> None:
+        value = validate_g4_projection_query_spec(
+            {
+                "input_text": "多智能体系统与智慧图书馆",
+                "resource_types": ["BOOK"],
+                "output_type": "TOPIC_RESOURCES",
+                "limit": 8,
+                "deadline_seconds": 240.0,
+            }
+        )
+        self.assertEqual(240.0, value["deadline_seconds"])
+
+    def test_query_spec_rejects_semantic_or_metadata_drift(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_g4_projection_query_spec(
+                {
+                    "input_text": "其他主题",
+                    "resource_types": ["BOOK"],
+                    "output_type": "TOPIC_RESOURCES",
+                    "limit": 8,
+                }
+            )
+        with self.assertRaises(ValueError):
+            validate_g4_projection_query_spec(
+                {
+                    "input_text": "多智能体系统与智慧图书馆",
+                    "resource_types": ["BOOK"],
+                    "output_type": "TOPIC_RESOURCES",
+                    "limit": 8,
+                    "deadline_seconds": 301,
+                }
+            )
 
 
 if __name__ == "__main__":
