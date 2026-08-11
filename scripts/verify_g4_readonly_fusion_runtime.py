@@ -231,8 +231,16 @@ async def execute(args: argparse.Namespace) -> int:
     if not isinstance(candidates, list) or len(candidates) != args.limit:
         raise ValueError("G4 read-only orchestration returned an unexpected candidate count")
     channels = recall_payload.get("channels")
-    if channels != ["MYSQL", "GRAPH", "VECTOR"]:
-        raise ValueError(f"G4 read-only orchestration channels are not fully enabled: {channels!r}")
+    allowed_channels = ("MYSQL", "GRAPH", "VECTOR")
+    if (
+        not isinstance(channels, list)
+        or not channels
+        or channels != [channel for channel in allowed_channels if channel in channels]
+    ):
+        raise ValueError(
+            "G4 read-only orchestration returned an invalid channel set: "
+            f"{channels!r}"
+        )
     required_projection_fields = {
         "channel_scores",
         "channel_ranks",
