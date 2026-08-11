@@ -166,8 +166,15 @@ def validate_plan(
         target_tables[table] = target
     if set(target_tables) != set(TARGET_TABLES):
         raise ValueError("ChangePlan target set does not match the bounded G4 write set")
-    if int(plan.get("max_changes", -1)) != 68:
-        raise ValueError("G4 projection ChangePlan max_changes must remain 68")
+    expected_total = sum(
+        int(target["expected_after_min_count"])
+        - int(target["expected_before_count"])
+        for target in target_tables.values()
+    )
+    if int(plan.get("max_changes", -1)) != expected_total:
+        raise ValueError(
+            "G4 projection ChangePlan max_changes must equal its bounded target deltas"
+        )
     return plan, raw
 
 
@@ -476,6 +483,22 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "evidence_confidence": True,
     }:
         raise ValueError("G4 baseline does not prove candidate enrichment")
+    target_candidate_delta = next(
+        int(target["expected_after_min_count"])
+        - int(target["expected_before_count"])
+        for target in plan["targets"]
+        if str(target["identifier"]).rsplit(".", maxsplit=1)[-1]
+        == "recommendation_candidate"
+    )
+    if int(g4_baseline.get("candidate_persistence_rows", -1)) != target_candidate_delta:
+        raise ValueError("G4 baseline candidate row count does not match the plan")
+    if g4_baseline.get("query_spec") != {
+        "input_text": "多智能体系统与智慧图书馆",
+        "resource_types": ["BOOK"],
+        "output_type": "TOPIC_RESOURCES",
+        "limit": 8,
+    }:
+        raise ValueError("G4 baseline query_spec does not match the approved request")
     if sha256_bytes(CONFIG_PATH.read_bytes()) != plan["input_hashes"]["config_bundle"]:
         raise ValueError("config bundle hash does not match the approved plan")
     request_payload = load_request_payload(plan, request_run_id=args.request_run_id)
@@ -500,8 +523,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required runtime keys: {missing}")
-    if values.get("RECPRO_LLM_PROVIDER", "mock") != "mock":
-        raise ValueError("approved G4 projection requires RECPRO_LLM_PROVIDER=mock")
+    configured_llm_provider = values.get("RECPRO_LLM_PROVIDER", "mock")
+    if configured_llm_provider not in {"mock", "deepseek"}:
+        raise ValueError("RECPRO_LLM_PROVIDER must be mock or deepseek")
     if values["COMPOSE_PROJECT_NAME"] != plan["environment"]["environment_id"]:
         raise ValueError("Compose project does not match the approved plan")
     database_identity = (
@@ -666,6 +690,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "database_writes": sum(deltas.values()),
         "external_requests": 0,
         "external_llm_requests": 0,
+        "configured_llm_provider": configured_llm_provider,
         "neo4j_writes": 0,
         "chroma_writes": 0,
         "actual_delete_count": 0,

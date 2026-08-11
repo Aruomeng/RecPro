@@ -24,10 +24,9 @@ from jsonschema import Draft202012Validator, FormatChecker
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "contracts" / "safety" / "change-plan.schema.json"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
-COUNT_TARGETS = (
+BASE_COUNT_TARGETS = (
     ("recommendation_task", 1),
     ("recommendation_task_transition", 8),
-    ("recommendation_candidate", 24),
     ("recommendation_record", 1),
     ("recommendation_item", 8),
     ("recommendation_item_explanation", 8),
@@ -93,6 +92,17 @@ def load_pass_evidence(path: Path, *, label: str) -> tuple[dict[str, Any], bytes
     return payload, raw
 
 
+def count_targets(*, candidate_rows: int) -> tuple[tuple[str, int], ...]:
+    if isinstance(candidate_rows, bool) or not 1 <= candidate_rows <= 60:
+        raise ValueError("candidate persistence rows must be between 1 and 60")
+    return (
+        ("recommendation_task", 1),
+        ("recommendation_task_transition", 8),
+        ("recommendation_candidate", candidate_rows),
+        *BASE_COUNT_TARGETS[2:],
+    )
+
+
 def build_plan(
     *,
     run_id: str,
@@ -110,11 +120,19 @@ def build_plan(
     g4_baseline, g4_raw = load_pass_evidence(
         g4_baseline_path, label="G4 baseline evidence"
     )
-    mysql_counts = {str(key): int(value) for key, value in mysql_baseline["before_counts"].items()}
-    g4_counts = {str(key): int(value) for key, value in g4_baseline["before_counts"].items()}
+    mysql_counts = {
+        str(key): int(value) for key, value in mysql_baseline["before_counts"].items()
+    }
+    g4_counts = {
+        str(key): int(value) for key, value in g4_baseline["before_counts"].items()
+    }
+    candidate_rows = g4_baseline.get("candidate_persistence_rows")
+    if isinstance(candidate_rows, bool) or not isinstance(candidate_rows, int):
+        raise ValueError("G4 baseline must record candidate_persistence_rows")
+    count_targets_value = count_targets(candidate_rows=candidate_rows)
     missing = [
         table
-        for table, _delta in COUNT_TARGETS
+        for table, _delta in count_targets_value
         if table not in mysql_counts and table not in g4_counts
     ]
     if missing:
@@ -132,6 +150,20 @@ def build_plan(
         "evidence_confidence": True,
     }:
         raise ValueError("G4 baseline does not prove the writer candidate enrichment")
+    query_spec = g4_baseline.get("query_spec")
+    if query_spec != {
+        "input_text": "多智能体系统与智慧图书馆",
+        "resource_types": ["BOOK"],
+        "output_type": "TOPIC_RESOURCES",
+        "limit": 8,
+    }:
+        raise ValueError("G4 baseline query_spec does not match the approved request")
+    channel_counts = g4_baseline.get("candidate_channel_counts")
+    if (
+        not isinstance(channel_counts, dict)
+        or sum(int(value) for value in channel_counts.values()) != candidate_rows
+    ):
+        raise ValueError("G4 baseline candidate channel counts are inconsistent")
     commit = git_commit()
     project = str(mysql_baseline.get("compose_project") or "recpro-isolated")
     database = "recpro"
@@ -158,7 +190,7 @@ def build_plan(
     merged_counts = {**g4_counts, **mysql_counts}
     targets: list[dict[str, object]] = []
     max_changes = 0
-    for table, delta in COUNT_TARGETS:
+    for table, delta in count_targets_value:
         before = merged_counts[table]
         targets.append(
             {
@@ -200,7 +232,7 @@ def build_plan(
         "preconditions": [
             "target Compose project/database identity and both PASS baselines match immediately before apply",
             "all expected_before_count values are re-read immediately before apply",
-            "G4 graph/vector versions and candidate enrichment remain unchanged",
+            "G4 graph/vector versions, exact query_spec and candidate enrichment remain unchanged",
             "request_id and idempotency key are absent or replay-identical before apply",
             "writer transaction must commit all G3 and G4 rows together or rollback all of them",
             "no migration, seed, UPDATE, DELETE, graph write, vector write, or external LLM call is part of this plan",

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+from collections import Counter
 from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
@@ -103,7 +104,16 @@ async def read_counts(connection: Any) -> dict[str, int]:
     return counts
 
 
-def build_request(run_id: str, *, user_id: int, now: datetime) -> OrchestrationRequest:
+def build_request(
+    run_id: str,
+    *,
+    user_id: int,
+    now: datetime,
+    input_text: str,
+    resource_types: tuple[str, ...],
+    output_type: str,
+    limit: int,
+) -> OrchestrationRequest:
     task_id = uuid5(NAMESPACE_URL, f"g4-readonly-fusion-task:{run_id}")
     trace_id = uuid5(NAMESPACE_URL, f"g4-readonly-fusion-trace:{run_id}")
     session_id = uuid5(NAMESPACE_URL, f"g4-readonly-fusion-session:{run_id}")
@@ -112,10 +122,10 @@ def build_request(run_id: str, *, user_id: int, now: datetime) -> OrchestrationR
         trace_id=trace_id,
         session_id=session_id,
         user_id=user_id,
-        input_text="多智能体 智慧图书馆",
-        resource_types=("BOOK",),
-        output_type="TOPIC_RESOURCES",
-        limit=8,
+        input_text=input_text,
+        resource_types=resource_types,
+        output_type=output_type,
+        limit=limit,
         constraints={},
         evaluation_at=now,
         deadline_at=now + timedelta(seconds=90),
@@ -184,7 +194,16 @@ async def execute(args: argparse.Namespace) -> int:
             retry_policy=RetryPolicy(max_attempts=2),
         )
         now = datetime.now(UTC)
-        request = build_request(run_id, user_id=args.user_id, now=now)
+        resource_types = tuple(args.resource_type or ("BOOK",))
+        request = build_request(
+            run_id,
+            user_id=args.user_id,
+            now=now,
+            input_text=args.input_text,
+            resource_types=resource_types,
+            output_type=args.output_type,
+            limit=args.limit,
+        )
         first = await orchestrator.run(request)
         second = await orchestrator.run(request)
         chroma_after = int(collection.count())
@@ -228,6 +247,17 @@ async def execute(args: argparse.Namespace) -> int:
         raise ValueError(
             "G4 read-only candidates are missing the projection fields required by MySQL writer"
         )
+    candidate_channel_counts: Counter[str] = Counter()
+    candidate_persistence_rows = 0
+    for candidate in candidates:
+        channel = candidate.get("channel")
+        if not isinstance(channel, str) or not channel.strip():
+            raise ValueError("G4 read-only candidate channel is invalid")
+        parts = tuple(part.strip().upper() for part in channel.split("+"))
+        if not parts or any(not part for part in parts) or len(set(parts)) != len(parts):
+            raise ValueError("G4 read-only candidate channel components are invalid")
+        candidate_channel_counts.update(parts)
+        candidate_persistence_rows += len(parts)
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -253,6 +283,14 @@ async def execute(args: argparse.Namespace) -> int:
         "dispatch_count": len(first.dispatches),
         "candidate_count": len(candidates),
         "channels": channels,
+        "query_spec": {
+            "input_text": args.input_text,
+            "resource_types": list(resource_types),
+            "output_type": args.output_type,
+            "limit": args.limit,
+        },
+        "candidate_channel_counts": dict(sorted(candidate_channel_counts.items())),
+        "candidate_persistence_rows": candidate_persistence_rows,
         "candidate_enrichment": {
             "channel_scores": True,
             "channel_ranks": True,
@@ -300,6 +338,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--user-id", type=int, default=1001)
     parser.add_argument("--limit", type=int, default=8)
+    parser.add_argument("--input-text", default="多智能体 智慧图书馆")
+    parser.add_argument("--resource-type", action="append", default=None)
+    parser.add_argument("--output-type", default="TOPIC_RESOURCES")
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")
