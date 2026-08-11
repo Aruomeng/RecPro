@@ -48,6 +48,18 @@ class GraphRecallEvidence:
 
 
 @dataclass(frozen=True, slots=True)
+class VectorRecallEvidence:
+    """A read-only vector hit bound to one immutable index/version contract."""
+
+    external_id: str
+    vector_id: str
+    score: float
+    embedding_version: str
+    index_version: str
+    namespace_name: str
+
+
+@dataclass(frozen=True, slots=True)
 class IndexBuildPlan:
     build_id: str
     resource_id: int

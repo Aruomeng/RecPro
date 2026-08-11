@@ -64,3 +64,15 @@ ISBN 冲突不强行合并：相同 ISBN 出现多个核心书目指纹时，Boo
 `scripts/import_mysql_book_catalog.py` 默认只做计划完整性校验和干跑。实际追加必须同时提供 `--apply --confirm-mysql-write`，非空目标还要显式 `--allow-nonempty-target`；导入先检查资源、标签和索引状态冲突，再使用 `INSERT IGNORE`，不提供删除、清空、更新或覆盖路径。用户确认目标 `recpro-g2-tianyuhang-20260809a` 的本地研究追加写入后，`mysql-book-import-20260810-002` 已将计划追加到 `recpro` 数据库；前后目标表总数为 `resource_catalog=14,989`、`resource_book_detail=14,986`、`tag_dictionary=8,522`、`resource_tag=70,762`、`resource_index_state=14,989`，其中本次新增 14,983 本书、8,516 个标签和 70,750 条资源标签关系。`mysql-book-import-idempotency-20260810-004` 复跑前后计数完全一致；独立只读核验确认重复外部 ID 为 0、图版本 READY/PENDING 索引为 14,983、标签引用全部可解析。导入器仅过滤 asyncmy 输出的预期 `Duplicate entry ...` 日志，避免污染证据，不改变 append-only 语义。
 
 应用侧的 `Neo4jGraphReader` 实现 `GraphRecallPort`，只发送参数化 `MATCH` 查询，固定 `Book.graph_version`，返回稳定外部 ID 和可解释匹配词。该端口可选接入 `CandidateRecallAgent`，默认组合根仍不自动启用图召回或外部 DeepSeek。
+
+## 确定性向量构建与 Chroma 边界
+
+`scripts/build_vector_index_plan.py` 只读取已经审核的 MySQL 书目 ChangePlan，不连接数据库、不访问网络，也不写入 Chroma。它使用文档约定的 `HashingEmbeddingProvider`：字符 2—4 gram、384 维、非负哈希、L2 归一化、float32 little-endian base64 编码，文档格式固定为 `title\nkeywords\nabstract`。向量 ID 同时绑定 `external_id`、`content_hash`、`metadata_version` 和 `embedding_version`，因此改变模型或内容只能生成新的版本命名空间。
+
+本轮 `vector-index-plan-20260811-001` 状态为 `PASS_WITH_WARNINGS`、`can_build=true`，生成 14,983 条向量记录，产物大小 52,019,638 bytes，SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`。数据质量提示为 2,602 条缺少摘要、2,032 条缺少关键词；空文档、重复外部 ID、重复向量 ID 和非法内容哈希均为 0。第二次独立构建 `vector-index-plan-20260811-002` 的向量文件哈希完全一致，`verify_vector_index_plan.py` 独立校验通过。
+
+证据目录：`artifacts/verification/vector-index-plan/vector-index-plan-20260811-001/`、`artifacts/verification/vector-index-plan/vector-index-plan-20260811-002/`、`artifacts/verification/vector-index-plan/vector-index-verify-20260811-002/`。本阶段 `database_reads=0`、`database_writes=0`、`external_store_writes=0`、`actual_delete_count=0`、`overwritten_inputs=0`、`files_deleted=0`。向量文件仍是待审查的派生构建产物，不代表 Chroma 已就绪；后续必须以新的 collection/version 进行显式构建，并在成功校验后再讨论 `resource_index_state` 的受控状态投影。
+
+`backend/app/catalog/adapters/chroma.py` 提供版本化的只读 `ChromaVectorReader`，通过依赖注入接收 collection，不导入或锁定 Chroma 客户端；它只调用 `query`，以 `$and` 元数据过滤固定 `embedding_version`/`index_version`，校验 384 维输入、返回行数、稳定 `vector_id`、`external_id` 和元数据版本，异常或超时均 fail-closed。Chroma cosine distance 按 `cosine_similarity = 1 - distance`、`score = clip((cosine_similarity + 1) / 2, 0, 1)` 转换为 `VectorRecallEvidence`；跨 collection/version、重复 ID、缺失元数据和非有限距离拒绝返回。该 adapter 尚未接入默认 Agent/HTTP，也没有创建 collection 或写入任何向量。
+
+对应端口为 `backend/app/catalog/ports/public.py` 的 `VectorRecallPort`，领域只依赖 `VectorRecallEvidence`，因此可在没有 Chroma 依赖的环境中使用 fake collection 完成契约、异常和零写入测试。当前计划仍为 `Chroma=NOT_BUILT`、MySQL `embedding_status=PENDING`；只有用户单独确认 collection 名称、版本、记录范围和追加写入授权后，才可开展新的 Chroma 构建 ChangePlan。

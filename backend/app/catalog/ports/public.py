@@ -5,7 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol
 
-from backend.app.catalog.domain.models import GraphRecallEvidence, ResourceSummary, ResourceTagEvidence
+from backend.app.catalog.domain.models import (
+    GraphRecallEvidence,
+    ResourceSummary,
+    ResourceTagEvidence,
+    VectorRecallEvidence,
+)
 
 
 class CatalogRepository(Protocol):
@@ -49,3 +54,16 @@ class GraphRecallPort(Protocol):
         graph_version: str,
         limit: int,
     ) -> tuple[GraphRecallEvidence, ...]: ...
+
+
+class VectorRecallPort(Protocol):
+    """Read-only vector recall boundary for one immutable collection version."""
+
+    async def recall(
+        self,
+        *,
+        query_vector: tuple[float, ...],
+        embedding_version: str,
+        index_version: str,
+        limit: int,
+    ) -> tuple[VectorRecallEvidence, ...]: ...

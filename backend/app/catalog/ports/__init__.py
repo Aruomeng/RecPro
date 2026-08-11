@@ -1,5 +1,5 @@
 """Catalog ports exposed to application and infrastructure adapters."""
 
-from backend.app.catalog.ports.public import GraphRecallPort
+from backend.app.catalog.ports.public import GraphRecallPort, VectorRecallPort
 
-__all__ = ["GraphRecallPort"]
+__all__ = ["GraphRecallPort", "VectorRecallPort"]

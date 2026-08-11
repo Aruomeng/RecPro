@@ -1,0 +1,137 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/data/intake/vector-index-plan.schema.json",
+  "title": "LibraMAS deterministic vector index build plan",
+  "description": "A database-free, versioned plan and offline vector artifact for the optional VECTOR index.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "can_build",
+    "graph_version",
+    "index_version",
+    "embedding_version",
+    "namespace_name",
+    "source_mysql_plan",
+    "source_mysql_plan_sha256",
+    "embedding",
+    "resource_count",
+    "vector_count",
+    "skipped_count",
+    "quality",
+    "safety",
+    "generated_at",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {"const": "vector-index-plan-v1"},
+    "status": {"enum": ["READY_FOR_VECTOR_BUILD", "PASS_WITH_WARNINGS", "PASS_WITH_BLOCKERS"]},
+    "can_build": {"type": "boolean"},
+    "graph_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "index_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "embedding_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "namespace_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,254}$"},
+    "source_mysql_plan": {"type": "string", "minLength": 1, "maxLength": 255},
+    "source_mysql_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "embedding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "analyzer",
+        "ngram_min",
+        "ngram_max",
+        "dimension",
+        "alternate_sign",
+        "normalization",
+        "dtype",
+        "encoding",
+        "document_format"
+      ],
+      "properties": {
+        "provider": {"const": "HashingEmbeddingProvider"},
+        "analyzer": {"const": "char"},
+        "ngram_min": {"const": 2},
+        "ngram_max": {"const": 4},
+        "dimension": {"const": 384},
+        "alternate_sign": {"const": false},
+        "normalization": {"const": "L2"},
+        "dtype": {"const": "float32"},
+        "encoding": {"const": "float32-little-endian-base64"},
+        "document_format": {"const": "title\nkeywords\nabstract"}
+      }
+    },
+    "resource_count": {"type": "integer", "minimum": 0},
+    "vector_count": {"type": "integer", "minimum": 0},
+    "skipped_count": {"type": "integer", "minimum": 0},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "warnings",
+        "blockers",
+        "missing_abstract_count",
+        "missing_keywords_count",
+        "empty_document_count",
+        "duplicate_external_id_count",
+        "duplicate_vector_id_count",
+        "invalid_content_hash_count"
+      ],
+      "properties": {
+        "warnings": {"type": "array", "items": {"type": "object"}},
+        "blockers": {"type": "array", "items": {"type": "object"}},
+        "missing_abstract_count": {"type": "integer", "minimum": 0},
+        "missing_keywords_count": {"type": "integer", "minimum": 0},
+        "empty_document_count": {"type": "integer", "minimum": 0},
+        "duplicate_external_id_count": {"type": "integer", "minimum": 0},
+        "duplicate_vector_id_count": {"type": "integer", "minimum": 0},
+        "invalid_content_hash_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database_reads",
+        "database_writes",
+        "external_store_writes",
+        "expected_delete_count",
+        "actual_delete_count",
+        "overwritten_inputs",
+        "files_deleted"
+      ],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 0},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "external_store_writes": {"type": "integer", "minimum": 0},
+        "expected_delete_count": {"type": "integer", "minimum": 0},
+        "actual_delete_count": {"type": "integer", "minimum": 0},
+        "overwritten_inputs": {"type": "integer", "minimum": 0},
+        "files_deleted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"},
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vectors"],
+      "properties": {
+        "vectors": {"$ref": "#/$defs/artifact"}
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "count", "bytes"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 255},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "count": {"type": "integer", "minimum": 0},
+        "bytes": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}
