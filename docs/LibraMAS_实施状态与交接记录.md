@@ -1321,6 +1321,25 @@ Gate：G4 动态多智能体闭环（失败修复后的 successor DRY_RUN）
 下一步唯一动作：提交本交接记录后生成 final `g4-clarification-plan-20260811-005` DRY_RUN，用户重新批准其精确 hash 后才可执行一次等待任务追加。
 ```
 
+## G4 等待任务真实追加与独立回读记录
+
+```text
+交接ID：G4-CLARIFICATION-APPLY-20260811-036
+Gate：G4 动态多智能体闭环（初始 WAITING_CLARIFICATION 任务真实追加）
+状态：REAL_MYSQL_WAITING_APPEND_PASS / PLAN_DELTA_EXACT / READONLY_READBACK_PASS
+时间：2026-08-11（Asia/Shanghai）
+授权：用户批准 plan_id=`0357dbfe-9e7c-5833-8bf5-70dd24620106`、plan_hash=`e286f9d4a7681829da5f74d0824507a0a495294a8834cbf47b611e7f977c9153`；执行器仅运行一次，apply run=`g4-clarification-apply-20260811-002`。
+计划与环境：ChangePlan=`artifacts/verification/g4/g4-clarification-plan-20260811-005/g4-clarification-waiting-change-plan.json`，reviewed Git=`8c60885feae37178237fbbd9965b05ffafb62eae`，Compose project=`recpro-g2-tianyuhang-20260809a`，MySQL=`recpro`、本地端口=`62306`；runtime probe 与 grants guard 均通过。
+真实结果：返回 HTTP/service `201`、`replayed=false`、状态=`WAITING_CLARIFICATION`、context_version=`1`、问题=`2`、record_id=`null`；task=`b6dc4ed8-4c3d-500b-8026-7b5f7779f7cf`，trace=`76a31b9b-c613-5dbc-af53-4e2d398ea5fe`，request_id=`f580118a-e459-5ccc-86fe-d636ab6270ed`。
+精确追加：MySQL 共 `19` 行：task=`+1`、transition=`+4`、policy=`+1`、trace=`+1`、task_context=`+1`、clarification=`+1`、Agent message/result=`+4/+4`、artifact=`+1`、orchestration_result=`+1`；candidate、record、item、explanation、trace_revision 及资源事实表均 `+0`。
+计数回读：task/transition/candidate/record/item/explanation/policy/trace=`22/184/311/21/111/111/22/22`；context/clarification/trace_revision=`7/7/3`；Agent message/result/artifact/orchestration=`32/32/5/5`；resource_catalog/book_detail/tag_dictionary/resource_tag/index_state=`14,989/14,986/8,522/70,762/14,989`，与计划精确一致。
+独立只读回读：目标 task 根状态=`WAITING_CLARIFICATION`、根 context_version=`1`、trace identity 一致；context 1 包含 2 个问题、空答案、response status=`WAITING_CLARIFICATION`、evaluation_at 已规范化为字符串；clarification 1 的 answered_at=`NULL`；trace `g4-trace-v1` complete=`true`、4 steps；transition/Agent message/result/artifact/orchestration 行数=`4/4/4/1/1`。独立回读 writes=`0`、deletes=`0`。
+副作用计数：本次数据库写入=`19`；Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`、external_llm_requests=`0`、files_deleted=`0`、actual_delete_count=`0`、overwritten_inputs=`0`。
+证据：`artifacts/verification/g4/g4-clarification-apply-20260811-002/g4-clarification-apply.json`；只读基线=`artifacts/verification/g4/g4-clarification-readonly-20260811-001/clarification-readonly.json`。两份 artifact 均追加保存，未覆盖旧证据。
+未解决风险：尚未提交任何澄清答案；默认 HTTP/Worker/DeepSeek 仍关闭。下一轮必须针对 task=`b6dc4ed8-4c3d-500b-8026-7b5f7779f7cf`、context_version=`1` 先生成独立答案 DRY_RUN ChangePlan，核对问题槽位与答案，再经用户单独批准；不得直接 POST。
+下一步唯一动作：实现/生成澄清答案 continuation 的只读计划门禁，目标为 context_version=`2`；在新 plan_id/hash 获批前不追加答案。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
