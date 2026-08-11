@@ -1159,8 +1159,9 @@ Gate：G4 多智能体系统（单事务投影 writer / 显式服务，未接入
 受控UPDATE对象和审计ID：0。
 文件删除数量：0。
 数据库物理删除数量：0。
-未解决风险：尚未在隔离 MySQL 上执行新的 G4 writer 真实 ChangePlan；必须先生成独立 dry-run/预期 delta 清单，确认 G4 候选通道与资源摘要完整，再由用户批准一次新的 request_id 真实 POST。G4 澄清续跑、跨 Agent 超时恢复和正式认证部署仍未完成。
-下一步唯一动作：生成 G4 writer 独立 ChangePlan 与只读基线/回滚预演，先不执行 `--apply`；批准前继续保持默认 HTTP/Worker 关闭。
+未解决风险：尚未在隔离 MySQL 上执行新的 G4 writer 真实 ChangePlan；G4 澄清续跑、跨 Agent 超时恢复和正式认证部署仍未完成。
+已生成但未批准的 DRY_RUN：`artifacts/verification/g4/g4-projection-plan-20260811-001/g4-recommendation-projection-change-plan.json`；plan_hash=`37e5d950daabd05ca9ea3127550bd4ffee1f9aecf7f534d31f53ee62b3267ca4`，git_commit=`9267e7b9231d84337f15b0cf52242494402f600c`，max_changes=`68`。计划只合并两份既有 PASS 只读基线，未连接数据库；任何 apply 都必须重新读基线并得到用户对该 hash 的明确批准。
+下一步唯一动作：由用户审阅该 DRY_RUN ChangePlan；在明确批准前继续保持默认 HTTP/Worker 关闭，不执行 `--apply` 或新的业务 POST。
 ```
 
 ## 阶段交接模板
