@@ -30,6 +30,11 @@ G4_PROJECTION_REQUEST_RUN_ID ?=
 G4_CLARIFICATION_READONLY_RUN_ID ?=
 G4_CLARIFICATION_PLAN_RUN_ID ?=
 G4_CLARIFICATION_PLAN_EVIDENCE ?=
+G4_CLARIFICATION_APPLY_RUN_ID ?=
+G4_CLARIFICATION_PLAN ?=
+G4_CLARIFICATION_PLAN_ID ?=
+G4_CLARIFICATION_PLAN_HASH ?=
+G4_CLARIFICATION_REQUEST_RUN_ID ?=
 G5_RUN_ID ?=
 G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
@@ -97,7 +102,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
-	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-clarification-readonly build-g4-clarification-plan \
+	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -248,6 +253,15 @@ build-g4-clarification-plan:
 	@test -n "$(G4_CLARIFICATION_PLAN_RUN_ID)" || { echo "G4_CLARIFICATION_PLAN_RUN_ID is required and must identify a new dry-run plan"; exit 2; }
 	@test -n "$(G4_CLARIFICATION_PLAN_EVIDENCE)" || { echo "G4_CLARIFICATION_PLAN_EVIDENCE is required and must point to PASS clarification read-only evidence"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_clarification_plan --run-id "$(G4_CLARIFICATION_PLAN_RUN_ID)" --evidence "$(G4_CLARIFICATION_PLAN_EVIDENCE)"
+
+execute-g4-clarification-plan:
+	@test -n "$(G4_CLARIFICATION_APPLY_RUN_ID)" || { echo "G4_CLARIFICATION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_PLAN)" || { echo "G4_CLARIFICATION_PLAN is required and must point to the reviewed waiting ChangePlan"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_PLAN_ID)" || { echo "G4_CLARIFICATION_PLAN_ID is required and must match the reviewed plan_id"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_PLAN_HASH)" || { echo "G4_CLARIFICATION_PLAN_HASH is required and must be the exact approved hash"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_PLAN_EVIDENCE)" || { echo "G4_CLARIFICATION_PLAN_EVIDENCE is required and must point to the matching PASS read-only evidence"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_REQUEST_RUN_ID)" || { echo "G4_CLARIFICATION_REQUEST_RUN_ID is required and must identify the reviewed request payload"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g4_clarification_plan --apply --plan-id "$(G4_CLARIFICATION_PLAN_ID)" --approved-plan-hash "$(G4_CLARIFICATION_PLAN_HASH)" --plan "$(G4_CLARIFICATION_PLAN)" --evidence "$(G4_CLARIFICATION_PLAN_EVIDENCE)" --request-run-id "$(G4_CLARIFICATION_REQUEST_RUN_ID)" --run-id "$(G4_CLARIFICATION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --secrets-file ".env.user-secrets"
 
 execute-g4-recommendation-projection:
 	@test -n "$(G4_PROJECTION_APPLY_RUN_ID)" || { echo "G4_PROJECTION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
