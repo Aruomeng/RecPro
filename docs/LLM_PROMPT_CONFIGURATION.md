@@ -15,7 +15,7 @@ RECPRO_PROMPT_BUNDLE_SHA256=bad547702e4c3b42395280ea44781e60992a85f981605afbcd29
 
 DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROVIDER=deepseek` 和 `RECPRO_LLM_API_KEY` 后才允许构造。密钥不能写入仓库、Prompt Bundle、Agent 消息、日志、实验 Manifest 或验证 artifact；仓库不保存真实密钥。
 
-当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-chat`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。已完成离线 provider 构造验证和 Compose 环境结构校验，尚未发起任何 DeepSeek 网络请求。
+当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-v4-flash`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。已完成离线 provider 构造验证和 Compose 环境结构校验，尚未发起任何 DeepSeek 网络请求。
 
 要让一个研究组合根使用文本能力，还必须显式传入 `enable_llm_provider=True`。默认规则编排、默认 FastAPI 和 Worker 都不因设置文件存在而改变：
 

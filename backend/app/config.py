@@ -99,7 +99,7 @@ class AppSettings(BaseSettings):
         max_length=255,
     )
     llm_model: str = Field(
-        default="deepseek-chat",
+        default="deepseek-v4-flash",
         min_length=1,
         max_length=128,
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$",

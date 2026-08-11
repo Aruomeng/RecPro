@@ -100,7 +100,7 @@ class ConfigurationTest(unittest.TestCase):
             llm_api_key="local-test-deepseek-key-001",
         )
         self.assertEqual("deepseek", settings.llm_provider)
-        self.assertEqual("deepseek-chat", settings.llm_model)
+        self.assertEqual("deepseek-v4-flash", settings.llm_model)
         self.assertIsNotNone(settings.llm_api_key)
 
     def test_external_llm_origin_must_be_https(self) -> None:

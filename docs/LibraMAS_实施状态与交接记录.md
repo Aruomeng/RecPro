@@ -919,11 +919,25 @@ Gate：G6 可选检索与解释（DeepSeek 运行配置）
 时间：2026-08-11（Asia/Shanghai）
 目标：将用户提供的 DeepSeek 凭据安全注入本机 opt-in 运行环境，同时保持默认 HTTP/Worker、数据库和外部请求关闭。
 本机配置文件：`.env.host`、`.env.compose`；均被 `.gitignore` 忽略，权限 `0600`，不进入 Git。真实 key 值不在此记录、代码、日志、Prompt、Agent 消息或验证 artifact 中。
-运行参数：provider=`deepseek`；model=`deepseek-chat`；base_url=`https://api.deepseek.com`；timeout=`20s`；max_output_tokens=`512`；Prompt Bundle=`prompt-v1`；Prompt SHA-256=`bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a`。
+运行参数：provider=`deepseek`；model=`deepseek-v4-flash`；base_url=`https://api.deepseek.com`；timeout=`20s`；max_output_tokens=`512`；Prompt Bundle=`prompt-v1`；Prompt SHA-256=`bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a`。
 验证结果：Compose 环境结构校验 PASS；DeepSeek provider 离线构造 PASS（未打印 key）；host 校验仍被既有 MySQL 运行时缺失字段和占位探针阻断，与 DeepSeek 配置无关。
 外部请求：0；数据库读取：0；数据库写入：0；数据库物理删除：0；文件删除：0；Docker/容器/卷变更：0。
 安全边界：默认 provider 仍为 `mock`，默认 API/Worker 不挂载 LLM；本阶段不做连通性请求。任何真实 DeepSeek 调用仍需单独确认脱敏、论文伦理、费用上限、超时/降级和数据出境范围。
 下一步唯一动作：完成 Neo4j/Chroma 只读端口与版本过滤、超时 fail-closed、候选融合和解释引用的 fake/隔离验证，再评审是否需要一次受控外部 LLM 请求。
+```
+
+## G6 DeepSeek 默认模型与 Agent 清单校准记录
+
+```text
+交接ID：G6-DEEPSEEK-MODEL-20260811-013
+Gate：G6 可选检索与解释（模型与 Agent 清单）
+状态：MODEL_DEFAULT_UPDATED / AGENT_INVENTORY_VERIFIED / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+默认模型：`deepseek-v4-flash`。已同步本机 `.env.host`/`.env.compose`、Compose 默认值、AppSettings、DeepSeek 适配器、三个环境示例、配置测试和 LLM 配置文档；真实 key 仍只在本机忽略文件中。
+Agent 数量口径：设计文档定义 9 个逻辑角色（1 个 RecommendationOrchestratorAgent + 8 个业务 Agent）；当前默认 Registry 实际注册 8 个执行 Agent，Orchestrator 作为独立控制器不注册到业务 Agent Registry。
+默认执行 Agent：IntentUnderstandingAgent、UserProfileAgent、ResourceSemanticAgent、RecommendationPolicyAgent、CandidateRecallAgent、RankingAgent、ExplanationAgent、FeedbackLearningAgent。
+显式端口组合根：Profile、Semantic、CandidateRecall 三个角色可由 MySQL/图端口实现替换；它们是同一角色的适配实现，不是额外并行 Agent。启用 LLM 时，LLMIntentUnderstandingAgent 替换规则 IntentUnderstandingAgent，不增加总角色数。
+外部请求：0；数据库读取：0；数据库写入：0；文件删除：0。
 ```
 
 ## 阶段交接模板

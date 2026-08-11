@@ -48,7 +48,7 @@ class DeepSeekLLMProvider:
 
     api_key: SecretStr
     base_url: str = "https://api.deepseek.com"
-    model: str = "deepseek-chat"
+    model: str = "deepseek-v4-flash"
     timeout_seconds: float = 20.0
     max_output_tokens: int = 512
     prompt_version: str | None = None
