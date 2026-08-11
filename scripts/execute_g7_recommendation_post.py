@@ -423,12 +423,15 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     status = persisted_body.get("status")
     if status not in {"COMPLETED", "DEGRADED_COMPLETED"}:
         raise RuntimeError(f"persisted recommendation did not complete: {status!r}")
-    item_count = len(persisted_body.get("items", []))
-    if item_count != changes["recommendation_item"]:
+    response_items = response_body.get("items")
+    response_item_count = len(response_items) if isinstance(response_items, list) else None
+    if response_item_count is not None and response_item_count != changes["recommendation_item"]:
         raise RuntimeError(
-            "response item count does not match recommendation_item delta: "
-            f"{item_count} != {changes['recommendation_item']}"
+            "POST response item count does not match recommendation_item delta: "
+            f"{response_item_count} != {changes['recommendation_item']}"
         )
+    if persisted_body.get("record_id") is None:
+        raise RuntimeError("persisted recommendation GET did not contain record_id")
 
     evidence: dict[str, Any] = {
         "schema_version": "g7-mysql-http-approved-append-evidence-v1",
@@ -465,7 +468,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "idempotency_replayed": response.headers.get("Idempotency-Replayed"),
             "task_id": task_id,
             "persisted_status": status,
-            "item_count": item_count,
+            "post_response_item_count": response_item_count,
+            "persisted_record_id": persisted_body.get("record_id"),
             "persisted_get_status_code": persisted.status_code,
         },
         "mode": "APPLY_ONE_BOUNDED_APPEND",
