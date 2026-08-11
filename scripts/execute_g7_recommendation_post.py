@@ -167,6 +167,7 @@ def validate_git_boundary(plan: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
     allowed = {
         "README.md",
         "docs/LibraMAS_实施状态与交接记录.md",
+        "Makefile",
         "scripts/execute_g7_recommendation_post.py",
     }
     unexpected = sorted(set(changed) - allowed)
