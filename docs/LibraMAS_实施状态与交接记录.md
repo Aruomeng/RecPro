@@ -1217,6 +1217,26 @@ Gate：G4 多智能体闭环（精确请求、单事务投影与隔离目标回�
 下一步唯一动作：进入 G4 continuation（澄清续跑）和真实 HTTP 接线设计；先完成 fake 事务/幂等/stale-context 测试与新的 DRY_RUN 计划，默认 HTTP/Worker 不变，用户批准前不得追加新的业务行。
 ```
 
+## G4 澄清续跑适配器代码完成记录
+
+```text
+交接ID：G4-CLARIFICATION-CONTINUATION-20260811-029
+Gate：G4 动态多智能体闭环（澄清续跑适配器与追加式事务边界）
+状态：CONTINUATION_ADAPTER_PASS / FAKE_TX_PASS / MULTI_ROUND_GUARD_PASS / REAL_PLAN_PENDING
+时间：2026-08-11（Asia/Shanghai）
+目标：实现 G4 等待态的真实续跑路径，但在生成并批准专用 ChangePlan 前不触碰隔离 MySQL、Neo4j、Chroma 或外部 LLM。
+新增文件：`tests/g4/test_g4_continuation.py`。
+修改文件：`backend/app/recommendation/adapters/g4_mysql.py`、`backend/app/recommendation/agents/orchestrator.py`、`backend/app/recommendation/application/g4_projection.py`、`tests/g4/test_g4_mysql_writer.py`、`tests/g4/test_g4_orchestrator.py`。
+代码结果：`OrchestrationRequest.initial_status` 允许从 `WAITING_CLARIFICATION` 进入同一 Agent 编排；G4 service 先读取任务身份、幂等键和最新等待上下文，再调用纯 `build_g4_clarification_continuation`，使用原 task/trace identity 和递增 context_version 执行 Agent；writer 追加 context 2 及后续轮次的 transition、Agent message/result、artifact、orchestration result、policy、trace revision、候选/record/item/explanation 和回答上下文。根任务请求事实不更新，writer 以最新上下文而不是根行的旧版本作为多轮续跑边界。
+幂等与失败边界：同一幂等键同答案直接回放；同键不同答案拒绝；context_version 陈旧、任务非 WAITING 或数据库唯一性冲突均回滚；所有续跑事实由调用方一次 commit，writer 不 commit/rollback，SQL 不包含 UPDATE、DELETE、DROP、TRUNCATE 或覆盖式写入。
+测试结果：全量 Python unittest=`431` 项 PASS；架构扫描=`114` files PASS；安全扫描=`296` files PASS；文档校验=`18` Markdown/42 blocks PASS；相关 `py_compile`、`git diff --check` PASS。
+版本提交：`5e6d63a feat(g4): implement append-only clarification continuation`，已推送 `origin/codex/g1-runnable-skeleton`。
+数据库与外部副作用：database_reads=`0`、database_writes=`0`、Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`；新增数据库对象和行数=`0`；文件删除数量=`0`；数据库物理删除数量=`0`。
+配置/部署边界：默认 `backend.app.main:app`、Demo HTTP、Worker 和 DeepSeek 外部调用均保持关闭；仅代码与 fake connection 测试验证，不宣称真实续跑已经可用。
+未解决风险：当前隔离 MySQL 没有可直接复用的 G4 WAITING 任务；真实续跑必须先用新的 request_id 创建一个等待任务，并为“创建等待任务”和“提交澄清答案”分别生成、核对和批准 append-only ChangePlan；真实运行还需验证响应 GET、debug context/trace、幂等重放和前后计数。
+下一步唯一动作：基于新的只读基线生成 G4 WAITING 任务创建 DRY_RUN 计划；未得到该计划的精确 hash 和用户批准前，不执行任何续跑业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
