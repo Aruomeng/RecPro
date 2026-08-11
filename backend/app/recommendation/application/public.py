@@ -122,28 +122,53 @@ def execute_recommendation(
         for resource in resources
         if resource.resource_type in intent.resource_types and resource.available_from <= request.evaluation_at
     )
+    resource_tags_by_id: dict[int, tuple[ResourceTagEvidence, ...]] = {}
+    channel_scores_by_id: dict[str, dict[int, float]] = {
+        "PROFILE": {},
+        "KEYWORD": {},
+        "TRENDING": {},
+    }
+    negative_penalty_by_id: dict[int, float] = {}
     for resource in eligible_resources:
         resource_tags = tuple(sorted(tags_by_resource.get(resource.id, ()), key=lambda item: item.tag_id))
         keyword_score = _keyword_score(resource, tokens)
         profile_score, negative_penalty = _profile_score(resource_tags, profile_signals)
         trending_score = _trending_score(resource.id, behavior_events)
-        channel_scores = {"PROFILE": profile_score, "KEYWORD": keyword_score, "TRENDING": trending_score}
-        channel_ranks: dict[str, int] = {}
-        for channel in channel_scores:
-            ranked = sorted(
-                eligible_resources,
-                key=lambda item: (
-                    -(
-                        _profile_score(tuple(tags_by_resource.get(item.id, ())), profile_signals)[0]
-                        if channel == "PROFILE"
-                        else _keyword_score(item, tokens)
-                        if channel == "KEYWORD"
-                        else _trending_score(item.id, behavior_events)
-                    ),
-                    item.id,
-                ),
-            )
-            channel_ranks[channel] = next((index for index, item in enumerate(ranked, start=1) if item.id == resource.id), len(ranked) + 1)
+        resource_tags_by_id[resource.id] = resource_tags
+        negative_penalty_by_id[resource.id] = negative_penalty
+        channel_scores_by_id["PROFILE"][resource.id] = profile_score
+        channel_scores_by_id["KEYWORD"][resource.id] = keyword_score
+        channel_scores_by_id["TRENDING"][resource.id] = trending_score
+
+    # Each channel ranking is independent of the resource currently being
+    # scored.  Build the three rank maps once instead of sorting the full
+    # eligible catalog for every resource/channel pair (which was quadratic
+    # in the real 15k-book dataset).
+    channel_ranks_by_id: dict[str, dict[int, int]] = {}
+    for channel, scores in channel_scores_by_id.items():
+        ranked = sorted(
+            eligible_resources,
+            key=lambda item: (-scores[item.id], item.id),
+        )
+        channel_ranks_by_id[channel] = {
+            item.id: index for index, item in enumerate(ranked, start=1)
+        }
+
+    for resource in eligible_resources:
+        resource_tags = resource_tags_by_id[resource.id]
+        profile_score = channel_scores_by_id["PROFILE"][resource.id]
+        keyword_score = channel_scores_by_id["KEYWORD"][resource.id]
+        trending_score = channel_scores_by_id["TRENDING"][resource.id]
+        negative_penalty = negative_penalty_by_id[resource.id]
+        channel_scores = {
+            "PROFILE": profile_score,
+            "KEYWORD": keyword_score,
+            "TRENDING": trending_score,
+        }
+        channel_ranks = {
+            channel: channel_ranks_by_id[channel][resource.id]
+            for channel in channel_scores
+        }
         rrf_score = sum(CHANNEL_WEIGHTS[channel] * channel_scores[channel] / (RRF_K0 + channel_ranks[channel]) for channel in channel_scores)
         final_score = _bounded(0.50 * rrf_score * 60.0 + 0.30 * profile_score + 0.20 * keyword_score - 0.35 * negative_penalty)
         primary_channel = max(channel_scores, key=lambda channel: (channel_scores[channel], -channel_ranks[channel], channel))
