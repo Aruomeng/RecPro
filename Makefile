@@ -22,6 +22,11 @@ G4_READONLY_FUSION_RUN_ID ?=
 G4_PROJECTION_PLAN_RUN_ID ?=
 G4_PROJECTION_MYSQL_BASELINE ?=
 G4_PROJECTION_G4_BASELINE ?=
+G4_PROJECTION_APPLY_RUN_ID ?=
+G4_PROJECTION_PLAN ?=
+G4_PROJECTION_PLAN_ID ?=
+G4_PROJECTION_PLAN_HASH ?=
+G4_PROJECTION_REQUEST_RUN_ID ?=
 G5_RUN_ID ?=
 G5_HTTP_RUN_ID ?=
 G5_WORKER_RUN_ID ?=
@@ -89,7 +94,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
-	build-g4-recommendation-projection-plan \
+	build-g4-recommendation-projection-plan execute-g4-recommendation-projection \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -231,6 +236,16 @@ build-g4-recommendation-projection-plan:
 	@test -n "$(G4_PROJECTION_MYSQL_BASELINE)" || { echo "G4_PROJECTION_MYSQL_BASELINE is required and must point to a PASS MySQL read-only evidence file"; exit 2; }
 	@test -n "$(G4_PROJECTION_G4_BASELINE)" || { echo "G4_PROJECTION_G4_BASELINE is required and must point to a PASS G4 read-only evidence file"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_recommendation_projection_plan --run-id "$(G4_PROJECTION_PLAN_RUN_ID)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)"
+
+execute-g4-recommendation-projection:
+	@test -n "$(G4_PROJECTION_APPLY_RUN_ID)" || { echo "G4_PROJECTION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
+	@test -n "$(G4_PROJECTION_PLAN)" || { echo "G4_PROJECTION_PLAN is required and must point to the reviewed G4 ChangePlan"; exit 2; }
+	@test -n "$(G4_PROJECTION_PLAN_ID)" || { echo "G4_PROJECTION_PLAN_ID is required and must match the reviewed plan_id"; exit 2; }
+	@test -n "$(G4_PROJECTION_PLAN_HASH)" || { echo "G4_PROJECTION_PLAN_HASH is required and must be the exact approved hash"; exit 2; }
+	@test -n "$(G4_PROJECTION_MYSQL_BASELINE)" || { echo "G4_PROJECTION_MYSQL_BASELINE is required and must point to the matching PASS MySQL evidence"; exit 2; }
+	@test -n "$(G4_PROJECTION_G4_BASELINE)" || { echo "G4_PROJECTION_G4_BASELINE is required and must point to the matching PASS G4 evidence"; exit 2; }
+	@test -n "$(G4_PROJECTION_REQUEST_RUN_ID)" || { echo "G4_PROJECTION_REQUEST_RUN_ID is required and must identify the reviewed request payload"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g4_recommendation_projection --apply --plan-id "$(G4_PROJECTION_PLAN_ID)" --approved-plan-hash "$(G4_PROJECTION_PLAN_HASH)" --plan "$(G4_PROJECTION_PLAN)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --request-run-id "$(G4_PROJECTION_REQUEST_RUN_ID)" --run-id "$(G4_PROJECTION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 execute-g7-recommendation-post:
 	@test -n "$(G7_RECOMMENDATION_APPLY_RUN_ID)" || { echo "G7_RECOMMENDATION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
