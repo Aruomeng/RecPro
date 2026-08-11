@@ -28,6 +28,7 @@ class OrchestrationRequest:
     evaluation_at: datetime | None = None
     deadline_at: datetime | None = None
     scene: str = "HOME"
+    initial_status: TaskStatus = TaskStatus.CREATED
 
     def __post_init__(self) -> None:
         if not isinstance(self.task_id, UUID) or not isinstance(self.trace_id, UUID):
@@ -52,6 +53,13 @@ class OrchestrationRequest:
             raise ValueError("deadline_at must be timezone-aware")
         if not isinstance(self.scene, str) or not self.scene.strip():
             raise ValueError("scene must be a non-blank string")
+        if self.initial_status not in {
+            TaskStatus.CREATED,
+            TaskStatus.WAITING_CLARIFICATION,
+        }:
+            raise ValueError(
+                "initial_status must be CREATED or WAITING_CLARIFICATION"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,7 +97,7 @@ class RecommendationOrchestrator:
         transitions: list[dict[str, object]] = []
         dispatches: list[AgentDispatch] = []
         results: dict[str, AgentResult[dict[str, object]]] = {}
-        current = TaskStatus.CREATED
+        current = request.initial_status
         replan_count = 0
 
         def transition(target: TaskStatus, reason: str) -> None:

@@ -25,6 +25,7 @@ from backend.app.recommendation.agents.orchestrator import (
     OrchestrationResult,
 )
 from backend.app.recommendation.domain.public import RecommendationTaskCommand
+from backend.app.shared_kernel.contracts.enums import TaskStatus
 
 
 class G4ProjectionError(ValueError):
@@ -111,6 +112,7 @@ def build_orchestration_request(
     deadline_at: datetime,
     context_version: int = 1,
     identity: G4TaskIdentity | None = None,
+    initial_status: TaskStatus = TaskStatus.CREATED,
 ) -> OrchestrationRequest:
     """Map a transport-neutral task command to one explicit G4 request.
 
@@ -146,6 +148,7 @@ def build_orchestration_request(
         deadline_at=deadline_at,
         scene=command.scene,
         limit=command.limit,
+        initial_status=initial_status,
     )
 
 

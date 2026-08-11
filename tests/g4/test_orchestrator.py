@@ -13,7 +13,15 @@ from backend.app.shared_kernel.contracts.enums import TaskStatus
 
 
 class G4OrchestratorTest(unittest.TestCase):
-    def request(self, *, input_text: str | None = "多智能体推荐", resource_types=("BOOK", "PAPER"), constraints=None) -> OrchestrationRequest:
+    def request(
+        self,
+        *,
+        input_text: str | None = "多智能体推荐",
+        resource_types=("BOOK", "PAPER"),
+        constraints=None,
+        context_version: int = 1,
+        initial_status: TaskStatus = TaskStatus.CREATED,
+    ) -> OrchestrationRequest:
         return OrchestrationRequest(
             task_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
             trace_id=UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"),
@@ -22,7 +30,9 @@ class G4OrchestratorTest(unittest.TestCase):
             input_text=input_text,
             resource_types=resource_types,
             constraints=constraints,
+            context_version=context_version,
             deadline_at=datetime.now(UTC) + timedelta(seconds=30),
+            initial_status=initial_status,
         )
 
     def execute(self, request: OrchestrationRequest):
@@ -55,6 +65,13 @@ class G4OrchestratorTest(unittest.TestCase):
         self.assertNotIn("CandidateRecallAgent", {step["agent_name"] for step in result.trace})
         self.assertNotIn("RankingAgent", {step["agent_name"] for step in result.trace})
         self.assertEqual("WAITING_CLARIFICATION", result.transitions[-1]["to_status"])
+
+    def test_continuation_starts_from_waiting_context(self) -> None:
+        result = self.execute(self.request(initial_status=TaskStatus.WAITING_CLARIFICATION, context_version=2))
+        self.assertEqual(TaskStatus.COMPLETED, result.status)
+        self.assertEqual(2, result.context_version)
+        self.assertEqual("WAITING_CLARIFICATION", result.transitions[0]["from_status"])
+        self.assertEqual("UNDERSTANDING", result.transitions[0]["to_status"])
 
     def test_degraded_path_preserves_results_and_warnings(self) -> None:
         result = self.execute(self.request(constraints={"force_degraded": True}))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import unittest
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -62,6 +63,10 @@ class FakeCursor:
                 plan.status,
                 plan.context_version,
             )
+        elif normalized.startswith(
+            "SELECT status, context_version FROM recommendation_task_context"
+        ):
+            self.row = self.connection.latest_context
         elif normalized.startswith("SELECT id, decision_json"):
             plan = self.connection.plan
             self.row = (
@@ -108,8 +113,14 @@ class FakeCursor:
 
 
 class FakeConnection:
-    def __init__(self, plan: G4ProjectionWritePlan) -> None:
+    def __init__(
+        self,
+        plan: G4ProjectionWritePlan,
+        *,
+        latest_context: tuple[str, int] | None = None,
+    ) -> None:
         self.plan = plan
+        self.latest_context = latest_context
         self.queries: list[tuple[str, tuple[Any, ...]]] = []
         self.commits = 0
         self.rollbacks = 0
@@ -172,6 +183,26 @@ class G4MySQLWriterTests(unittest.TestCase):
                     connection, plan, result=result
                 )
             )
+        self.assertEqual(0, connection.commits)
+        self.assertEqual(0, connection.rollbacks)
+
+    def test_continuation_uses_latest_context_not_immutable_task_snapshot(self) -> None:
+        plan, _result = make_plan()
+        continuation_plan = replace(plan, context_version=3)
+        connection = FakeConnection(
+            continuation_plan,
+            latest_context=("WAITING_CLARIFICATION", 2),
+        )
+        asyncio.run(
+            MySQLG4ProjectionWriter(log_port=RecordingLogPort())._append_task(
+                connection, continuation_plan
+            )
+        )
+        sql = " ".join(query for query, _ in connection.queries).upper()
+        self.assertIn(
+            "SELECT STATUS, CONTEXT_VERSION FROM RECOMMENDATION_TASK_CONTEXT",
+            sql,
+        )
         self.assertEqual(0, connection.commits)
         self.assertEqual(0, connection.rollbacks)
 

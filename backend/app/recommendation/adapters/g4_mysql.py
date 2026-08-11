@@ -14,6 +14,7 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Awaitable, Callable, Mapping
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 import asyncmy
 
@@ -22,10 +23,14 @@ from backend.app.recommendation.application.g4_persistence import (
     build_g4_projection_write_plan,
 )
 from backend.app.recommendation.application.g4_projection import (
+    G4TaskIdentity,
     G4ProjectionVersions,
     G4ResourceProjection,
     build_http_execution_payload,
     build_orchestration_request,
+)
+from backend.app.recommendation.application.g4_clarification import (
+    build_g4_clarification_continuation,
 )
 from backend.app.recommendation.application.orchestration import persist_orchestration
 from backend.app.recommendation.application.persistent_orchestration import (
@@ -41,6 +46,7 @@ from backend.app.recommendation.adapters.mysql import (
     ConnectionFactory,
     MySQLRecommendationTaskService,
     _canonical as _g3_canonical,
+    _json_array as _g3_json_array,
     _json_object as _g3_json_object,
 )
 from backend.app.recommendation.domain.public import (
@@ -49,9 +55,11 @@ from backend.app.recommendation.domain.public import (
 )
 from backend.app.recommendation.ports.public import (
     IdempotencyConflictError,
+    StaleContextVersionError,
     TaskStateConflictError,
 )
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
+from backend.app.shared_kernel.contracts.enums import TaskStatus
 
 
 def _canonical(value: object) -> str:
@@ -86,6 +94,10 @@ def _required_version(plan: G4ProjectionWritePlan, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"projection version {name} is required")
     return value
+
+
+def _revision_trace_id(task_id: object, context_version: int) -> str:
+    return str(uuid5(NAMESPACE_URL, f"trace-revision:{task_id}:{context_version}"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,38 +144,39 @@ class MySQLG4ProjectionWriter:
     async def _append_task(self, connection: Any, plan: G4ProjectionWritePlan) -> None:
         finished_at = _naive_utc(plan.finished_at) if plan.finished_at else None
         async with connection.cursor() as cursor:
-            await cursor.execute(
-                "INSERT IGNORE INTO recommendation_task "
-                "(id, request_id, trace_id, user_id, session_id, trigger_scene, input_text, request_json, "
-                "intent_type, intent_confidence, status, context_version, profile_version, "
-                "config_bundle_version, policy_version, ranking_version, behavior_formula_version, "
-                "dataset_version, replan_count, evaluation_at, started_at, finished_at, created_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
-                (
-                    str(plan.task_id),
-                    str(plan.request_id),
-                    str(plan.trace_id),
-                    plan.user_id,
-                    str(plan.session_id),
-                    plan.scene,
-                    plan.input_text,
-                    _canonical(plan.request_json),
-                    plan.intent_type,
-                    _decimal(plan.intent_confidence),
-                    plan.status,
-                    plan.context_version,
-                    _required_version(plan, "config_bundle"),
-                    _required_version(plan, "policy"),
-                    _required_version(plan, "ranking"),
-                    _required_version(plan, "behavior_formula"),
-                    _required_version(plan, "dataset"),
-                    plan.replan_count,
-                    _naive_utc(plan.evaluation_at),
-                    _naive_utc(plan.started_at),
-                    finished_at,
-                    _naive_utc(plan.started_at),
-                ),
-            )
+            if plan.context_version == 1:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_task "
+                    "(id, request_id, trace_id, user_id, session_id, trigger_scene, input_text, request_json, "
+                    "intent_type, intent_confidence, status, context_version, profile_version, "
+                    "config_bundle_version, policy_version, ranking_version, behavior_formula_version, "
+                    "dataset_version, replan_count, evaluation_at, started_at, finished_at, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NULL, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (
+                        str(plan.task_id),
+                        str(plan.request_id),
+                        str(plan.trace_id),
+                        plan.user_id,
+                        str(plan.session_id),
+                        plan.scene,
+                        plan.input_text,
+                        _canonical(plan.request_json),
+                        plan.intent_type,
+                        _decimal(plan.intent_confidence),
+                        plan.status,
+                        plan.context_version,
+                        _required_version(plan, "config_bundle"),
+                        _required_version(plan, "policy"),
+                        _required_version(plan, "ranking"),
+                        _required_version(plan, "behavior_formula"),
+                        _required_version(plan, "dataset"),
+                        plan.replan_count,
+                        _naive_utc(plan.evaluation_at),
+                        _naive_utc(plan.started_at),
+                        finished_at,
+                        _naive_utc(plan.started_at),
+                    ),
+                )
             await cursor.execute(
                 "SELECT request_json, trace_id, status, context_version "
                 "FROM recommendation_task WHERE id = %s",
@@ -172,10 +185,31 @@ class MySQLG4ProjectionWriter:
             row = await cursor.fetchone()
         if row is None:
             raise ValueError("G4 task projection was not persisted")
-        if not _same_json(row[0], dict(plan.request_json)) or str(row[1]) != str(plan.trace_id):
-            raise ValueError("G4 task request or trace identity conflict")
-        if str(row[2]) != plan.status or int(row[3]) != plan.context_version:
-            raise ValueError("G4 task status or context conflict")
+        if str(row[1]) != str(plan.trace_id):
+            raise ValueError("G4 task trace identity conflict")
+        if plan.context_version == 1:
+            if not _same_json(row[0], dict(plan.request_json)):
+                raise ValueError("G4 task request identity conflict")
+            if str(row[2]) != plan.status or int(row[3]) != plan.context_version:
+                raise ValueError("G4 task status or context conflict")
+        else:
+            # The root task row is an immutable request fact.  Its status and
+            # context_version therefore remain at the creation snapshot; the
+            # latest waiting context is the concurrency boundary for every
+            # continuation, including a second or later clarification round.
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT status, context_version FROM recommendation_task_context "
+                    "WHERE task_id = %s ORDER BY context_version DESC LIMIT 1",
+                    (str(plan.task_id),),
+                )
+                latest_context = await cursor.fetchone()
+            if (
+                latest_context is None
+                or str(latest_context[0]) != "WAITING_CLARIFICATION"
+                or int(latest_context[1]) != plan.context_version - 1
+            ):
+                raise ValueError("G4 continuation requires the latest waiting context")
 
     async def _append_transitions(self, connection: Any, plan: G4ProjectionWritePlan) -> None:
         async with connection.cursor() as cursor:
@@ -214,50 +248,65 @@ class MySQLG4ProjectionWriter:
     ) -> None:
         decision = plan.decision
         async with connection.cursor() as cursor:
-            await cursor.execute(
-                "INSERT IGNORE INTO recommendation_trace "
-                "(trace_id, task_id, schema_version, steps_json, complete, created_at) "
-                "VALUES (%s, %s, 'g4-trace-v1', %s, TRUE, %s)",
-                (
-                    str(plan.trace_id),
-                    str(plan.task_id),
-                    _canonical(list(plan.trace_steps)),
-                    _naive_utc(plan.started_at),
-                ),
-            )
+            if plan.context_version == 1:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_trace "
+                    "(trace_id, task_id, schema_version, steps_json, complete, created_at) "
+                    "VALUES (%s, %s, 'g4-trace-v1', %s, TRUE, %s)",
+                    (
+                        str(plan.trace_id),
+                        str(plan.task_id),
+                        _canonical(list(plan.trace_steps)),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
+            else:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_trace_revision "
+                    "(trace_id, task_id, context_version, schema_version, steps_json, complete, created_at) "
+                    "VALUES (%s, %s, %s, 'g4-trace-v1', %s, TRUE, %s)",
+                    (
+                        _revision_trace_id(plan.task_id, plan.context_version),
+                        str(plan.task_id),
+                        plan.context_version,
+                        _canonical(list(plan.trace_steps)),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
             await self._append_policy_cursor(
                 cursor,
                 plan,
                 decision_no=plan.context_version,
                 plan_version=None,
             )
-            await cursor.execute(
-                "INSERT IGNORE INTO recommendation_task_context "
-                "(task_id, context_version, status, request_json, questions_json, answers_json, "
-                "response_json, idempotency_key, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s)",
-                (
-                    str(plan.task_id),
-                    plan.context_version,
-                    plan.status,
-                    _canonical(plan.request_json),
-                    _canonical(list(plan.questions)),
-                    _canonical({}),
-                    _canonical(dict(plan.context_response or {})),
-                    _naive_utc(plan.started_at),
-                ),
-            )
-            await cursor.execute(
-                "INSERT IGNORE INTO recommendation_clarification "
-                "(task_id, context_version, questions_json, answers_json, asked_at, answered_at) "
-                "VALUES (%s, %s, %s, %s, %s, NULL)",
-                (
-                    str(plan.task_id),
-                    plan.context_version,
-                    _canonical(list(plan.questions)),
-                    _canonical({}),
-                    _naive_utc(plan.started_at),
-                ),
-            )
+            if plan.context_version == 1:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_task_context "
+                    "(task_id, context_version, status, request_json, questions_json, answers_json, "
+                    "response_json, idempotency_key, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, %s)",
+                    (
+                        str(plan.task_id),
+                        plan.context_version,
+                        plan.status,
+                        _canonical(plan.request_json),
+                        _canonical(list(plan.questions)),
+                        _canonical({}),
+                        _canonical(dict(plan.context_response or {})),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_clarification "
+                    "(task_id, context_version, questions_json, answers_json, asked_at, answered_at) "
+                    "VALUES (%s, %s, %s, %s, %s, NULL)",
+                    (
+                        str(plan.task_id),
+                        plan.context_version,
+                        _canonical(list(plan.questions)),
+                        _canonical({}),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
 
     async def _append_completed(
         self,
@@ -383,18 +432,114 @@ class MySQLG4ProjectionWriter:
                 decision_no=plan.context_version,
                 plan_version=1,
             )
+            if plan.context_version == 1:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_trace "
+                    "(trace_id, task_id, schema_version, steps_json, complete, created_at) "
+                    "VALUES (%s, %s, 'g4-trace-v1', %s, TRUE, %s)",
+                    (
+                        str(plan.trace_id),
+                        str(plan.task_id),
+                        _canonical(list(plan.trace_steps)),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
+            else:
+                await cursor.execute(
+                    "INSERT IGNORE INTO recommendation_trace_revision "
+                    "(trace_id, task_id, context_version, schema_version, steps_json, complete, created_at) "
+                    "VALUES (%s, %s, %s, 'g4-trace-v1', %s, TRUE, %s)",
+                    (
+                        _revision_trace_id(plan.task_id, plan.context_version),
+                        str(plan.task_id),
+                        plan.context_version,
+                        _canonical(list(plan.trace_steps)),
+                        _naive_utc(plan.started_at),
+                    ),
+                )
+        return G4PersistedIdentities(record_id=record_id, item_ids=item_ids)
+
+    async def append_continuation_context(
+        self,
+        connection: Any,
+        plan: G4ProjectionWritePlan,
+        *,
+        answers: Mapping[str, str],
+        idempotency_key: str,
+        response: Mapping[str, object],
+    ) -> None:
+        """Append the answered context after the Agent/result facts.
+
+        Context and clarification rows are immutable facts.  The task summary
+        row is intentionally not updated; read APIs resolve the latest context
+        version, so this method preserves the append-only state boundary.
+        """
+
+        if plan.context_version <= 1 or not idempotency_key.strip():
+            raise ValueError("continuation context version and idempotency key are required")
+        request_json = _canonical(dict(plan.request_json))
+        questions_json = _canonical(list(plan.questions))
+        answers_json = _canonical(dict(answers))
+        response_json = _canonical(dict(response))
+        created_at = _naive_utc(plan.started_at)
+        async with connection.cursor() as cursor:
             await cursor.execute(
-                "INSERT IGNORE INTO recommendation_trace "
-                "(trace_id, task_id, schema_version, steps_json, complete, created_at) "
-                "VALUES (%s, %s, 'g4-trace-v1', %s, TRUE, %s)",
+                "INSERT IGNORE INTO recommendation_task_context "
+                "(task_id, context_version, status, request_json, questions_json, answers_json, "
+                "response_json, idempotency_key, created_at) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
                 (
-                    str(plan.trace_id),
                     str(plan.task_id),
-                    _canonical(list(plan.trace_steps)),
-                    _naive_utc(plan.started_at),
+                    plan.context_version,
+                    plan.status,
+                    request_json,
+                    questions_json,
+                    answers_json,
+                    response_json,
+                    idempotency_key,
+                    created_at,
                 ),
             )
-        return G4PersistedIdentities(record_id=record_id, item_ids=item_ids)
+            await cursor.execute(
+                "SELECT status, request_json, questions_json, answers_json, response_json, idempotency_key "
+                "FROM recommendation_task_context WHERE task_id = %s AND context_version = %s",
+                (str(plan.task_id), plan.context_version),
+            )
+            context = await cursor.fetchone()
+            if (
+                context is None
+                or str(context[0]) != plan.status
+                or not _same_json(context[1], dict(plan.request_json))
+                or not _same_json(context[2], list(plan.questions))
+                or not _same_json(context[3], dict(answers))
+                or not _same_json(context[4], dict(response))
+                or str(context[5]) != idempotency_key
+            ):
+                raise ValueError("G4 continuation context identity conflict")
+            await cursor.execute(
+                "INSERT IGNORE INTO recommendation_clarification "
+                "(task_id, context_version, questions_json, answers_json, asked_at, answered_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s)",
+                (
+                    str(plan.task_id),
+                    plan.context_version,
+                    questions_json,
+                    answers_json,
+                    created_at,
+                    created_at,
+                ),
+            )
+            await cursor.execute(
+                "SELECT questions_json, answers_json, asked_at, answered_at "
+                "FROM recommendation_clarification WHERE task_id = %s AND context_version = %s",
+                (str(plan.task_id), plan.context_version),
+            )
+            clarification = await cursor.fetchone()
+        if (
+            clarification is None
+            or not _same_json(clarification[0], list(plan.questions))
+            or not _same_json(clarification[1], dict(answers))
+        ):
+            raise ValueError("G4 continuation clarification identity conflict")
 
     @staticmethod
     async def _append_policy_cursor(
@@ -628,18 +773,160 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
 
     async def submit_clarification(
         self,
-        task_id,
+        task_id: UUID,
         *,
         context_version: int,
         answers: dict[str, str],
         idempotency_key: str,
         user_id: int,
     ) -> RecommendationTaskResult:
-        """Keep G4 clarification disabled until its Agent continuation is added."""
+        """Resume one waiting G4 context through the same append-only transaction."""
 
-        raise TaskStateConflictError(
-            "G4 clarification continuation is not enabled in this opt-in service"
-        )
+        if context_version < 1 or not idempotency_key.strip():
+            raise ValueError("context version and idempotency key are required")
+        connection = await self._connect()
+        try:
+            task = await self._find_task_by_id(
+                connection,
+                task_id=task_id,
+                user_id=user_id,
+                include_request=True,
+            )
+            if task is None:
+                raise LookupError("recommendation task not found")
+            replay = await self._find_context_by_idempotency(
+                connection,
+                task_id=task_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is not None:
+                if _g3_canonical(_g3_json_object(replay["answers_json"])) != _g3_canonical(
+                    answers
+                ):
+                    raise IdempotencyConflictError(
+                        "clarification idempotency key was reused with different answers"
+                    )
+                await connection.rollback()
+                return RecommendationTaskResult(
+                    200,
+                    True,
+                    _g3_json_object(replay["response_json"]),
+                )
+            latest = await self._latest_context(connection, task_id=task_id)
+            if latest is None:
+                raise TaskStateConflictError("task has no clarification context")
+            if int(latest["context_version"]) != context_version:
+                raise StaleContextVersionError("clarification context version is stale")
+            if str(latest["status"]) != "WAITING_CLARIFICATION":
+                raise TaskStateConflictError("task is not waiting for clarification")
+
+            request_json = _g3_json_object(latest["request_json"])
+            base_command = self._command_from_clarification(
+                task=task,
+                request_json=request_json,
+                answers={},
+            )
+            continuation = build_g4_clarification_continuation(
+                base_command,
+                questions=_g3_json_array(latest["questions_json"]),
+                answers=answers,
+                previous_context_version=context_version,
+            )
+            evaluation_at = task["evaluation_at"]
+            if not isinstance(evaluation_at, datetime):
+                raise RuntimeError("task evaluation_at is invalid")
+            evaluation_at = evaluation_at.replace(tzinfo=UTC)
+            deadline_at = datetime.now(UTC) + timedelta(seconds=self._deadline_seconds)
+            orchestration_request = build_orchestration_request(
+                continuation.command,
+                evaluation_at=evaluation_at,
+                deadline_at=deadline_at,
+                context_version=continuation.context_version,
+                identity=G4TaskIdentity(
+                    task_id=UUID(str(task["task_id"])),
+                    trace_id=UUID(str(task["trace_id"])),
+                ),
+                initial_status=TaskStatus.WAITING_CLARIFICATION,
+            )
+            result = await self._orchestrator_factory(connection).run(
+                orchestration_request
+            )
+            catalog = self._catalog_repository_factory(connection)
+            resource_values = await catalog.list_resources(available_at=evaluation_at)
+            resources = {
+                int(resource.id): _resource_projection(resource)
+                for resource in resource_values
+            }
+            started_at = datetime.now(UTC)
+            plan = build_g4_projection_write_plan(
+                continuation.command,
+                result,
+                resources=resources,
+                versions=self._g4_versions,
+                evaluation_at=evaluation_at,
+                started_at=started_at,
+            )
+            persisted = await self._g4_writer.append(
+                connection,
+                plan,
+                result=result,
+            )
+            if result.status.value == "WAITING_CLARIFICATION":
+                payload = dict(plan.context_response or {})
+            else:
+                payload = build_http_execution_payload(
+                    result,
+                    resources=resources,
+                    versions=self._g4_versions,
+                    evaluation_at=evaluation_at,
+                    record_id=persisted.record_id,
+                    item_ids=persisted.item_ids,
+                )
+            stored_payload = dict(payload)
+            stored_evaluation = stored_payload.get("evaluation_at")
+            if isinstance(stored_evaluation, datetime):
+                stored_payload["evaluation_at"] = stored_evaluation.isoformat()
+            await self._g4_writer.append_continuation_context(
+                connection,
+                plan,
+                answers=continuation.answers,
+                idempotency_key=idempotency_key,
+                response=stored_payload,
+            )
+            await connection.commit()
+            return RecommendationTaskResult(200, False, payload)
+        except (
+            IdempotencyConflictError,
+            StaleContextVersionError,
+            TaskStateConflictError,
+        ):
+            await connection.rollback()
+            raise
+        except asyncmy.IntegrityError:
+            await connection.rollback()
+            replay = await self._find_context_by_idempotency(
+                connection,
+                task_id=task_id,
+                idempotency_key=idempotency_key,
+            )
+            if replay is None:
+                raise
+            if _g3_canonical(_g3_json_object(replay["answers_json"])) != _g3_canonical(
+                answers
+            ):
+                raise IdempotencyConflictError(
+                    "clarification idempotency key was reused with different answers"
+                )
+            return RecommendationTaskResult(
+                200,
+                True,
+                _g3_json_object(replay["response_json"]),
+            )
+        except Exception:
+            await connection.rollback()
+            raise
+        finally:
+            connection.close()
 
 
 __all__ = [
