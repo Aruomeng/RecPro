@@ -3,6 +3,8 @@ NPM ?= npm
 COMPOSE ?= docker compose
 COMPOSE_ENV_FILE ?= .env.compose
 COMPOSE_EXAMPLE_ENV_FILE ?= .env.compose.example
+DEMO_BACKEND_ENV_FILE ?= .env.host
+DEMO_BACKEND_PORT ?= 8000
 RUN_ID ?=
 BUILD_RUN_ID ?=
 G2_RUN_ID ?=
@@ -87,7 +89,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
 	preflight-chroma-import import-chroma-vectors import-chroma-vectors-idempotency verify-chroma-import verify-g6-readonly-fusion \
-	start stop status infra-start infra-stop backend frontend worker git-status
+	start stop status infra-start infra-stop backend demo-backend frontend worker git-status
 
 bootstrap-check:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/bootstrap.py
@@ -431,6 +433,11 @@ backend:
 	@test -f .env.host || { echo ".env.host is missing; run make bootstrap after installing prerequisites"; exit 2; }
 	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/validate_runtime_env.py --mode host --env-file .env.host
 	@set -a; . ./.env.host; set +a; exec $(PYTHON) -m uvicorn backend.app.main:app --host 127.0.0.1 --port "$${RECPRO_BACKEND_PORT:-8000}" --reload
+
+demo-backend:
+	@test -f "$(DEMO_BACKEND_ENV_FILE)" || { echo "DEMO_BACKEND_ENV_FILE is missing: $(DEMO_BACKEND_ENV_FILE)"; exit 2; }
+	@PYTHONDONTWRITEBYTECODE=1 $(PYTHON) scripts/validate_runtime_env.py --mode host --env-file "$(DEMO_BACKEND_ENV_FILE)"
+	@set -a; . "$(DEMO_BACKEND_ENV_FILE)"; set +a; RECPRO_APP_ENV=demo RECPRO_DEMO_HTTP_ENABLED=true exec $(PYTHON) -m uvicorn backend.app.demo_main:app --host 127.0.0.1 --port "$(DEMO_BACKEND_PORT)" --reload
 
 frontend:
 	$(NPM) --prefix frontend run dev
