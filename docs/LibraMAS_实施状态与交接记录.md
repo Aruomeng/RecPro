@@ -1047,7 +1047,8 @@ Gate：G7 前端与论文演示（真实 MySQL 健康闸门与 HTTP 组合根）
 安全计数：database_read_queries=`30`（两次完整计数快照各执行 1 条 information_schema 查询与 13 条 COUNT，健康探针另执行 persistence identity 与 SHOW GRANTS）；database_writes=`0`；external_requests=`0`；actual_delete_count=`0`；files_deleted=`0`；overwritten_inputs=`0`；business HTTP POST=`0`。
 新增数据库对象和行数：0；未执行 DDL、INSERT、UPDATE、DELETE、迁移、seed、索引状态切换或向量/图写入。
 未解决风险：尚未执行真实推荐 POST，因此没有证明任务、候选、Trace 与 Agent 日志在 MySQL 中的事务闭环；反馈/画像、真实图向量请求和 DeepSeek 外部调用仍需单独的范围与写入审查。
-下一步唯一动作：审阅 `scripts/build_g7_recommendation_post_plan.py` 生成的 `S1_APPEND/DRY_RUN` ChangePlan（基于上述 `...-004` 基线，含用户、输入、幂等键、预计新增表行、前置条件和安全断言）；只有用户明确批准未变更的 plan hash 和写入范围后，才可执行一次隔离 Demo 请求及只读复核；默认应用继续保持关闭。
+ChangePlan 证据：`artifacts/verification/g7/g7-recommendation-post-plan-20260811-003/recommendation-post-change-plan.json`；生成时 git_commit=`3c35ce62002eeaeaf07ce35fb5b1c8019d06c7e3`，plan_hash=`48f64cbfbb13ed5f1f31408011bf95c6edf88c1f899834a91afecc6337c0cff3`，idempotency_key 与 request_id=`49cd9d61-1f24-524d-b15b-db2e183668b5`，`max_changes=37`；Schema 校验 PASS，mode=`DRY_RUN`，不包含 apply 操作。
+下一步唯一动作：审阅上述 `S1_APPEND/DRY_RUN` ChangePlan（基于上述 `...-004` 基线，含用户、输入、幂等键、预计新增表行、前置条件和安全断言）；只有用户明确批准未变更的 plan hash 和写入范围后，才可执行一次隔离 Demo 请求及只读复核；默认应用继续保持关闭。
 ```
 
 ## 阶段交接模板
