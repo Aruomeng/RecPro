@@ -35,6 +35,7 @@ from backend.app.platform.auth import (
     build_formal_principal_resolver,
 )
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
+from backend.app.recommendation.adapters.mysql import MySQLRecommendationTaskService
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
 from backend.app.recommendation.application.persistent_orchestration import (
@@ -237,6 +238,45 @@ def build_demo_orchestration_service(
     )
 
 
+def build_demo_mysql_http_app(
+    settings: AppSettings,
+    *,
+    dataset_version: str = "lib-books-v1-20260810",
+    feedback_service: object | None = None,
+    behavior_service: object | None = None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+    feedback_api_enabled: bool = False,
+) -> FastAPI:
+    """Compose the local MySQL-backed G3 HTTP graph without opening a connection.
+
+    The HTTP port is implemented by ``MySQLRecommendationTaskService`` and is
+    therefore distinct from the G4 ``PersistentOrchestrationService`` run port.
+    The default module-level app never calls this function.
+    """
+
+    recommendation_service = MySQLRecommendationTaskService(
+        host=settings.mysql_host,
+        port=settings.mysql_port,
+        database=settings.mysql_database,
+        user=settings.mysql_user,
+        password=settings.mysql_password.get_secret_value(),
+        connect_timeout=settings.mysql_connect_timeout_seconds,
+        catalog_repository_factory=MySQLCatalogRepository,
+        config_bundle_version=settings.config_bundle_version,
+        dataset_version=dataset_version,
+    )
+    return build_demo_http_app(
+        settings,
+        recommendation_service=recommendation_service,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        feedback_api_enabled=feedback_api_enabled,
+    )
+
+
 def build_research_orchestration_service(
     settings: AppSettings,
     *,
@@ -327,6 +367,7 @@ __all__ = [
     "build_demo_http_app",
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
+    "build_demo_mysql_http_app",
     "build_research_behavior_service",
     "build_research_feedback_service",
     "build_research_orchestration_service",

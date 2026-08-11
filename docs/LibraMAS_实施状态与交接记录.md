@@ -1030,6 +1030,26 @@ Gate：G7 前端与论文演示（显式推荐 HTTP 组合根与健康闸门）
 下一步唯一动作：在不触碰既有数据库数据的前提下，为显式 Demo 组合根增加隔离 MySQL 真实请求冒烟和只读计数前后核验，再评审是否开放论文演示流量；默认应用继续保持关闭。
 ```
 
+## G7 隔离 MySQL 真实 HTTP 只读冒烟记录
+
+```text
+交接ID：G7-MYSQL-HTTP-READONLY-20260811-019
+Gate：G7 前端与论文演示（真实 MySQL 健康闸门与 HTTP 组合根）
+状态：REAL_MYSQL_READONLY_PASS / COUNTS_UNCHANGED / BUSINESS_POSTS_ZERO / G7_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：在已存在的 RecPro 隔离 Compose MySQL 上验证显式 Demo HTTP 组合根和真实 readiness；只执行健康 GET、SELECT 与 SHOW GRANTS，不执行推荐 POST、迁移、seed、反馈、画像或任何业务写入。
+新增文件：`scripts/verify_g7_mysql_http_readonly.py`、`scripts/build_g7_recommendation_post_plan.py`。
+修改文件：`backend/app/composition.py` 新增 `build_demo_mysql_http_app`，将契约完整的 G3 `MySQLRecommendationTaskService`、HTTP API 和健康闸门保持在一个显式组合根；G4 `PersistentOrchestrationService` 继续通过独立 `build_demo_orchestration_service` 暴露，不伪装成 HTTP task service；`tests/g7/test_optin_http_composition.py` 增加服务连接惰性测试；Makefile 增加 `verify-g7-mysql-http-readonly` 和 `build-g7-recommendation-post-plan`。
+目标边界：Compose project=`recpro-g2-tianyuhang-20260809a`；MySQL 本地端口=`62306`；本阶段未连接或查询本机既有 Neo4j，未启动/停止任何容器。
+真实结果：`GET /api/v1/health/live=200`；`GET /api/v1/health/ready=200`；状态=`DEGRADED`；`can_recommend=true`；recommendation_pipeline=`UP/required=true/active_version=recommendation-g3-mysql-v1`；OpenAPI 包含推荐任务路由，但业务 POST 数=`0`。
+只读计数：`resource_catalog=14,989`、`resource_book_detail=14,986`、`tag_dictionary=8,522`、`resource_tag=70,762`、`resource_index_state=14,989`、`recommendation_task=18`、`recommendation_task_transition=156`、`recommendation_candidate=270`、`recommendation_record=18`、`recommendation_item=90`、`recommendation_item_explanation=90`、`recommendation_policy_decision=18`、`recommendation_trace=18`；前后完全一致。
+验证证据：修正组合根后的最新证据为 `artifacts/verification/g7/g7-mysql-http-readonly-20260811-004/readonly.json`；此前 `...-001`、`...-002`、`...-003` 证据均保留、未覆盖；命令为 `make verify-g7-mysql-http-readonly PYTHON=.venv-g1-final-py311/bin/python G7_MYSQL_READONLY_RUN_ID=g7-mysql-http-readonly-20260811-004`。
+安全计数：database_read_queries=`30`（两次完整计数快照各执行 1 条 information_schema 查询与 13 条 COUNT，健康探针另执行 persistence identity 与 SHOW GRANTS）；database_writes=`0`；external_requests=`0`；actual_delete_count=`0`；files_deleted=`0`；overwritten_inputs=`0`；business HTTP POST=`0`。
+新增数据库对象和行数：0；未执行 DDL、INSERT、UPDATE、DELETE、迁移、seed、索引状态切换或向量/图写入。
+未解决风险：尚未执行真实推荐 POST，因此没有证明任务、候选、Trace 与 Agent 日志在 MySQL 中的事务闭环；反馈/画像、真实图向量请求和 DeepSeek 外部调用仍需单独的范围与写入审查。
+下一步唯一动作：审阅 `scripts/build_g7_recommendation_post_plan.py` 生成的 `S1_APPEND/DRY_RUN` ChangePlan（基于上述 `...-004` 基线，含用户、输入、幂等键、预计新增表行、前置条件和安全断言）；只有用户明确批准未变更的 plan hash 和写入范围后，才可执行一次隔离 Demo 请求及只读复核；默认应用继续保持关闭。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

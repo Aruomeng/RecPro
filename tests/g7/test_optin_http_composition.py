@@ -4,7 +4,7 @@ import unittest
 
 from fastapi.testclient import TestClient
 
-from backend.app.composition import build_demo_http_app
+from backend.app.composition import build_demo_http_app, build_demo_mysql_http_app
 from backend.app.config import AppSettings
 from backend.app.main import create_app
 from backend.app.observability.domain import ComponentReadiness, ComponentStatus
@@ -57,6 +57,19 @@ class OptInHttpCompositionTests(unittest.TestCase):
         )
         self.assertEqual(1, mysql_probe.calls)
         self.assertEqual(1, bundle_probe.calls)
+
+    def test_mysql_demo_root_keeps_service_connection_lazy(self) -> None:
+        mysql_probe = Probe()
+        bundle_probe = Probe()
+        app = build_demo_mysql_http_app(
+            settings(),
+            readiness_probe=mysql_probe,
+            config_bundle_probe=bundle_probe,
+        )
+
+        self.assertEqual(0, mysql_probe.calls)
+        self.assertEqual(0, bundle_probe.calls)
+        self.assertIn("/api/v1/recommendation-tasks", app.openapi()["paths"])
 
     def test_default_app_remains_health_only_and_cannot_claim_readiness(self) -> None:
         mysql_probe = Probe()

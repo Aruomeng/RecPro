@@ -27,6 +27,9 @@ G6_READONLY_SECRETS_ENV_FILE ?= .env.user-secrets
 G6_READONLY_CHROMA_PATH ?= data/chroma
 G6_READONLY_CHROMA_SITE_PACKAGES ?= .venv-chroma-g6-20260811/lib/python3.11/site-packages
 G7_RUN_ID ?=
+G7_MYSQL_READONLY_RUN_ID ?=
+G7_RECOMMENDATION_PLAN_RUN_ID ?=
+G7_RECOMMENDATION_PLAN_BASELINE ?=
 FORMAL_AUTH_RUN_ID ?=
 FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
@@ -70,7 +73,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle \
-	verify-g7-optin-http \
+	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -197,6 +200,15 @@ verify-prompt-bundle:
 verify-g7-optin-http:
 	@test -n "$(G7_RUN_ID)" || { echo "G7_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g7_optin_http --run-id "$(G7_RUN_ID)"
+
+verify-g7-mysql-http-readonly:
+	@test -n "$(G7_MYSQL_READONLY_RUN_ID)" || { echo "G7_MYSQL_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g7_mysql_http_readonly --run-id "$(G7_MYSQL_READONLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+
+build-g7-recommendation-post-plan:
+	@test -n "$(G7_RECOMMENDATION_PLAN_RUN_ID)" || { echo "G7_RECOMMENDATION_PLAN_RUN_ID is required and must identify a new plan run"; exit 2; }
+	@test -n "$(G7_RECOMMENDATION_PLAN_BASELINE)" || { echo "G7_RECOMMENDATION_PLAN_BASELINE is required and must point to a PASS read-only evidence file"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g7_recommendation_post_plan --run-id "$(G7_RECOMMENDATION_PLAN_RUN_ID)" --baseline "$(G7_RECOMMENDATION_PLAN_BASELINE)"
 
 verify-g6-readonly-fusion:
 	@test -n "$(G6_READONLY_RUN_ID)" || { echo "G6_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
