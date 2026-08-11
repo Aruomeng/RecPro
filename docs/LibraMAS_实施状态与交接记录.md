@@ -1360,6 +1360,27 @@ Gate：G4 动态多智能体闭环（context 1→2 真实澄清续跑）
 下一步唯一动作：整理 G4 真实闭环验收报告，随后生成下一项独立 DRY_RUN 计划；不对已提交事实做删除或 UPDATE。
 ```
 
+## 当前运行态、前端与参数审计记录
+
+```text
+交接ID：STATUS-AUDIT-20260811-001
+Gate：G4/G6/G7 当前实现可运行性与前端配置审计
+状态：COMPOSE_RUNTIME_PASS / FRONTEND_LOCKED_RUNTIME_PASS / CONFIG_BOUNDARY_REPORTED
+时间：2026-08-11（Asia/Shanghai）
+安全边界：本轮只构建/启动本项目 backend/frontend 容器、执行 HTTP GET 与 SELECT-only 验证；未执行业务 POST、迁移、UPDATE、DELETE、文件删除或外部 DeepSeek 请求。
+基础设施：Docker Desktop 实际引擎 client/server=`29.3.1`；Compose project=`recpro-g2-tianyuhang-20260809a`。MySQL=`healthy`（62306→3306）、Neo4j=`healthy`（62474/62687）；独立图书 Neo4j project=`recpro-library-neo4j-20260810a`（62475/62688）保持隔离。backend=`healthy`（62000→8000）、frontend=`healthy`（62173→8080）。
+默认 HTTP：backend.app.main:app 真实 live=`200`、ready=`200`，MySQL=`UP`、配置包=`UP`，但 `can_recommend=false`、推荐链路=`DISABLED`；这是默认 health-only 闸门，不是故障。前端 Nginx `/healthz`、前端代理 `/api/v1/health/live` 均真实返回 `200`。
+显式 Demo HTTP：临时以 `RECPRO_APP_ENV=demo` 与 `RECPRO_DEMO_HTTP_ENABLED=true` 启动 demo_main，仅执行 live/ready 和既有 task GET 回读；ready=`200`、`can_recommend=true`、G3 MySQL 推荐管线=`UP`，既有 task=`b6dc4ed8-4c3d-500b-8026-7b5f7779f7cf` 回读为 `COMPLETED/context_version=2/record=22`。本次没有新增业务行。
+G7/G6 当前回读：`g7-mysql-http-readonly-20260811-010` PASS，推荐路由存在、业务 POST=`0`、13 张资源/推荐事实表前后计数一致；`g6-retrieval-fusion-readonly-20260811-002` PASS，MYSQL+GRAPH+VECTOR 三通道、8 候选、三依赖 READY，MySQL/Neo4j/Chroma 写入均=`0`，Chroma collection=`14983`。
+前端页面：Vue 页面已完成状态核验卡片、组件状态、推荐工作台、资源类型/结果数选择、澄清面板、证据卡片和明确标注的本地演示；浏览器真实点击“查看本地演示”显示 3 张 fixture 卡片，并提示不访问 API/不写入三类存储。页面视觉与交互验收通过。
+前端验证：锁文件隔离环境中 Vitest=`6 files/40 tests PASS`、vue-tsc=`PASS`、追加式生产构建=`PASS`；Compose Node 24 镜像按 package-lock 重新构建成功。当前工作区既有 `frontend/node_modules` 实际 TypeScript=`7.0.2`，而锁文件要求=`5.9.3`，因此本机直接 `npm test`/`make frontend-build` 会失败；未使用 `npm ci`，未删除现有依赖目录。该问题属于本地依赖漂移，源码与锁文件未发现缺陷。
+参数：`.env.compose` 结构校验=`PASS`，MySQL/Neo4j/Prompt Bundle、DeepSeek provider=`deepseek`、model=`deepseek-v4-flash`、HTTPS base URL、20 秒、512 token、key 存在且仅在 0600 Git-ignored 文件中；离线 provider 构造为 `DeepSeekLLMProvider`。但默认 Compose/Worker/health-only 不会自动调用 DeepSeek，G3 demo 仍使用 MockLLM，G4 LLM/Graph/Vector HTTP 接线尚未开启。
+参数缺口：当前 `.env.host` 仍是旧 host-mode 文件，端口=`3306`（本隔离 Compose 映射为=`62306`），且缺少 migration user/password，`validate_runtime_env --mode host` 失败；因此不能宣称 host demo 参数已完全就绪。正式生产认证、production HTTP、Worker、G4 HTTP 入口也仍按 fail-closed 关闭。
+证据：`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`、`artifacts/verification/g7/g7-mysql-http-readonly-20260811-010/readonly.json`；源码/配置未覆盖历史 artifact。
+副作用计数：database_writes=`0`、Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`、external_llm_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`。
+下一步唯一动作：在不清理现有 `frontend/node_modules` 的前提下提供锁定依赖的可复现启动入口；随后单独设计/审查 G4 HTTP（真实多智能体、图/向量读取、澄清续跑、幂等）DRY_RUN 计划，获批前不发送新的业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
