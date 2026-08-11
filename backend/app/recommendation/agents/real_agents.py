@@ -6,7 +6,12 @@ from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid5
 
-from backend.app.catalog.ports.public import CatalogRepository, GraphRecallPort
+from backend.app.catalog.ports.public import (
+    CatalogRepository,
+    GraphRecallPort,
+    QueryEmbeddingPort,
+    VectorRecallPort,
+)
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.agents.base import (
     Agent,
@@ -155,9 +160,13 @@ class CatalogResourceSemanticAgent:
         self,
         catalog: CatalogRepository,
         *,
+        graph: GraphRecallPort | None = None,
+        vector: VectorRecallPort | None = None,
         retry_policy: RetryPolicy = RetryPolicy(),
     ) -> None:
         self._catalog = catalog
+        self._graph_enabled = graph is not None
+        self._vector_enabled = vector is not None
         self._retry_policy = retry_policy
 
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
@@ -189,7 +198,11 @@ class CatalogResourceSemanticAgent:
                     "catalog_count": 0,
                     "tag_count": 0,
                     "required_slots": [],
-                    "dependency_status": {"MYSQL": "UNAVAILABLE", "VECTOR": "DISABLED", "GRAPH": "DISABLED"},
+                    "dependency_status": {
+                        "MYSQL": "UNAVAILABLE",
+                        "VECTOR": "READY" if self._vector_enabled else "DISABLED",
+                        "GRAPH": "READY" if self._graph_enabled else "DISABLED",
+                    },
                 },
                 confidence=0.2,
                 status=AgentResultStatus.PARTIAL,
@@ -218,7 +231,11 @@ class CatalogResourceSemanticAgent:
                 "tag_count": len(tags),
                 "tag_coverage": tag_coverage,
                 "required_slots": [],
-                "dependency_status": {"MYSQL": "READY", "VECTOR": "DISABLED", "GRAPH": "DISABLED"},
+                "dependency_status": {
+                    "MYSQL": "READY",
+                    "VECTOR": "READY" if self._vector_enabled else "DISABLED",
+                    "GRAPH": "READY" if self._graph_enabled else "DISABLED",
+                },
             },
             confidence=metadata_coverage,
             status=AgentResultStatus.PARTIAL if not resources else AgentResultStatus.SUCCESS,
@@ -243,11 +260,19 @@ class CatalogCandidateRecallAgent:
         *,
         graph: GraphRecallPort | None = None,
         graph_version: str | None = None,
+        vector: VectorRecallPort | None = None,
+        query_embedder: QueryEmbeddingPort | None = None,
+        embedding_version: str | None = None,
+        index_version: str | None = None,
         retry_policy: RetryPolicy = RetryPolicy(),
     ) -> None:
         self._catalog = catalog
         self._graph = graph
         self._graph_version = graph_version
+        self._vector = vector
+        self._query_embedder = query_embedder
+        self._embedding_version = embedding_version
+        self._index_version = index_version
         self._retry_policy = retry_policy
 
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
@@ -320,6 +345,43 @@ class CatalogCandidateRecallAgent:
                 graph_hits = {item.external_id: item for item in graph_results}
             except DependencyCallFailed:
                 graph_warning = ("GRAPH_RECALL_UNAVAILABLE",)
+        vector_hits: dict[str, Any] = {}
+        vector_attempts = 0
+        vector_warning: tuple[str, ...] = ()
+        vector_configured = all(
+            value is not None
+            for value in (
+                self._vector,
+                self._query_embedder,
+                self._embedding_version,
+                self._index_version,
+            )
+        )
+        query_text = str(message.payload.get("query_text") or " ".join(sorted(terms))).strip()
+        if vector_configured and query_text:
+            try:
+                query_vector = self._query_embedder.embed(query_text)  # type: ignore[union-attr]
+                vector_results, vector_attempts = await call_with_retry(
+                    lambda: self._vector.recall(  # type: ignore[union-attr]
+                        query_vector=query_vector,
+                        embedding_version=self._embedding_version or "",
+                        index_version=self._index_version or "",
+                        limit=limit,
+                    ),
+                    operation_name="catalog.vector_recall",
+                    deadline_at=message.deadline_at,
+                    policy=self._retry_policy,
+                )
+                vector_hits = {item.external_id: item for item in vector_results}
+            except DependencyCallFailed:
+                vector_warning = ("VECTOR_RECALL_UNAVAILABLE",)
+            except ValueError:
+                vector_warning = ("VECTOR_QUERY_UNAVAILABLE",)
+        optional_channel_configured = (
+            self._graph is not None or vector_configured
+        )
+        graph_channel_ready = self._graph is not None and not graph_warning and bool(terms)
+        vector_channel_ready = vector_configured and not vector_warning and bool(query_text)
         candidates: list[dict[str, object]] = []
         for resource in eligible:
             searchable = " ".join((resource.title, *resource.keywords)).lower()
@@ -337,12 +399,25 @@ class CatalogCandidateRecallAgent:
             )
             graph_hit = graph_hits.get(resource.external_id)
             graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
-            score = max(0.0, min(1.0, 0.50 * keyword_score + 0.25 * profile_score + 0.25 * graph_score))
+            vector_hit = vector_hits.get(resource.external_id)
+            vector_score = float(vector_hit.score) if vector_hit is not None else 0.0
+            weighted_score = 0.50 * keyword_score + 0.25 * profile_score
+            effective_weight = 0.75
+            if graph_channel_ready:
+                weighted_score += 0.15 * graph_score
+                effective_weight += 0.15
+            if vector_channel_ready:
+                weighted_score += 0.10 * vector_score
+                effective_weight += 0.10
+            score = weighted_score / effective_weight if optional_channel_configured else weighted_score
             channels = ["MYSQL"]
             evidence_ref = f"catalog:resource:{resource.id}:metadata:{resource.metadata_version}"
             if graph_hit is not None:
                 channels.append("GRAPH")
                 evidence_ref += f":graph:{graph_hit.graph_version}"
+            if vector_hit is not None:
+                channels.append("VECTOR")
+                evidence_ref += f":vector:{vector_hit.index_version}"
             candidates.append(
                 {
                     "resource_id": resource.id,
@@ -360,16 +435,25 @@ class CatalogCandidateRecallAgent:
             payload={
                 "candidates": selected,
                 "candidate_count": len(selected),
-                "channels": ["MYSQL"] + (["GRAPH"] if graph_hits else []),
+                "channels": ["MYSQL"]
+                + (["GRAPH"] if graph_hits else [])
+                + (["VECTOR"] if vector_hits else []),
+                "dependency_status": {
+                    "MYSQL": "READY",
+                    "GRAPH": "READY" if graph_channel_ready else ("UNAVAILABLE" if graph_warning else "DISABLED"),
+                    "VECTOR": "READY" if vector_channel_ready else ("UNAVAILABLE" if vector_warning else "DISABLED"),
+                },
             },
             confidence=0.8 if selected else 0.3,
-            status=AgentResultStatus.SUCCESS if selected else AgentResultStatus.PARTIAL,
-            warnings=(("CATALOG_EMPTY",) if not selected else ()) + graph_warning,
-            fallback_used=False,
+            status=AgentResultStatus.PARTIAL if (not selected or graph_warning or vector_warning) else AgentResultStatus.SUCCESS,
+            warnings=(("CATALOG_EMPTY",) if not selected else ()) + graph_warning + vector_warning,
+            fallback_used=bool(graph_warning or vector_warning),
             tool_calls=(
                 {"operation": "catalog.list_resources.recall", "attempts": resource_attempts, "outcome": "SUCCESS"},
                 {"operation": "catalog.list_resource_tags.recall", "attempts": tag_attempts, "outcome": "SUCCESS"},
-            ) + (({"operation": "catalog.graph_recall", "attempts": graph_attempts, "outcome": "SUCCESS"},) if graph_hits else ()),
+            )
+            + (({"operation": "catalog.graph_recall", "attempts": graph_attempts, "outcome": "SUCCESS"},) if graph_hits else ())
+            + (({"operation": "catalog.vector_recall", "attempts": vector_attempts, "outcome": "SUCCESS"},) if vector_hits else ()),
         )
 
 

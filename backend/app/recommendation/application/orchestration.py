@@ -19,7 +19,12 @@ from backend.app.recommendation.agents.real_agents import (
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.llm_agents import LLMIntentUnderstandingAgent
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
-from backend.app.catalog.ports.public import CatalogRepository, GraphRecallPort
+from backend.app.catalog.ports.public import (
+    CatalogRepository,
+    GraphRecallPort,
+    QueryEmbeddingPort,
+    VectorRecallPort,
+)
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
 from backend.app.llm.ports.public import TextCapabilityProvider
@@ -42,6 +47,10 @@ def build_port_orchestrator(
     *,
     graph: GraphRecallPort | None = None,
     graph_version: str | None = None,
+    vector: VectorRecallPort | None = None,
+    query_embedder: QueryEmbeddingPort | None = None,
+    embedding_version: str | None = None,
+    index_version: str | None = None,
     retry_policy: RetryPolicy = RetryPolicy(),
     llm_provider: TextCapabilityProvider | None = None,
 ) -> RecommendationOrchestrator:
@@ -56,12 +65,19 @@ def build_port_orchestrator(
         {
             "UserProfileAgent": MySQLProfileAgent(profile, retry_policy=retry_policy),
             "ResourceSemanticAgent": CatalogResourceSemanticAgent(
-                catalog, retry_policy=retry_policy
+                catalog,
+                graph=graph,
+                vector=vector,
+                retry_policy=retry_policy,
             ),
             "CandidateRecallAgent": CatalogCandidateRecallAgent(
                 catalog,
                 graph=graph,
                 graph_version=graph_version,
+                vector=vector,
+                query_embedder=query_embedder,
+                embedding_version=embedding_version,
+                index_version=index_version,
                 retry_policy=retry_policy,
             ),
         }

@@ -67,3 +67,15 @@ class VectorRecallPort(Protocol):
         index_version: str,
         limit: int,
     ) -> tuple[VectorRecallEvidence, ...]: ...
+
+
+class QueryEmbeddingPort(Protocol):
+    """Create a bounded query vector for one versioned vector index."""
+
+    @property
+    def embedding_version(self) -> str: ...
+
+    @property
+    def dimension(self) -> int: ...
+
+    def embed(self, text: str) -> tuple[float, ...]: ...

@@ -15,6 +15,11 @@ from fastapi import FastAPI
 from backend.app.config import AppSettings
 from backend.app.llm.factory import build_llm_provider
 from backend.app.catalog.adapters.mysql import MySQLCatalogRepository
+from backend.app.catalog.ports.public import (
+    GraphRecallPort,
+    QueryEmbeddingPort,
+    VectorRecallPort,
+)
 from backend.app.feedback.adapters.mysql import MySQLFeedbackStore
 from backend.app.feedback.application.service import (
     BehaviorApplicationService,
@@ -127,6 +132,12 @@ def _build_mysql_orchestration_service(
     connection_factory: ConnectionFactory | None = None,
     retry_policy: RetryPolicy = RetryPolicy(max_attempts=2),
     enable_llm_provider: bool = False,
+    graph: GraphRecallPort | None = None,
+    graph_version: str | None = None,
+    vector: VectorRecallPort | None = None,
+    query_embedder: QueryEmbeddingPort | None = None,
+    embedding_version: str | None = None,
+    index_version: str | None = None,
 ) -> PersistentOrchestrationService:
     factory = connection_factory or _mysql_connection_factory(settings)
     llm_provider = build_llm_provider(settings) if enable_llm_provider else None
@@ -135,6 +146,12 @@ def _build_mysql_orchestration_service(
         return build_port_orchestrator(
             MySQLCatalogRepository(connection),
             MySQLProfileSnapshotReader(connection),
+            graph=graph,
+            graph_version=graph_version,
+            vector=vector,
+            query_embedder=query_embedder,
+            embedding_version=embedding_version,
+            index_version=index_version,
             retry_policy=retry_policy,
             llm_provider=llm_provider,
         )
@@ -151,6 +168,12 @@ def build_demo_orchestration_service(
     *,
     connection_factory: ConnectionFactory | None = None,
     enable_llm_provider: bool = False,
+    graph: GraphRecallPort | None = None,
+    graph_version: str | None = None,
+    vector: VectorRecallPort | None = None,
+    query_embedder: QueryEmbeddingPort | None = None,
+    embedding_version: str | None = None,
+    index_version: str | None = None,
 ) -> PersistentOrchestrationService:
     """Build the opt-in local demo path; never wire it into the default app."""
 
@@ -160,6 +183,12 @@ def build_demo_orchestration_service(
         settings,
         connection_factory=connection_factory,
         enable_llm_provider=enable_llm_provider,
+        graph=graph,
+        graph_version=graph_version,
+        vector=vector,
+        query_embedder=query_embedder,
+        embedding_version=embedding_version,
+        index_version=index_version,
     )
 
 
@@ -168,6 +197,12 @@ def build_research_orchestration_service(
     *,
     connection_factory: ConnectionFactory | None = None,
     enable_llm_provider: bool = False,
+    graph: GraphRecallPort | None = None,
+    graph_version: str | None = None,
+    vector: VectorRecallPort | None = None,
+    query_embedder: QueryEmbeddingPort | None = None,
+    embedding_version: str | None = None,
+    index_version: str | None = None,
 ) -> PersistentOrchestrationService:
     """Build the explicit research path while rejecting production by default."""
 
@@ -177,6 +212,12 @@ def build_research_orchestration_service(
         settings,
         connection_factory=connection_factory,
         enable_llm_provider=enable_llm_provider,
+        graph=graph,
+        graph_version=graph_version,
+        vector=vector,
+        query_embedder=query_embedder,
+        embedding_version=embedding_version,
+        index_version=index_version,
     )
 
 

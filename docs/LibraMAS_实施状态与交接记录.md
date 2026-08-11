@@ -54,6 +54,7 @@
   - 已完成版本化 Prompt Bundle：`contracts/prompts/rec-prompts-v1.0.0.json`（`prompt-v1`）及严格 Schema、变量白名单、上下文上限、输出 Schema、工具零授权和 SHA-256 绑定；新增只读 `verify_prompt_bundle` 门禁与 Prompt 配置文档。
   - 已完成 DeepSeek Prompt 接入：四个能力统一使用 Prompt Bundle，LLMResult 增加 `prompt_id/prompt_sha256/request_id/attempts` 审计字段；无效 JSON/结构输出最多一次重试，证据引用越权 fail-closed。
   - 已完成显式 LLM Intent Agent：`LLMIntentUnderstandingAgent` 只消费文本分类结果，主题词/资源类型仍由规则生成；外部 provider 异常、超时或空输入自动降级，默认规则编排和默认 HTTP/Worker 不改变。
+  - 已完成 G6 低耦合只读检索融合接线：新增 `QueryEmbeddingPort`/`HashCharNgramQueryEmbedder`，`CatalogCandidateRecallAgent` 可通过显式组合根融合 Neo4j GraphRecall 与 Chroma VectorRecall；版本、超时、证据引用和故障降级均由 fake/隔离测试覆盖，默认 MySQL-only 路径不变。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
   - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
   - 已冻结 A01—A25 的首次实现 Gate、最终复验 Gate 和证据要求。
@@ -123,8 +124,8 @@
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`scripts/import_chroma_vectors.py`、`scripts/verify_chroma_import.py`、`backend/app/catalog/adapters/chroma.py`、`tests/g6/test_chroma_import.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；MySQL `embedding_status` 仍 PENDING，图/向量默认接线待完成；DeepSeek 本机配置和离线构造校验已 PASS，外部调用仍为 0 |
-| G7 前端与论文演示 | NOT_STARTED | — | 依赖G4—G6 |
+| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实隔离检索运行态待完成；DeepSeek 外部调用仍为 0 |
+| G7 前端与论文演示 | NOT_STARTED | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据已存在 | 推荐请求/澄清/解释/反馈/画像/调试交互页面、真实 API 接线和论文演示流程尚未完成；依赖 G6 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
@@ -135,7 +136,7 @@
 
 ## Working Set
 
-- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle、显式 LLM Intent Agent 以及 DeepSeek 本机密钥配置已完成，下一步仍是只读检索接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle、显式 LLM Intent Agent、DeepSeek 本机密钥配置以及图/向量显式组合根融合 fake 验证已完成，下一步是只读真实隔离运行态验证和 G7 推荐前端设计，保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -155,9 +156,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已接入显式组合根但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐前端仍未完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek 本机 key/模型/Base URL 已完成配置和离线构造校验；需要真实 LLM 时仍先确认脱敏、伦理、费用和外部请求范围。
+- `next_action`：先在独立 RecPro Neo4j/Chroma 目标上执行只读真实融合验证（固定 `graph_version`、`embedding_version`、`index_version`，只读计数和候选证据），再开始 G7 推荐前端的 API DTO、澄清、解释和反馈页面；继续保持默认 HTTP/Worker、MySQL `embedding_status` 和外部 LLM 请求关闭。
 
 ---
 
@@ -938,6 +939,35 @@ Agent 数量口径：设计文档定义 9 个逻辑角色（1 个 Recommendation
 默认执行 Agent：IntentUnderstandingAgent、UserProfileAgent、ResourceSemanticAgent、RecommendationPolicyAgent、CandidateRecallAgent、RankingAgent、ExplanationAgent、FeedbackLearningAgent。
 显式端口组合根：Profile、Semantic、CandidateRecall 三个角色可由 MySQL/图端口实现替换；它们是同一角色的适配实现，不是额外并行 Agent。启用 LLM 时，LLMIntentUnderstandingAgent 替换规则 IntentUnderstandingAgent，不增加总角色数。
 外部请求：0；数据库读取：0；数据库写入：0；文件删除：0。
+```
+
+## G6 图/向量只读融合接线记录
+
+```text
+交接ID：G6-RETRIEVAL-FUSION-20260811-014
+Gate：G6 可选检索与解释（显式组合根只读融合）
+状态：PORT_WIRING_PASS / FAKE_FUSION_PASS / DEFAULT_PATH_UNCHANGED / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+新增能力：`QueryEmbeddingPort`、`HashCharNgramQueryEmbedder`、VectorRecall 可选注入、CandidateRecall 图/向量融合、查询向量版本校验、通道状态和 evidence_ref 绑定。
+安全边界：只调用 Neo4j/Chroma 的读取端口；不提供写、删除、重置或 collection 生命周期操作；未连接数据库和 Chroma 实例。
+故障策略：图/向量超时或连接失败最多两次无退避重试，随后保留 MySQL 候选并标记 `PARTIAL`、`fallback_used=true`；可用通道权重重新归一化；默认没有注入端口时保持原 MySQL-only 分数路径。
+测试结果：`tests/g6/test_retrieval_fusion.py` 3 项 PASS；G4 端口回归、Chroma 读取契约和 G6 全套 37 项 PASS；查询向量与已冻结 `hash-char-ngram-v1` 离线向量逐元素一致。
+外部请求：0；数据库读取：0；数据库写入：0；文件删除：0；Docker/容器/卷变更：0。
+下一步唯一动作：在独立 RecPro Neo4j/Chroma 目标上做一次只读真实融合运行证据，再进入 G7 推荐前端设计；默认 HTTP/Worker 仍关闭。
+```
+
+## G7 前端当前状态记录
+
+```text
+交接ID：G7-FRONTEND-STATUS-20260811-015
+Gate：G7 前端与论文演示
+状态：G1_STATUS_SHELL_PASS / G7_RECOMMENDATION_UI_NOT_STARTED
+时间：2026-08-11（Asia/Shanghai）
+已完成：Vue 3/Vite 状态页、健康客户端、取消与超时处理、StatusBadge/SystemStatus 组件、响应校验、响应式样式、追加式安全构建脚本；当前页面明确提示 G1 不提供推荐结果。
+验证：前端 Vitest 33 项 PASS；使用锁定的临时 TypeScript 5.9.3/vue-tsc 3.3.9 运行时类型检查 PASS；追加式构建 `g7-status-20260811-004` PASS。工作区现有 `node_modules` 的 TypeScript 实际版本为 7.0.2，与 `package.json`/lockfile 的 5.9.3 不一致，因此直接 `npm run build` 的 vue-tsc 入口会失败；未执行会清理或重装现有 `node_modules` 的操作。
+未完成：推荐请求页、澄清交互、推荐卡片、证据解释、反馈、画像和 research-admin 调试页；真实推荐 API 接线和论文六场景演示流程仍未开始。
+外部请求：0；数据库读取：0；数据库写入：0；文件删除：0。
+下一步唯一动作：先固定前端依赖复现方式，再实现推荐/澄清/解释/反馈的只读或显式 API 页面，不改变默认 API 关闭策略。
 ```
 
 ## 阶段交接模板

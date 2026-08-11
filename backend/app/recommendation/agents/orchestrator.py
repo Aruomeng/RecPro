@@ -230,6 +230,9 @@ class RecommendationOrchestrator:
                 "probe": probe,
                 "constraints": constraints,
                 "limit": request.limit,
+                "query_text": request.input_text or " ".join(
+                    str(term) for term in intent.get("topic_terms", [])
+                ),
                 "replan_count": replan_count,
                 "evaluation_at": evaluation_at.isoformat(),
             },
@@ -271,6 +274,9 @@ class RecommendationOrchestrator:
                     "probe": probe,
                     "constraints": {**constraints, "force_replan": False},
                     "limit": request.limit,
+                    "query_text": request.input_text or " ".join(
+                        str(term) for term in intent.get("topic_terms", [])
+                    ),
                     "replan_count": replan_count,
                     "evaluation_at": evaluation_at.isoformat(),
                 },
