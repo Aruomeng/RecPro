@@ -55,6 +55,7 @@ from backend.app.shared_kernel.contracts.enums import (
     TriggerScene,
 )
 from backend.app.shared_kernel.contracts.errors import ErrorCode, WarningCode
+from backend.app.llm.prompts import PromptBundle, PromptBundleError
 
 
 REQUIRED_DOCUMENTS = {
@@ -63,6 +64,8 @@ REQUIRED_DOCUMENTS = {
     "contracts/agent/policy-result.schema.json",
     "contracts/config/rec-config.schema.json",
     "contracts/config/examples/rec-1.0.0.json",
+    "contracts/prompts/prompt-bundle.schema.json",
+    "contracts/prompts/rec-prompts-v1.0.0.json",
     "contracts/openapi/openapi-v1.json",
     "contracts/safety/examples/change-plan-dry-run.json",
     "contracts/safety/change-plan.schema.json",
@@ -653,6 +656,22 @@ def validate_config_bundle(
     return issues
 
 
+def validate_prompt_bundle_contract(
+    documents: Mapping[str, Any],
+) -> list[ContractIssue]:
+    """Validate the committed prompt instance beyond JSON Schema syntax."""
+
+    path = "contracts/prompts/rec-prompts-v1.0.0.json"
+    document = documents.get(path)
+    if document is None:
+        return []
+    try:
+        PromptBundle.from_document(document, source_path=path)
+    except PromptBundleError as exc:
+        return [_issue("PROMPT_BUNDLE_CONTRACT_INVALID", path, str(exc))]
+    return []
+
+
 def validate_openapi(document: Any, path: str) -> list[ContractIssue]:
     issues: list[ContractIssue] = []
     if not isinstance(document, Mapping):
@@ -826,6 +845,7 @@ def validate_repository(root: Path) -> tuple[list[ContractIssue], int]:
     issues.extend(validate_enum_parity(documents))
     issues.extend(validate_data_dictionary_enum_parity(root))
     issues.extend(validate_api_error_code_parity(root))
+    issues.extend(validate_prompt_bundle_contract(documents))
 
     config_path = "contracts/config/examples/rec-1.0.0.json"
     schema_path = "contracts/config/rec-config.schema.json"

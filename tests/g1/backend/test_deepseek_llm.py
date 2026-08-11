@@ -47,6 +47,61 @@ class DeepSeekLLMProviderTest(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(ValueError):
                 await provider.classify_intent("topic")
 
+    async def test_prompt_metadata_and_bounded_schema_retry(self) -> None:
+        provider = self._provider()
+        with patch.object(
+            DeepSeekLLMProvider,
+            "_complete",
+            new=AsyncMock(
+                side_effect=[
+                    {"intent": "UNSAFE"},
+                    {"intent": "PAPER_RECOMMENDATION"},
+                ]
+            ),
+        ) as complete:
+            result = await provider.classify_intent("论文")
+
+        self.assertEqual(2, complete.await_count)
+        self.assertEqual("intent.classify", result.prompt_id)
+        self.assertEqual(2, result.attempts)
+        self.assertEqual(64, len(result.prompt_sha256 or ""))
+        self.assertIsNotNone(result.request_id)
+
+    async def test_explanation_rejects_evidence_reference_outside_allowlist(self) -> None:
+        provider = self._provider()
+        with patch.object(
+            DeepSeekLLMProvider,
+            "_complete",
+            new=AsyncMock(
+                return_value={
+                    "text": "依据主题证据。",
+                    "evidence_refs": ["behavior:999"],
+                }
+            ),
+        ):
+            with self.assertRaises(ValueError):
+                await provider.render_explanation(
+                    {"factors": ["主题匹配"], "evidence_refs": ["behavior:1"]}
+                )
+
+    async def test_explanation_requires_allowlisted_markers(self) -> None:
+        provider = self._provider()
+        with patch.object(
+            DeepSeekLLMProvider,
+            "_complete",
+            new=AsyncMock(
+                return_value={
+                    "text": "依据主题匹配 [behavior:1]。",
+                    "evidence_refs": ["behavior:1"],
+                }
+            ),
+        ):
+            result = await provider.render_explanation(
+                {"factors": ["主题匹配"], "evidence_refs": ["behavior:1"]}
+            )
+        self.assertEqual(["behavior:1"], result.payload["evidence_refs"])
+        self.assertFalse(result.payload["evidence_limited"])
+
     def test_factory_keeps_mock_default_and_does_not_call_network(self) -> None:
         settings = AppSettings(mysql_password="isolated-test-password")
         provider = build_llm_provider(settings)

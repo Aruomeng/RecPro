@@ -51,6 +51,9 @@
   - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端已锁定 `chromadb==1.5.9` 并仅用于隔离 operator venv。
   - 已在用户明确授权后创建正式 Chroma collection 并追加 14,983 条向量；全量回读验证、版本/元数据验证、数值容差验证、召回冒烟、幂等复跑和独立只读 verifier 均 PASS。首次验证因 Chroma 1.5.9 的 NumPy 返回类型兼容性阻断，现场和失败证据均保留，未执行任何清理或覆盖。
   - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；尚未提供或保存 DeepSeek 密钥，未发起外部请求。
+  - 已完成版本化 Prompt Bundle：`contracts/prompts/rec-prompts-v1.0.0.json`（`prompt-v1`）及严格 Schema、变量白名单、上下文上限、输出 Schema、工具零授权和 SHA-256 绑定；新增只读 `verify_prompt_bundle` 门禁与 Prompt 配置文档。
+  - 已完成 DeepSeek Prompt 接入：四个能力统一使用 Prompt Bundle，LLMResult 增加 `prompt_id/prompt_sha256/request_id/attempts` 审计字段；无效 JSON/结构输出最多一次重试，证据引用越权 fail-closed。
+  - 已完成显式 LLM Intent Agent：`LLMIntentUnderstandingAgent` 只消费文本分类结果，主题词/资源类型仍由规则生成；外部 provider 异常、超时或空输入自动降级，默认规则编排和默认 HTTP/Worker 不改变。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
   - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
   - 已冻结 A01—A25 的首次实现 Gate、最终复验 Gate 和证据要求。
@@ -104,7 +107,7 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
-  - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。
+  - 当前没有外部大模型密钥，也没有启用外部 LLM；MockLLM/模板路径仍是唯一安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，但未授权真实外部调用。
 - `next_step`：进入 G6 的只读检索接线评审：把 Neo4j/Chroma 作为可选端口接入 Agent 组合根，保持默认 HTTP/Worker 关闭，并先以 fake/隔离运行态验证版本过滤、超时降级和解释证据；MySQL `embedding_status` 的 READY 投影、DeepSeek key/模型/Base URL 和外部请求授权仍需单独确认。
 
 ---
@@ -132,7 +135,7 @@
 
 ## Working Set
 
-- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；下一步是只读接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle 和显式 LLM Intent Agent 已完成，下一步仍是只读检索接线评审（Neo4j/Chroma 端口、版本过滤、超时降级和解释证据），保持默认 API/Worker 与外部 LLM 关闭，不改变 MySQL `embedding_status=PENDING`。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -152,9 +155,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek key 和外部请求授权仍缺失；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 Chroma collection 已完成但图/向量召回仍未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek key 和外部请求授权仍缺失；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek key/模型/Base URL 和外部调用授权仍不假设。
+- `next_action`：进入 G6 只读检索接线与推荐通道评审；先用 fake/隔离运行态验证 Neo4j/Chroma 端口的版本过滤、超时 fail-closed、候选融合和解释引用，再决定是否为 MySQL `embedding_status` 做单独受控 READY 投影。DeepSeek key/模型/Base URL 和外部调用授权仍不假设；需要真实 LLM 时先由用户确认脱敏、伦理、费用和外部请求范围。
 
 ---
 
@@ -880,6 +883,31 @@ Gate：G6 可选检索与解释（Chroma 版本化 collection 实际追加）
 配置/数据/索引版本：graph_version=`lib-books-v1-20260810`；embedding_version=`hash-char-ngram-v1`；index_version=`lib-books-vector-v1-20260811`；collection=`library_resources__hash_char_ngram_v1`；MySQL embedding status=`PENDING`；LLM default=`mock`；DeepSeek 未联网。
 未解决风险：Neo4j/Chroma 端口仍需在可选 Agent 组合根中接线并验证融合/解释证据；默认 HTTP/Worker、MySQL `embedding_status=READY` 受控投影、DeepSeek key/模型/Base URL 和外部请求授权仍待单独评审；operator Chroma 依赖不得进入默认运行镜像。
 下一步唯一动作：实施低耦合的只读检索接线 Gate，先验证图/向量版本过滤、超时 fail-closed、候选融合和解释引用，再由用户另行确认 MySQL READY 投影和 DeepSeek 外部调用。
+```
+
+## G6 Prompt Bundle 与显式 LLM Intent Agent 记录
+
+```text
+交接ID：G6-PROMPT-20260811-011
+Gate：G6 可选检索与解释（Prompt/LLM 配置边界）
+状态：PROMPT_BUNDLE_PASS / LLM_INTENT_OPT_IN_PASS / G6_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+目标：将提示词从 DeepSeek 适配器代码中抽离为可审计、可版本化、可安全降级的本地 Prompt Bundle；为 IntentUnderstandingAgent 提供显式 LLM 端口接线，同时保持默认规则、HTTP、Worker 和外部请求关闭。
+新增文件：`contracts/prompts/prompt-bundle.schema.json`；`contracts/prompts/rec-prompts-v1.0.0.json`；`backend/app/llm/prompts.py`；`backend/app/recommendation/agents/llm_agents.py`；`scripts/verify_prompt_bundle.py`；`tests/g1/backend/test_prompt_bundle.py`；`tests/g4/test_llm_intent_agent.py`；`docs/LLM_PROMPT_CONFIGURATION.md`。
+修改文件：`backend/app/config.py`、`backend/app/llm/ports/public.py`、`backend/app/llm/adapters/deepseek.py`、`backend/app/llm/adapters/mock.py`、`backend/app/llm/factory.py`、`backend/app/recommendation/application/orchestration.py`、`backend/app/composition.py`、三个环境模板、`Makefile`、`README.md`；原版本均保留在本次 Git 差异和历史提交中。
+Prompt/配置版本：Bundle=`prompt-v1`；文件 SHA-256=`bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a`；任务=`intent.classify/feedback.parse/explanation.render/group_summary.render`；默认 provider=`mock`。
+安全边界：Prompt Bundle `allowed_tools=[]`；禁止 filesystem_write/filesystem_delete/database_admin/free_sql/free_cypher/shell/credential_access；变量缺失、多余、超长或输出字段越权均 fail-closed；LLMResult 只保存 prompt_id、模板 SHA、请求 ID 和尝试次数，不保存用户原文或密钥。
+Agent接线：仅 `build_rule_orchestrator(..., llm_provider=...)` / `build_port_orchestrator(..., llm_provider=...)` 和显式组合根 `enable_llm_provider=True` 才替换 Intent Agent；空输入、超时、异常、非法枚举均规则降级，Explanation/Feedback 仍待 EvidenceValidator/反馈事务边界评审后再接入真实 LLM。
+新增数据库对象和行数：0；MySQL、Neo4j、Chroma 均未连接或写入。
+受控UPDATE对象和审计ID：0；不适用。
+文件删除数量：0。
+数据库物理删除数量：0。
+外部请求：0；未读取或保存 DeepSeek 密钥，未联网。
+执行命令：`python -m scripts.verify_prompt_bundle`；Prompt/DeepSeek/Agent 定向 unittest；`scripts.architecture_guard.py`；`git diff --check`。
+测试结果：Prompt/DeepSeek 定向 16 项 PASS；LLM Intent Agent 4 项 PASS；既有 G4 编排/组合根 18 项 PASS；架构扫描 108 files PASS；Prompt Bundle 只读验证 PASS。
+验证证据：命令输出；`docs/LLM_PROMPT_CONFIGURATION.md`；本记录；旧 G6 artifact 未覆盖。
+未解决风险：没有真实 DeepSeek key/外部调用授权；Prompt Bundle 尚未接入 Explanation EvidenceValidator 和 Feedback 持久化事务；Neo4j/Chroma 仍待只读融合接线；MySQL `embedding_status` 仍为 `PENDING`。
+下一步唯一动作：先完成 Neo4j/Chroma 只读端口与版本过滤/超时降级的 fake/隔离验证；若需要真实 LLM，先由用户确认脱敏、伦理、费用和外部请求范围，不得默认启用。
 ```
 
 ## 阶段交接模板

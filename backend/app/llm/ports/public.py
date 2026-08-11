@@ -12,6 +12,13 @@ class LLMResult:
     model: str
     prompt_version: str
     payload: Mapping[str, Any]
+    # Audit metadata identifies the reviewed template without retaining the
+    # rendered user text.  ``request_id`` is intentionally optional so the
+    # deterministic Mock provider remains byte-for-byte reproducible.
+    prompt_id: str | None = None
+    prompt_sha256: str | None = None
+    request_id: str | None = None
+    attempts: int = 1
 
 
 class TextCapabilityProvider(Protocol):

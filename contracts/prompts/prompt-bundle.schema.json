@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/prompts/prompt-bundle.schema.json",
+  "title": "LibraMAS prompt bundle",
+  "description": "Versioned, evidence-constrained prompt definitions. This contract contains no credentials or tool permissions.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "bundle_version",
+    "locale",
+    "security",
+    "tasks"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "prompt-bundle-v1"
+    },
+    "bundle_version": {
+      "type": "string",
+      "pattern": "^prompt-v[0-9]+(?:\\.[0-9]+){0,2}$",
+      "maxLength": 64
+    },
+    "locale": {
+      "const": "zh-CN"
+    },
+    "security": {
+      "$ref": "#/$defs/security"
+    },
+    "tasks": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 16,
+      "items": {
+        "$ref": "#/$defs/task"
+      }
+    }
+  },
+  "$defs": {
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "allowed_tools",
+        "forbidden_capabilities",
+        "max_context_chars"
+      ],
+      "properties": {
+        "allowed_tools": {
+          "type": "array",
+          "maxItems": 0,
+          "items": {}
+        },
+        "forbidden_capabilities": {
+          "type": "array",
+          "minItems": 5,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "filesystem_write",
+              "filesystem_delete",
+              "database_admin",
+              "free_sql",
+              "free_cypher",
+              "shell",
+              "credential_access"
+            ]
+          }
+        },
+        "max_context_chars": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 20000
+        }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "prompt_id",
+        "agent_name",
+        "capability",
+        "version",
+        "system_template",
+        "user_template",
+        "variables",
+        "output_schema",
+        "allowed_output_fields",
+        "evidence_only",
+        "max_input_chars",
+        "max_output_tokens",
+        "fallback_strategy"
+      ],
+      "properties": {
+        "prompt_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{2,63}$"
+        },
+        "agent_name": {
+          "type": "string",
+          "enum": [
+            "IntentUnderstandingAgent",
+            "ExplanationAgent",
+            "FeedbackLearningAgent"
+          ]
+        },
+        "capability": {
+          "type": "string",
+          "enum": [
+            "classify_intent",
+            "parse_feedback_text",
+            "render_explanation",
+            "render_group_summary"
+          ]
+        },
+        "version": {
+          "type": "string",
+          "pattern": "^prompt-v[0-9]+(?:\\.[0-9]+){0,2}$",
+          "maxLength": 64
+        },
+        "system_template": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 8000
+        },
+        "user_template": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12000
+        },
+        "variables": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          }
+        },
+        "output_schema": {
+          "type": "object"
+        },
+        "allowed_output_fields": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{1,63}$"
+          }
+        },
+        "evidence_only": {
+          "type": "boolean"
+        },
+        "max_input_chars": {
+          "type": "integer",
+          "minimum": 128,
+          "maximum": 12000
+        },
+        "max_output_tokens": {
+          "type": "integer",
+          "minimum": 32,
+          "maximum": 1024
+        },
+        "fallback_strategy": {
+          "type": "string",
+          "enum": [
+            "RULE_INTENT_FALLBACK",
+            "OTHER_FEEDBACK",
+            "TEMPLATE_EXPLANATION",
+            "TEMPLATE_GROUP_SUMMARY"
+          ]
+        }
+      }
+    }
+  }
+}

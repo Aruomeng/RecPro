@@ -8,6 +8,7 @@ from unittest.mock import patch
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
     CONFIG_BUNDLE_SCHEMA_SHA256,
+    DEFAULT_PROMPT_BUNDLE_SHA256,
     PROJECT_ROOT,
     AppSettings,
     load_configuration,
@@ -20,6 +21,14 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(
             CONFIG_BUNDLE_SCHEMA_SHA256,
             hashlib.sha256(CONFIG_BUNDLE_SCHEMA_PATH.read_bytes()).hexdigest(),
+        )
+
+    def test_prompt_bundle_hash_is_frozen_in_runtime_configuration(self) -> None:
+        self.assertEqual(
+            DEFAULT_PROMPT_BUNDLE_SHA256,
+            hashlib.sha256(
+                (PROJECT_ROOT / "contracts/prompts/rec-prompts-v1.0.0.json").read_bytes()
+            ).hexdigest(),
         )
 
     def test_valid_environment_loads_without_external_api_key(self) -> None:
@@ -124,6 +133,13 @@ class ConfigurationTest(unittest.TestCase):
                 AppSettings(
                     mysql_password="isolated-test-password",
                     config_bundle_path=path,
+                )
+
+        for path in ("/outside/prompts.json", "../outside/prompts.json"):
+            with self.subTest(prompt_path=path), self.assertRaises(ValueError):
+                AppSettings(
+                    mysql_password="isolated-test-password",
+                    prompt_bundle_path=path,
                 )
 
     def test_path_resolution_os_error_preserves_fail_closed_liveness_state(self) -> None:

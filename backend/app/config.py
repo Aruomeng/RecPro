@@ -20,6 +20,9 @@ CONFIG_BUNDLE_SCHEMA_PATH = PROJECT_ROOT / "contracts/config/rec-config.schema.j
 CONFIG_BUNDLE_SCHEMA_SHA256 = (
     "2783a75736fe21d39f2ef3101fa9f9849f1ac3757d0a05c50d656b5169ab6bd1"
 )
+DEFAULT_PROMPT_BUNDLE_SHA256 = (
+    "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a"
+)
 LOCAL_SECRET_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{16,128}$")
 
 
@@ -48,6 +51,19 @@ class AppSettings(BaseSettings):
     )
     config_bundle_sha256: str = Field(
         default="220b0fb30f38fef7ca148c43b1f2751715c7df7ecf7d47e7ddfce7ff2847a5c6",
+        pattern=r"^[0-9a-f]{64}$",
+    )
+    prompt_bundle_version: str = Field(
+        default="prompt-v1",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
+    )
+    prompt_bundle_path: Path = Path(
+        "contracts/prompts/rec-prompts-v1.0.0.json"
+    )
+    prompt_bundle_sha256: str = Field(
+        default=DEFAULT_PROMPT_BUNDLE_SHA256,
         pattern=r"^[0-9a-f]{64}$",
     )
 
@@ -128,6 +144,21 @@ class AppSettings(BaseSettings):
         except ValueError as exc:
             raise ValueError(
                 "config bundle path must be project-relative and contained"
+            ) from exc
+        return resolved
+
+    @field_validator("prompt_bundle_path", mode="before")
+    @classmethod
+    def resolve_prompt_bundle_path(cls, value: object) -> Path:
+        path = Path(str(value))
+        if path.is_absolute() or ".." in path.parts:
+            raise ValueError("prompt bundle path must be project-relative and contained")
+        resolved = (PROJECT_ROOT / path).resolve()
+        try:
+            resolved.relative_to(PROJECT_ROOT)
+        except ValueError as exc:
+            raise ValueError(
+                "prompt bundle path must be project-relative and contained"
             ) from exc
         return resolved
 

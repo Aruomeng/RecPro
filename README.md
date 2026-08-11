@@ -26,6 +26,7 @@ G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立
 - [A01—A25 验收矩阵](docs/acceptance_matrix.md)
 - [图书数据接入契约](contracts/data/intake/book-intake-manifest.schema.json)
 - [书目图谱模型与导入契约](docs/book_graph_model.md)
+- [LLM 与 Prompt 配置基线](docs/LLM_PROMPT_CONFIGURATION.md)
 - [书目图计划 Schema](contracts/data/intake/book-graph-plan.schema.json)
 - [MySQL 书目计划 Schema](contracts/data/intake/mysql-book-plan.schema.json)
 - [向量索引计划 Schema](contracts/data/intake/vector-index-plan.schema.json)

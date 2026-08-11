@@ -17,18 +17,23 @@ from backend.app.recommendation.agents.real_agents import (
     MySQLProfileAgent,
 )
 from backend.app.recommendation.agents.base import RetryPolicy
+from backend.app.recommendation.agents.llm_agents import LLMIntentUnderstandingAgent
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
 from backend.app.catalog.ports.public import CatalogRepository, GraphRecallPort
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
+from backend.app.llm.ports.public import TextCapabilityProvider
 
 
-def build_rule_orchestrator() -> RecommendationOrchestrator:
+def build_rule_orchestrator(
+    *, llm_provider: TextCapabilityProvider | None = None
+) -> RecommendationOrchestrator:
     """Build the G4 rule registry without exposing Agent implementations to HTTP."""
 
-    return RecommendationOrchestrator(
-        AgentRegistry({agent.name: agent for agent in DEFAULT_RULE_AGENTS})
-    )
+    agents = {agent.name: agent for agent in DEFAULT_RULE_AGENTS}
+    if llm_provider is not None:
+        agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_provider)
+    return RecommendationOrchestrator(AgentRegistry(agents))
 
 
 def build_port_orchestrator(
@@ -38,6 +43,7 @@ def build_port_orchestrator(
     graph: GraphRecallPort | None = None,
     graph_version: str | None = None,
     retry_policy: RetryPolicy = RetryPolicy(),
+    llm_provider: TextCapabilityProvider | None = None,
 ) -> RecommendationOrchestrator:
     """Compose read-only Catalog/Profile Agents without exposing adapters to HTTP."""
 
@@ -60,6 +66,8 @@ def build_port_orchestrator(
             ),
         }
     )
+    if llm_provider is not None:
+        agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_provider)
     return RecommendationOrchestrator(AgentRegistry(agents))
 
 

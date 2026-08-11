@@ -63,6 +63,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
+	verify-prompt-bundle \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -130,7 +131,7 @@ frontend-build:
 	@test -n "$(BUILD_RUN_ID)" || { echo "BUILD_RUN_ID is required and must name a new append-only frontend build"; exit 2; }
 	RECPRO_BUILD_RUN_ID="$(BUILD_RUN_ID)" $(NPM) --prefix frontend run build
 
-verify-g0: safety-check architecture-check docs-check contracts-check test-g0
+verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 
 verify-g1-local: verify-g0 test-g1-python frontend-test frontend-build
 
@@ -179,6 +180,9 @@ verify-experiment-freeze:
 verify-evaluation-freeze-inputs:
 	@test -n "$(EVAL_INPUT_RUN_ID)" || { echo "EVAL_INPUT_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_evaluation_freeze_inputs --run-id "$(EVAL_INPUT_RUN_ID)"
+
+verify-prompt-bundle:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_prompt_bundle
 
 verify-book-intake:
 	@test -n "$(BOOK_INTAKE_RUN_ID)" || { echo "BOOK_INTAKE_RUN_ID is required and must identify a new evidence run"; exit 2; }
