@@ -113,6 +113,7 @@ def build_request(
     resource_types: tuple[str, ...],
     output_type: str,
     limit: int,
+    deadline_seconds: float = 180.0,
 ) -> OrchestrationRequest:
     task_id = uuid5(NAMESPACE_URL, f"g4-readonly-fusion-task:{run_id}")
     trace_id = uuid5(NAMESPACE_URL, f"g4-readonly-fusion-trace:{run_id}")
@@ -128,7 +129,7 @@ def build_request(
         limit=limit,
         constraints={},
         evaluation_at=now,
-        deadline_at=now + timedelta(seconds=90),
+        deadline_at=now + timedelta(seconds=deadline_seconds),
     )
 
 
@@ -203,6 +204,7 @@ async def execute(args: argparse.Namespace) -> int:
             resource_types=resource_types,
             output_type=args.output_type,
             limit=args.limit,
+            deadline_seconds=args.deadline_seconds,
         )
         first = await orchestrator.run(request)
         second = await orchestrator.run(request)
@@ -296,6 +298,7 @@ async def execute(args: argparse.Namespace) -> int:
             "resource_types": list(resource_types),
             "output_type": args.output_type,
             "limit": args.limit,
+            "deadline_seconds": args.deadline_seconds,
         },
         "candidate_channel_counts": dict(sorted(candidate_channel_counts.items())),
         "candidate_persistence_rows": candidate_persistence_rows,
@@ -349,6 +352,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-text", default="多智能体 智慧图书馆")
     parser.add_argument("--resource-type", action="append", default=None)
     parser.add_argument("--output-type", default="TOPIC_RESOURCES")
+    parser.add_argument("--deadline-seconds", type=float, default=180.0)
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")
@@ -364,6 +368,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if not 1 <= args.limit <= 20:
         raise SystemExit("--limit must be between 1 and 20")
+    if not 30 <= args.deadline_seconds <= 300:
+        raise SystemExit("--deadline-seconds must be between 30 and 300")
     try:
         return asyncio.run(execute(args))
     except (OSError, ValueError, RuntimeError, asyncmy.errors.Error, json.JSONDecodeError) as exc:

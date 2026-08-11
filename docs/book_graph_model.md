@@ -75,6 +75,8 @@ ISBN 冲突不强行合并：相同 ISBN 出现多个核心书目指纹时，Boo
 
 `backend/app/catalog/adapters/chroma.py` 提供版本化的只读 `ChromaVectorReader`，通过依赖注入接收 collection，不导入或锁定 Chroma 客户端；它只调用 `query`，以 `$and` 元数据过滤固定 `embedding_version`/`index_version`，校验 384 维输入、返回行数、稳定 `vector_id`、`external_id` 和元数据版本，异常或超时均 fail-closed。Chroma cosine distance 按 `cosine_similarity = 1 - distance`、`score = clip((cosine_similarity + 1) / 2, 0, 1)` 转换为 `VectorRecallEvidence`；跨 collection/version、重复 ID、缺失元数据和非有限距离拒绝返回。该 adapter 尚未接入默认 Agent/HTTP，也不暴露 collection 写入或生命周期操作。
 
+G4 的 `backend/app/catalog/runtime/g4_ports.py` 是显式研究组合工厂：它把只读 Neo4j/Chroma adapter 和确定性 query embedder 绑定到同一组 graph/embedding/index/namespace 版本，构造期不打开外部连接。`build_research_g4_http_app_from_runtime()` 只有在独立 G4 开关开启且调用方提供该 runtime 时才组装业务 HTTP；默认应用和 Compose 仍不接线。
+
 对应端口为 `backend/app/catalog/ports/public.py` 的 `VectorRecallPort`，领域只依赖 `VectorRecallEvidence`，因此可在没有 Chroma 依赖的环境中使用 fake collection 完成契约、异常和零写入测试。当前 MySQL `embedding_status=PENDING`；Chroma collection 已构建但仍未接入默认 Agent/HTTP，避免容器启动自动开启推荐。
 
 本轮生成并独立校验 `chroma-collection-plan-20260811-002`：状态 `PASS_WITH_WARNINGS`、`can_build=true`，collection=`library_resources__hash_char_ngram_v1`，距离度量=`cosine`，记录数=14,983，客户端锁定为 `chromadb==1.5.9`，写入仍要求命令行双确认。metadata 必须包含 `external_id`、`vector_id`、`embedding_version`、`index_version`、`namespace_name`、`metadata_version`、`graph_version`、资源类型/分类/难度/可用时间等字段；写策略固定为 `ADD_NEW_COLLECTION_ONLY`、append-only、禁止覆盖、禁止物理删除、禁止活动版本切换。用户授权后，`data/chroma` 中仅创建该新 collection 并追加 14,983 条记录；导入幂等复核为新增 0、最终 14,983/14,983，独立只读 verifier 为 `PASS`，Chroma 归一化数值误差最大约 `2.98e-8`。本阶段 MySQL 没有写入或状态投影，`actual_delete_count=0`、`files_deleted=0`。

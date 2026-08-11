@@ -32,6 +32,7 @@ G4_AGENT_RUN_ID ?=
 G4_PORT_RUN_ID ?=
 G4_COMPOSITION_RUN_ID ?=
 G4_READONLY_FUSION_RUN_ID ?=
+G4_READONLY_FUSION_DEADLINE_SECONDS ?= 180
 G4_PROJECTION_PLAN_RUN_ID ?=
 G4_PROJECTION_MYSQL_BASELINE ?=
 G4_PROJECTION_G4_BASELINE ?=
@@ -450,7 +451,7 @@ verify-g4-composition:
 
 verify-g4-readonly-fusion:
 	@test -n "$(G4_READONLY_FUSION_RUN_ID)" || { echo "G4_READONLY_FUSION_RUN_ID is required and must identify a new evidence run"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --deadline-seconds "$(G4_READONLY_FUSION_DEADLINE_SECONDS)" --env-file "$(COMPOSE_ENV_FILE)"
 
 migrate-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }

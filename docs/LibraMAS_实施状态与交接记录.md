@@ -1393,10 +1393,26 @@ Gate：本机配置同步、前端锁定依赖恢复与 Compose 健康检查稳�
 前端依赖：发现旧 `frontend/node_modules` 的 TypeScript=`7.0.2` 与 `package-lock.json` 的 TypeScript=`5.9.3` 漂移；旧目录仅移动到 `/tmp/recpro-frontend-node_modules-drift-backup-20260811-001` 保留，未删除。按锁文件重新安装后，Vitest=`6 files/40 tests PASS`，vue-tsc=`PASS`，生产构建=`PASS`，构建产物写入新的 `frontend/dist/config-fix-20260811-002/`。
 Docker CLI：Makefile 增加只读探测并自动回退到实际 Docker Desktop 二进制 `/Applications/编程/Docker.app/Contents/Resources/bin/docker`；没有修改或替换系统 `docker` 符号链接。`make status` 与 `make compose-config` 均可执行。
 健康检查：MySQL timeout 调整为 `5s`；backend/worker timeout 调整为 `10s`、start_period=`20s`；Neo4j 使用轻量 HTTP(`7474`)+Bolt(`7687`) 探测，timeout=`10s`、start_period=`60s`，避免启动期反复拉起 `cypher-shell` JVM。配置已通过 Compose 语法门禁；MySQL、backend、frontend 与本项目隔离 Neo4j 当前均为 `healthy`，live/ready 与前端 `/healthz` GET 均通过。
-Neo4j 运行态：本项目隔离 `neo4j_data` 卷在容器重建前后保持同一命名卷，未执行卷删除或数据清理。短暂初始化期间的资源竞争已自行缓解，当前隔离 Neo4j 已恢复 `healthy`。独立图书 Neo4j `recpro-library-neo4j-20260810a` 始终未停止、未重启、未访问写入；其运行态仍与本项目隔离。
+Neo4j 运行态：本项目隔离 `neo4j_data` 卷在容器重建前后保持同一命名卷，未执行卷删除或数据清理。短暂初始化期间的资源竞争已自行缓解，当前隔离 Neo4j 已恢复 `healthy`。为使图书只读验证使用新的轻量健康检查，本阶段仅重建了项目自有的 `recpro-library-neo4j-20260810a` 容器并复用原卷，未执行 Cypher 写入；用户原有 Homebrew/外部 Neo4j 大图始终未停止、未重启、未访问。
 自动化验证：新增 host-env-sync 单元测试 `2` 项 PASS；全量 Python unittest、safety/architecture/docs/contracts/prompt 门禁与 `git diff --check` 均通过；同步脚本报告 `database_writes=0`、`external_requests=0`、`files_deleted=0`、`overwritten_inputs=0`。
 G4 HTTP 组合边界：新增 `RECPRO_G4_HTTP_ENABLED=false` 配置与 `build_research_g4_http_app()`；构造期要求非 production、显式开关和调用方注入 G4 service，默认 API/Compose/Worker 不变。该组合根尚未接入真实 Graph/Vector 客户端或 DeepSeek，也未启动或发送任何 HTTP 业务请求；新增构造契约测试覆盖“关闭即拒绝”和“仅挂载注入 service”。
 下一阶段：在默认 HTTP/Worker/LLM 继续 fail-closed 的前提下，进入 G4 HTTP 真实投影入口的纯只读/DRY_RUN 设计，先冻结 graph/vector 读取、澄清续跑、幂等与认证边界，再生成独立 ChangePlan；未获新的精确批准前不提交新的业务写入。
+```
+
+## G4 Graph/Vector 只读接线与融合证据
+
+```text
+交接ID：G4-READONLY-FUSION-20260811-010/011
+Gate：G4 动态多智能体闭环（版本锁定的 Graph/Vector 只读运行时）
+状态：READONLY_FUSION_PASS / VERSION_PINNED / NO_BUSINESS_WRITE / HTTP_STILL_OFF
+时间：2026-08-11（Asia/Shanghai）
+运行时接线：新增 `backend/app/catalog/runtime/g4_ports.py`，通过显式注入的 Chroma collection 构造 `Neo4jGraphReader`、`ChromaVectorReader` 和 `HashCharNgramQueryEmbedder`；构造阶段不连接数据库、不查询存储、不导入 Chroma 客户端、不暴露写操作。`build_research_g4_http_app_from_runtime()` 只在 `RECPRO_G4_HTTP_ENABLED=true` 且调用方提供 runtime 时组装 G4 HTTP，默认应用/Compose/Worker 不调用。
+固定版本：graph=`lib-books-v1-20260810`；embedding=`hash-char-ngram-v1`；index=`lib-books-vector-v1-20260811`；namespace=`library_resources__hash_char_ngram_v1`；dimension=`384`。版本漂移、embedder 维度不一致或不安全命名空间在构造期拒绝。
+只读证据一：`artifacts/verification/g4/g4-readonly-fusion-20260811-010/readonly.json`，请求 `BOOK` + `多智能体+推荐系统+知识图谱`，240 秒有界 deadline，7 个 Agent、8 个候选，通道=`MYSQL+VECTOR`；该主题未命中图谱术语，但 Vector 真实 READY。
+只读证据二：`artifacts/verification/g4/g4-readonly-fusion-20260811-011/readonly.json`，请求 `BOOK` + `多智能体 智慧图书馆`，7 个 Agent、8 个候选，通道=`MYSQL+GRAPH+VECTOR`，三依赖均真实 READY。
+安全回读：两轮均使用 MySQL `SELECT_ONLY_ROLLBACK`；资源表与 Agent 事实表前后计数一致，Chroma 前后均为 `14,983`，Neo4j/Chroma writes=`0`，external_requests=`0`，files_deleted=`0`，overwritten_inputs=`0`。第一次 90 秒默认验证因资源冷启动触发 deadline 并安全失败，没有生成证据或写入；随后只增加有界只读 deadline，没有放宽写入权限。
+测试与门禁：新增 G4 runtime 构造/版本/无连接测试；只读 verifier 默认 deadline=`180s`，Makefile 可通过 `G4_READONLY_FUSION_DEADLINE_SECONDS` 显式调整（30—300s）；架构、安全、文档、契约门禁必须继续通过。
+下一步：为上述 runtime 提供独立的 operator-only Chroma collection loader 与 host 入口预演，再单独生成 G4 HTTP/幂等 DRY_RUN ChangePlan；未获得新的精确 plan_id/hash 批准前不提交业务行、不启用 DeepSeek。
 ```
 
 ## 阶段交接模板

@@ -79,6 +79,12 @@ G4 研究 HTTP 图只能由 `build_research_g4_http_app()` 创建，并要求
 和 LLM 策略必须在更上层的研究组合根中冻结并注入。默认模块级应用、Compose
 服务和 Worker 均不调用它。
 
+当调用方使用 `build_g4_readonly_runtime()` 构造版本锁定的只读端口后，应使用
+`build_research_g4_http_app_from_runtime()` 组装 G4 HTTP；该 helper 会把同一组
+Graph/Vector 版本传入 G4 service，防止请求在不同索引代际之间漂移。Chroma
+collection 必须由 operator-only 运行层以只读方式取得，基础 backend 不依赖
+`chromadb`，也不会在缺少显式 collection 时创建目录或 collection。
+
 ### 2.3 请求追踪
 
 客户端可以发送：

@@ -46,6 +46,7 @@ from backend.app.recommendation.application.persistent_orchestration import (
     ConnectionFactory,
     PersistentOrchestrationService,
 )
+from backend.app.catalog.runtime.g4_ports import G4ReadOnlyRuntime
 
 
 def _mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
@@ -416,6 +417,67 @@ def build_research_g4_http_app(
     )
 
 
+def build_research_g4_recommendation_service_from_runtime(
+    settings: AppSettings,
+    *,
+    runtime: G4ReadOnlyRuntime,
+    dataset_version: str = "lib-books-v1-20260810",
+    connection_factory: ConnectionFactory | None = None,
+    enable_llm_provider: bool = False,
+    deadline_seconds: float = 120.0,
+) -> MySQLG4RecommendationTaskService:
+    """Build G4 service with an explicit, version-pinned read-only runtime."""
+
+    return build_research_g4_recommendation_service(
+        settings,
+        dataset_version=dataset_version,
+        connection_factory=connection_factory,
+        graph=runtime.graph,
+        graph_version=runtime.graph_version,
+        vector=runtime.vector,
+        query_embedder=runtime.query_embedder,
+        embedding_version=runtime.embedding_version,
+        index_version=runtime.index_version,
+        enable_llm_provider=enable_llm_provider,
+        deadline_seconds=deadline_seconds,
+    )
+
+
+def build_research_g4_http_app_from_runtime(
+    settings: AppSettings,
+    *,
+    runtime: G4ReadOnlyRuntime,
+    dataset_version: str = "lib-books-v1-20260810",
+    connection_factory: ConnectionFactory | None = None,
+    enable_llm_provider: bool = False,
+    deadline_seconds: float = 120.0,
+    feedback_service: object | None = None,
+    behavior_service: object | None = None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+    feedback_api_enabled: bool = False,
+) -> FastAPI:
+    """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
+
+    recommendation_service = build_research_g4_recommendation_service_from_runtime(
+        settings,
+        runtime=runtime,
+        dataset_version=dataset_version,
+        connection_factory=connection_factory,
+        enable_llm_provider=enable_llm_provider,
+        deadline_seconds=deadline_seconds,
+    )
+    return build_research_g4_http_app(
+        settings,
+        recommendation_service=recommendation_service,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        feedback_api_enabled=feedback_api_enabled,
+    )
+
+
 def build_research_feedback_service(
     settings: AppSettings,
     *,
@@ -483,4 +545,6 @@ __all__ = [
     "build_research_orchestration_service",
     "build_research_g4_recommendation_service",
     "build_research_g4_http_app",
+    "build_research_g4_recommendation_service_from_runtime",
+    "build_research_g4_http_app_from_runtime",
 ]
