@@ -4,10 +4,10 @@ import asyncio
 import json
 import unittest
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, timezone
 from typing import Any
 
-from backend.app.recommendation.adapters.g4_mysql import MySQLG4ProjectionWriter
+from backend.app.recommendation.adapters.g4_mysql import MySQLG4ProjectionWriter, _canonical
 from backend.app.recommendation.application.g4_persistence import (
     G4ProjectionWritePlan,
 )
@@ -151,6 +151,25 @@ def make_plan() -> tuple[G4ProjectionWritePlan, object]:
 
 
 class G4MySQLWriterTests(unittest.TestCase):
+    def test_waiting_context_json_normalizes_datetime_as_utc(self) -> None:
+        self.assertEqual(
+            '{"evaluation_at":"2026-08-11T01:02:03.456789Z"}',
+            _canonical(
+                {
+                    "evaluation_at": datetime(
+                        2026,
+                        8,
+                        11,
+                        9,
+                        2,
+                        3,
+                        456789,
+                        tzinfo=timezone(timedelta(hours=8)),
+                    )
+                }
+            ),
+        )
+
     def test_writer_appends_all_facts_without_owning_commit(self) -> None:
         plan, result = make_plan()
         connection = FakeConnection(plan)

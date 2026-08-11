@@ -63,7 +63,29 @@ from backend.app.shared_kernel.contracts.enums import TaskStatus
 
 
 def _canonical(value: object) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    """Serialize projection JSON with the same UTC representation as HTTP.
+
+    The pure G4 HTTP projection intentionally keeps ``evaluation_at`` as a
+    ``datetime`` for the transport layer.  Before persistence, however, the
+    waiting-context response must be valid JSON.  Normalizing datetimes here
+    keeps that boundary explicit and prevents a late transaction failure after
+    earlier append statements have already run.
+    """
+
+    def _json_default(item: object) -> object:
+        if isinstance(item, datetime):
+            if item.tzinfo is not None and item.utcoffset() is not None:
+                item = item.astimezone(UTC)
+            return item.isoformat().replace("+00:00", "Z")
+        raise TypeError(f"object of type {type(item).__name__} is not JSON serializable")
+
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=_json_default,
+    )
 
 
 def _naive_utc(value: datetime) -> datetime:
@@ -745,7 +767,7 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
         except IdempotencyConflictError:
             await connection.rollback()
             raise
-        except asyncmy.IntegrityError:
+        except asyncmy.errors.IntegrityError:
             await connection.rollback()
             existing = await self._find_task(
                 connection,
@@ -902,7 +924,7 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
         ):
             await connection.rollback()
             raise
-        except asyncmy.IntegrityError:
+        except asyncmy.errors.IntegrityError:
             await connection.rollback()
             replay = await self._find_context_by_idempotency(
                 connection,
