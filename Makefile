@@ -102,7 +102,7 @@ CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
-	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan \
+	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -253,6 +253,27 @@ build-g4-clarification-plan:
 	@test -n "$(G4_CLARIFICATION_PLAN_RUN_ID)" || { echo "G4_CLARIFICATION_PLAN_RUN_ID is required and must identify a new dry-run plan"; exit 2; }
 	@test -n "$(G4_CLARIFICATION_PLAN_EVIDENCE)" || { echo "G4_CLARIFICATION_PLAN_EVIDENCE is required and must point to PASS clarification read-only evidence"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_clarification_plan --run-id "$(G4_CLARIFICATION_PLAN_RUN_ID)" --evidence "$(G4_CLARIFICATION_PLAN_EVIDENCE)"
+
+verify-g4-clarification-continuation-readonly:
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_READONLY_RUN_ID)" || { echo "G4_CLARIFICATION_CONTINUATION_READONLY_RUN_ID is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_TASK_ID)" || { echo "G4_CLARIFICATION_CONTINUATION_TASK_ID is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_RESOURCE_TYPES)" || { echo "G4_CLARIFICATION_CONTINUATION_RESOURCE_TYPES is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_TOPIC)" || { echo "G4_CLARIFICATION_CONTINUATION_TOPIC is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_IDEMPOTENCY_KEY)" || { echo "G4_CLARIFICATION_CONTINUATION_IDEMPOTENCY_KEY is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_clarification_continuation_readonly --run-id "$(G4_CLARIFICATION_CONTINUATION_READONLY_RUN_ID)" --task-id "$(G4_CLARIFICATION_CONTINUATION_TASK_ID)" --context-version "$(G4_CLARIFICATION_CONTINUATION_CONTEXT_VERSION)" --resource-types "$(G4_CLARIFICATION_CONTINUATION_RESOURCE_TYPES)" --topic "$(G4_CLARIFICATION_CONTINUATION_TOPIC)" --idempotency-key "$(G4_CLARIFICATION_CONTINUATION_IDEMPOTENCY_KEY)" --env-file "$(COMPOSE_ENV_FILE)" --secrets-file ".env.user-secrets"
+
+build-g4-clarification-continuation-plan:
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_PLAN_RUN_ID)" || { echo "G4_CLARIFICATION_CONTINUATION_PLAN_RUN_ID is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_EVIDENCE)" || { echo "G4_CLARIFICATION_CONTINUATION_EVIDENCE is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_clarification_continuation_plan --run-id "$(G4_CLARIFICATION_CONTINUATION_PLAN_RUN_ID)" --evidence "$(G4_CLARIFICATION_CONTINUATION_EVIDENCE)"
+
+execute-g4-clarification-continuation-plan:
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_APPLY_RUN_ID)" || { echo "G4_CLARIFICATION_CONTINUATION_APPLY_RUN_ID is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_PLAN)" || { echo "G4_CLARIFICATION_CONTINUATION_PLAN is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_PLAN_ID)" || { echo "G4_CLARIFICATION_CONTINUATION_PLAN_ID is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_PLAN_HASH)" || { echo "G4_CLARIFICATION_CONTINUATION_PLAN_HASH is required"; exit 2; }
+	@test -n "$(G4_CLARIFICATION_CONTINUATION_EVIDENCE)" || { echo "G4_CLARIFICATION_CONTINUATION_EVIDENCE is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g4_clarification_continuation_plan --apply --plan-id "$(G4_CLARIFICATION_CONTINUATION_PLAN_ID)" --approved-plan-hash "$(G4_CLARIFICATION_CONTINUATION_PLAN_HASH)" --plan "$(G4_CLARIFICATION_CONTINUATION_PLAN)" --evidence "$(G4_CLARIFICATION_CONTINUATION_EVIDENCE)" --run-id "$(G4_CLARIFICATION_CONTINUATION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" --secrets-file ".env.user-secrets"
 
 execute-g4-clarification-plan:
 	@test -n "$(G4_CLARIFICATION_APPLY_RUN_ID)" || { echo "G4_CLARIFICATION_APPLY_RUN_ID is required and must identify a new apply evidence run"; exit 2; }
