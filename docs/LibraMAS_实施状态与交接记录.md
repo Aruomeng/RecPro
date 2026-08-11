@@ -1164,6 +1164,26 @@ Gate：G4 多智能体系统（单事务投影 writer / 显式服务，未接入
 下一步唯一动作：由用户审阅该 DRY_RUN ChangePlan；在明确批准前继续保持默认 HTTP/Worker 关闭，不执行 `--apply` 或新的业务 POST。
 ```
 
+## G4 澄清续跑纯函数契约
+
+```text
+交接ID：G4-CLARIFICATION-CONTRACT-20260811-026
+Gate：G4 动态多智能体闭环（澄清续跑输入契约，不写库）
+状态：PURE_CLARIFICATION_PASS / CONTEXT_INCREMENT_PASS / IDENTITY_PRESERVED / DEFAULT_HTTP_OFF
+时间：2026-08-11（Asia/Shanghai）
+目标：在实现 G4 continuation 事务适配器前，先把等待态问题、答案、上下文版本和下一轮 RecommendationTaskCommand 的关系冻结为独立纯函数，避免 G4 适配器复用 G3 私有答案解释逻辑或在事务中临时推断。
+新增文件：`backend/app/recommendation/application/g4_clarification.py`；`tests/g4/test_g4_clarification.py`。
+契约结果：仅接受声明过的槽位和非空答案；required 槽位必须全部回答；声明 options 时答案必须命中 options；`BOOK`/`PAPER`/`BOOK_AND_PAPER` 映射为显式资源类型元组；topic/output_type 只能覆盖对应字段；request/session/user/scene、evaluation_at、来源引用、constraints 和 limit 原样保留；下一 context_version 必须是 previous+1。
+事务边界：该模块不连接数据库、不读取上下文、不调用 Agent、不生成 task/trace ID、不提交或回滚；数据库适配器必须先完成幂等键与最新 WAITING context 的只读校验，再调用此纯函数，最后由同一调用方事务追加下一轮事实。
+测试结果：新增澄清定向测试 `4` 项 PASS；G4 目录回归 `53` 项 PASS；`py_compile` 和 `git diff --check` PASS。
+安全边界：本阶段未连接 MySQL/Neo4j/Chroma，未执行迁移、seed、INSERT、UPDATE、DELETE、索引切换或外部 LLM 请求；文件删除数量=`0`；数据库物理删除数量=`0`。
+新增数据库对象和行数：0。
+受控UPDATE对象和审计ID：0。
+验证证据目录：无运行时 artifact（纯函数阶段）；测试输出由 CI/提交记录保留。
+未解决风险：G4 opt-in service 的 `submit_clarification` 仍保持 fail-closed；尚未将下一轮 Agent message/result、task transition、context/clarification、record/item 和 trace revision 组合到同一事务，也未生成该 continuation 的独立 ChangePlan。
+下一步唯一动作：实现未接入默认 HTTP 的 G4 continuation writer/service 适配器，先完成 fake 事务的提交、回滚、幂等和 stale-context 测试，再单独生成 DRY_RUN 计划；用户批准前不执行任何新的业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
