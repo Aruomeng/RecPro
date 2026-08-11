@@ -1288,6 +1288,25 @@ Gate：G4 动态多智能体闭环（等待任务 ChangePlan 的 fail-closed 执
 下一步唯一动作：重新生成最终 DRY_RUN ChangePlan；用户明确批准未变更的 plan_id/hash 后，才可执行一次等待任务追加并做只读回读。
 ```
 
+## G4 等待任务首次执行失败隔离与修复记录
+
+```text
+交接ID：G4-CLARIFICATION-APPLY-FAILURE-20260811-034
+Gate：G4 动态多智能体闭环（已批准等待任务追加的失败隔离）
+状态：APPLY_STOPPED_BEFORE_COMMIT / ZERO_DELTA_CONFIRMED / SUCCESSOR_PLAN_REQUIRED
+时间：2026-08-11（Asia/Shanghai）
+授权边界：用户批准了 plan_id=`8bcd9c3a-67aa-5cc5-a901-9854741dadfe`、plan_hash=`ffa6764a14cf1445c955d91750033e430f5bb4adcc2ff67f20d64d16e49ebc00`；执行器仅尝试一次，未复用或重试该旧计划。
+执行命令：`make execute-g4-clarification-plan PYTHON=.venv-g1-release-py311/bin/python G4_CLARIFICATION_APPLY_RUN_ID=g4-clarification-apply-20260811-001 ...`；运行前已核对 plan/evidence/config/Git hash、MySQL 62306 身份、Neo4j 62688 与 HTTP 62475 端口。
+失败原因：真实等待态响应在 G4 writer 的 JSON 持久化边界携带 `datetime`，触发 `TypeError: Object of type datetime is not JSON serializable`；异常恢复分支又引用了当前 asyncmy 版本不存在的 `asyncmy.IntegrityError`，导致原始异常未能进入受控回滚分支。
+安全处置：停止新写请求，不重试、不补偿、不 UPDATE、不 DELETE；关闭连接后立即执行独立 SELECT-only 核对。MySQL 19 张表计数仍为 `task/transition/candidate/record/item/explanation/policy/trace=21/180/311/21/111/111/21/21`、`context/clarification=6/6`、`Agent message/result/artifact/orchestration=28/28/4/4`，资源事实表仍为 `14,989/14,986/8,522/70,762/14,989`；目标 request_id 不存在，确认数据库增量为 `0`。
+根因修复：提交 `d81efe6 fix(g4): harden waiting-task transaction serialization`，在 G4 persistence boundary 将带时区 datetime 规范化为 UTC `Z` JSON 字符串，并改用 `asyncmy.errors.IntegrityError`；新增时区回归测试。该修复不修改任何既有数据库行或文件。
+验证结果：完整 Python unittest=`439` 项 PASS；架构扫描=`114` files PASS；安全扫描=`301` files PASS；文档校验=`18` Markdown/42 blocks PASS；`compileall` 与 `git diff --check` PASS；分支已推送 `origin/codex/g1-runnable-skeleton`。
+副作用计数：database_writes=`0`、Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`、overwritten_inputs=`0`。
+证据：原执行器在提交前失败，故没有生成 apply PASS artifact；失败堆栈与独立只读计数保留在本次任务日志，成功后的新执行必须写入新的 apply run 目录，不覆盖旧目录。
+未解决风险：修复改变了 reviewed Git boundary，旧 plan_id/hash 不再可执行；不能在未获新批准前提交任何新的业务 POST。
+下一步唯一动作：基于同一 PASS 只读 evidence 和新 Git commit 生成新的 G4 WAITING `S1_APPEND/DRY_RUN` ChangePlan，报告新的精确 plan_id/plan_hash，等待用户重新批准后再执行一次。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

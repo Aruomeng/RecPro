@@ -13,7 +13,7 @@ G4 已完成一次真实隔离只读多智能体融合：7 个 Agent 全部成�
 G4 澄清续跑适配器随后已完成代码级实现：Orchestrator 可从 `WAITING_CLARIFICATION` 继续，G4 writer 对 context 2 及后续轮次只追加 transition、Agent facts、trace revision、policy、结果和回答上下文；服务在最新上下文校验、幂等重放、冲突、陈旧版本和并发唯一性失败时回滚，且不执行 `UPDATE/DELETE`。全量 Python 回归 431 项、安全/架构/文档门禁均通过；本阶段未执行真实续跑、未新增数据库行，默认 HTTP/Worker 仍关闭。真实续跑需先为一个新的等待任务生成独立 DRY_RUN ChangePlan，再经用户批准后执行。
 等待态只读验证器和 19 行初始等待任务 DRY_RUN 构建器已加入仓库；它们会冻结 HOME 空请求、4 个 Agent、问题快照、完整表计数和幂等身份。当前 Docker CLI 符号链接指向不存在的 Docker Desktop 路径，尚未生成新的运行态基线或 ChangePlan artifact；恢复 Docker 后先运行只读验证，再生成计划，期间不执行任何业务写入。
 隔离端口仍在运行，因此已绕过 Docker CLI 完成真实 MySQL 只读验证：HOME 空请求稳定进入 `WAITING_CLARIFICATION`，19 张相关表前后计数不变，证据见 `artifacts/verification/g4/g4-clarification-readonly-20260811-001/clarification-readonly.json`。初始 19 行等待任务计划已预演生成，但交接文档提交后会重新生成 hash；在最终 hash 获得用户批准前不会创建任务或提交答案。
-等待任务专用执行器也已完成：它严格校验 plan/evidence/config/Git hash、权限、幂等身份和 19 张表的精确 delta，显式 `--apply` 之外不会写库；当前尚未执行 apply，待最终计划 hash 生成并经用户批准。
+等待任务专用执行器也已完成：它严格校验 plan/evidence/config/Git hash、权限、幂等身份和 19 张表的精确 delta，显式 `--apply` 之外不会写库。已对批准的 `8bcd9c3a-67aa-5cc5-a901-9854741dadfe` 做过且仅做过一次受控 apply 尝试；因真实等待响应的 datetime JSON 序列化缺陷在提交前失败，独立只读回读确认 MySQL 19 张表零增量、目标 request_id 不存在，未生成成功 apply artifact。修复已提交为 `d81efe6` 并推送；因 Git boundary 改变，旧计划 hash 不再有效，必须基于新 commit 重新生成并重新批准计划后才可再次 apply。
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和图计划只读校验，再由 `scripts/import_book_graph.py` 以显式 `--apply` 追加到带 `graph_version` 的 Neo4j 影子图；实体/关系见 [图书图谱模型与导入契约](docs/book_graph_model.md)。仓库不保存外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；DeepSeek 适配器已准备并保持默认关闭，当前本机的 opt-in 配置只能通过被 Git 忽略的环境文件注入，禁止提交到 Git。详见 [LLM 与 Prompt 配置基线](docs/LLM_PROMPT_CONFIGURATION.md)。
 
