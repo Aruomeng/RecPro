@@ -18,6 +18,9 @@ class G4ClarificationError(ValueError):
     """Clarification input cannot safely continue the G4 task."""
 
 
+MAX_CLARIFICATION_ANSWER_LENGTH = 500
+
+
 @dataclass(frozen=True, slots=True)
 class G4ClarificationContinuation:
     """Validated answer facts and the command for the next G4 context."""
@@ -76,8 +79,20 @@ def _validated_answers(
         normalized[slot] = _required_text(
             raw_answer, f"clarification answer.{slot}"
         )
+        if len(normalized[slot]) > MAX_CLARIFICATION_ANSWER_LENGTH:
+            raise G4ClarificationError(
+                f"clarification answer for {slot} exceeds "
+                f"{MAX_CLARIFICATION_ANSWER_LENGTH} characters"
+            )
         options = question_map[slot].get("options")
-        if options is not None and normalized[slot] not in options:
+        # Options are guided suggestions.  Resource type answers remain
+        # closed enums, while the topic slot also accepts bounded custom text
+        # (for example, a user may combine several suggested themes with '+').
+        if (
+            options is not None
+            and normalized[slot] not in options
+            and slot != "topic"
+        ):
             raise G4ClarificationError(
                 f"clarification answer for {slot} is not one of the declared options"
             )

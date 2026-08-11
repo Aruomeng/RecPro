@@ -62,6 +62,28 @@ class G4ClarificationTests(unittest.TestCase):
         self.assertEqual({"availability": "AVAILABLE_BORROW"}, dict(command.constraints))
         self.assertEqual({"resource_types": "BOOK_AND_PAPER", "topic": "多智能体"}, dict(continuation.answers))
 
+    def test_accepts_bounded_custom_multi_topic_text(self) -> None:
+        continuation = build_g4_clarification_continuation(
+            base_command(),
+            questions=QUESTIONS,
+            answers={
+                "resource_types": "BOOK",
+                "topic": "多智能体+推荐系统+知识图谱",
+            },
+            previous_context_version=1,
+        )
+        self.assertEqual(("BOOK",), continuation.command.resource_types)
+        self.assertEqual("多智能体+推荐系统+知识图谱", continuation.command.input_text)
+
+    def test_rejects_overlong_custom_topic_text(self) -> None:
+        with self.assertRaisesRegex(G4ClarificationError, "exceeds 500"):
+            build_g4_clarification_continuation(
+                base_command(),
+                questions=QUESTIONS,
+                answers={"resource_types": "BOOK", "topic": "x" * 501},
+                previous_context_version=1,
+            )
+
     def test_rejects_stale_or_invalid_context(self) -> None:
         with self.assertRaisesRegex(G4ClarificationError, "previous_context_version"):
             build_g4_clarification_continuation(
