@@ -85,6 +85,14 @@ Graph/Vector 版本传入 G4 service，防止请求在不同索引代际之间�
 collection 必须由 operator-only 运行层以只读方式取得，基础 backend 不依赖
 `chromadb`，也不会在缺少显式 collection 时创建目录或 collection。
 
+当前 operator-only 入口为 `scripts/g4_operator_runtime.py` 与
+`scripts/verify_g4_http_host_readonly.py`。loader 只允许打开已存在的
+collection，要求 collection 名、graph/embedding/index 版本、cosine 距离度量和
+记录数全部匹配；host 预演只在内存中打开 G4 HTTP 组合根，并调用
+`/api/v1/health/live`、`/api/v1/health/ready` 两个 GET。它不创建任务、不调用
+Neo4j recall、不调用外部 LLM，也不发送任何业务 POST。默认 Compose/Worker 仍
+不会调用该入口。
+
 ### 2.3 请求追踪
 
 客户端可以发送：

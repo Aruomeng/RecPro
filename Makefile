@@ -33,6 +33,8 @@ G4_PORT_RUN_ID ?=
 G4_COMPOSITION_RUN_ID ?=
 G4_READONLY_FUSION_RUN_ID ?=
 G4_READONLY_FUSION_DEADLINE_SECONDS ?= 180
+G4_HTTP_READONLY_HOST_RUN_ID ?=
+G4_HTTP_READONLY_HOST_CONFIRM ?=
 G4_PROJECTION_PLAN_RUN_ID ?=
 G4_PROJECTION_MYSQL_BASELINE ?=
 G4_PROJECTION_G4_BASELINE ?=
@@ -119,6 +121,7 @@ HOST_ENV_SYNC_RUN_ID ?=
 	verify-prompt-bundle \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
+	verify-g4-http-readonly-host \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -452,6 +455,11 @@ verify-g4-composition:
 verify-g4-readonly-fusion:
 	@test -n "$(G4_READONLY_FUSION_RUN_ID)" || { echo "G4_READONLY_FUSION_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --deadline-seconds "$(G4_READONLY_FUSION_DEADLINE_SECONDS)" --env-file "$(COMPOSE_ENV_FILE)"
+
+verify-g4-http-readonly-host:
+	@test -n "$(G4_HTTP_READONLY_HOST_RUN_ID)" || { echo "G4_HTTP_READONLY_HOST_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test "$(G4_HTTP_READONLY_HOST_CONFIRM)" = "YES_READONLY" || { echo "G4_HTTP_READONLY_HOST_CONFIRM=YES_READONLY is required; this target only performs GET/SELECT checks"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_http_host_readonly --run-id "$(G4_HTTP_READONLY_HOST_RUN_ID)" --confirm-readonly --env-file "$(COMPOSE_ENV_FILE)" --secrets-file "$(G6_READONLY_SECRETS_ENV_FILE)" --chroma-path "$(G6_READONLY_CHROMA_PATH)" --chroma-site-packages "$(G6_READONLY_CHROMA_SITE_PACKAGES)"
 
 migrate-g2:
 	@test -n "$(G2_RUN_ID)" || { echo "G2_RUN_ID is required and must identify a new evidence run"; exit 2; }

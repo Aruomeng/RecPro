@@ -1415,6 +1415,28 @@ Gate：G4 动态多智能体闭环（版本锁定的 Graph/Vector 只读运行�
 下一步：为上述 runtime 提供独立的 operator-only Chroma collection loader 与 host 入口预演，再单独生成 G4 HTTP/幂等 DRY_RUN ChangePlan；未获得新的精确 plan_id/hash 批准前不提交业务行、不启用 DeepSeek。
 ```
 
+## G4 operator-only Chroma loader 与 HTTP host 只读预演
+
+```text
+交接ID：G4-HTTP-HOST-READONLY-20260811-003
+Gate：G4 版本锁定 runtime 的 operator-only collection loader 与 HTTP 组合根预演
+状态：HOST_PREFLIGHT_PASS / GET_SELECT_ONLY / COUNTS_UNCHANGED / HTTP_DEFAULT_OFF
+时间：2026-08-11（Asia/Shanghai）
+新增文件：scripts/g4_operator_runtime.py；scripts/verify_g4_http_host_readonly.py；tests/g4/test_g4_operator_runtime.py。
+接线：loader 只打开已有 `library_resources__hash_char_ngram_v1`，校验 graph=`lib-books-v1-20260810`、embedding=`hash-char-ngram-v1`、index=`lib-books-vector-v1-20260811`、namespace、cosine metadata 和 14,983 条记录；不调用 `get_or_create_collection`，不创建目录，不暴露集合写操作。host 预演在内存启用 G4 开关，注入版本锁定 Graph/Vector runtime，调用 `/api/v1/health/live` 与 `/api/v1/health/ready`，未调用业务 POST。
+运行结果：live=`200`、ready=`200`、`can_recommend=true`；MySQL 12 张资源/推荐/G4 表前后计数一致；Chroma 前后均=`14,983`；Neo4j recall=`0`（本阶段只验证组合入口，真实 Graph recall 已由 G4-READONLY-FUSION-010/011 覆盖）。
+安全边界：MySQL 仅 SELECT/SHOW GRANTS，`mysql_writes=0`；Neo4j writes=`0`；Chroma writes=`0`；external_requests=`0`；external_llm_requests=`0`；business_post_count=`0`；files_deleted=`0`。未删除或覆盖任何文件、数据库、容器、卷或数据。
+证据：`artifacts/verification/g4/g4-http-host-readonly-20260811-003/readonly.json`。
+测试：新增 operator loader 4 项测试通过；随后需继续通过完整 Python、G0 安全/架构/合同/文档/提示词和 Compose 门禁。
+剩余核心工作量：按“真实可用而非模拟”口径仍有 4 个实现/授权 Gate：
+1. G4 HTTP 真实业务 POST 的新 ChangePlan、一次隔离追加、GET/幂等/计数回读；
+2. 前端使用同一 RecommendationClient 完成一次真实 G4 推荐/澄清浏览器闭环，并接入 feedback/behavior API 的独立受控验证；
+3. Worker/Outbox、正式认证和 production 组合根的部署验收，保持默认 fail-closed；
+4. DeepSeek 外部调用的脱敏、费用/超时/审计与单次 opt-in 验证，或明确论文演示继续使用 MockLLM。
+若只要求本地隔离论文演示，完成第 1、2 Gate 后即可视为核心演示闭环；若要求生产级全部能力，还需第 3、4 Gate，预计还需 4 个阶段（每阶段至少一份独立证据和一次提交）。
+下一步唯一动作：基于本次 host 预演证据生成新的 G4 HTTP/幂等 `S1_APPEND/DRY_RUN` ChangePlan；在用户批准精确 plan_id/hash 前不执行业务 POST、不启用 DeepSeek。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
