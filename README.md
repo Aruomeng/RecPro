@@ -29,6 +29,7 @@ G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立
 - [书目图计划 Schema](contracts/data/intake/book-graph-plan.schema.json)
 - [MySQL 书目计划 Schema](contracts/data/intake/mysql-book-plan.schema.json)
 - [向量索引计划 Schema](contracts/data/intake/vector-index-plan.schema.json)
+- [Chroma Collection 计划 Schema](contracts/data/intake/chroma-collection-plan.schema.json)
 
 ## 最高优先级安全约束
 

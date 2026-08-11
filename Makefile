@@ -39,6 +39,14 @@ MYSQL_BOOK_PLAN_DIR ?=
 MYSQL_BOOK_IMPORT_RUN_ID ?=
 MYSQL_BOOK_PREFLIGHT_RUN_ID ?=
 MYSQL_BOOK_MYSQL_ENV_FILE ?= .env.compose
+VECTOR_INDEX_PLAN_RUN_ID ?=
+VECTOR_INDEX_VERIFY_RUN_ID ?=
+VECTOR_INDEX_MYSQL_PLAN_DIR ?=
+VECTOR_INDEX_PLAN_DIR ?=
+CHROMA_COLLECTION_PLAN_RUN_ID ?=
+CHROMA_COLLECTION_VECTOR_PLAN ?=
+CHROMA_COLLECTION_VERIFY_RUN_ID ?=
+CHROMA_COLLECTION_PLAN ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -51,6 +59,7 @@ MYSQL_BOOK_MYSQL_ENV_FILE ?= .env.compose
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
+	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
 	start stop status infra-start infra-stop backend frontend worker git-status
 
 bootstrap-check:
@@ -207,6 +216,26 @@ import-mysql-book-catalog:
 	@test -n "$(MYSQL_BOOK_IMPORT_RUN_ID)" || { echo "MYSQL_BOOK_IMPORT_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	@test -n "$(MYSQL_BOOK_PLAN_DIR)" || { echo "MYSQL_BOOK_PLAN_DIR is required and must point to a reviewed MySQL plan directory"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.import_mysql_book_catalog --run-id "$(MYSQL_BOOK_IMPORT_RUN_ID)" --plan-dir "$(MYSQL_BOOK_PLAN_DIR)" --env-file "$(MYSQL_BOOK_MYSQL_ENV_FILE)" --apply --confirm-mysql-write
+
+build-vector-index-plan:
+	@test -n "$(VECTOR_INDEX_PLAN_RUN_ID)" || { echo "VECTOR_INDEX_PLAN_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(VECTOR_INDEX_MYSQL_PLAN_DIR)" || { echo "VECTOR_INDEX_MYSQL_PLAN_DIR is required and must point to a reviewed MySQL plan directory"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_vector_index_plan --run-id "$(VECTOR_INDEX_PLAN_RUN_ID)" --mysql-plan-dir "$(VECTOR_INDEX_MYSQL_PLAN_DIR)"
+
+verify-vector-index-plan:
+	@test -n "$(VECTOR_INDEX_PLAN_DIR)" || { echo "VECTOR_INDEX_PLAN_DIR is required and must point to a reviewed vector plan JSON"; exit 2; }
+	@test -n "$(VECTOR_INDEX_VERIFY_RUN_ID)" || { echo "VECTOR_INDEX_VERIFY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_vector_index_plan --run-id "$(VECTOR_INDEX_VERIFY_RUN_ID)" --plan "$(VECTOR_INDEX_PLAN_DIR)"
+
+build-chroma-collection-plan:
+	@test -n "$(CHROMA_COLLECTION_PLAN_RUN_ID)" || { echo "CHROMA_COLLECTION_PLAN_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test -n "$(CHROMA_COLLECTION_VECTOR_PLAN)" || { echo "CHROMA_COLLECTION_VECTOR_PLAN is required and must point to a reviewed vector plan JSON"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_chroma_collection_plan --run-id "$(CHROMA_COLLECTION_PLAN_RUN_ID)" --vector-plan "$(CHROMA_COLLECTION_VECTOR_PLAN)"
+
+verify-chroma-collection-plan:
+	@test -n "$(CHROMA_COLLECTION_PLAN)" || { echo "CHROMA_COLLECTION_PLAN is required and must point to a reviewed Chroma collection plan JSON"; exit 2; }
+	@test -n "$(CHROMA_COLLECTION_VERIFY_RUN_ID)" || { echo "CHROMA_COLLECTION_VERIFY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_chroma_collection_plan --run-id "$(CHROMA_COLLECTION_VERIFY_RUN_ID)" --plan "$(CHROMA_COLLECTION_PLAN)"
 
 verify-g4-orchestrator:
 	@test -n "$(G4_RUN_ID)" || { echo "G4_RUN_ID is required and must identify a new evidence run"; exit 2; }

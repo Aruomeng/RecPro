@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/data/intake/chroma-collection-plan.schema.json",
+  "title": "LibraMAS versioned Chroma collection ChangePlan",
+  "description": "A database-free, append-only plan for a new Chroma collection. It does not authorize writes by itself.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "can_build",
+    "collection_name",
+    "distance_metric",
+    "embedding_version",
+    "index_version",
+    "namespace_name",
+    "dimension",
+    "client",
+    "source_vector_plan",
+    "source_vector_plan_sha256",
+    "vector_artifact",
+    "record_count",
+    "quality",
+    "metadata_contract",
+    "write_policy",
+    "safety",
+    "generated_at"
+  ],
+  "properties": {
+    "schema_version": {"const": "chroma-collection-plan-v1"},
+    "status": {"enum": ["READY_FOR_CHROMA_BUILD", "PASS_WITH_WARNINGS", "PASS_WITH_BLOCKERS"]},
+    "can_build": {"type": "boolean"},
+    "collection_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,254}$"},
+    "distance_metric": {"const": "cosine"},
+    "embedding_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$"},
+    "index_version": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$"},
+    "namespace_name": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,254}$"},
+    "dimension": {"type": "integer", "const": 384},
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["package", "version_status", "write_authorization_required"],
+      "properties": {
+        "package": {"const": "chromadb"},
+        "version_status": {"enum": ["NOT_INSTALLED", "PIN_REQUIRED", "PINNED"]},
+        "version": {"type": "string", "maxLength": 64},
+        "write_authorization_required": {"const": true}
+      }
+    },
+    "source_vector_plan": {"type": "string", "minLength": 1, "maxLength": 255},
+    "source_vector_plan_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "vector_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "bytes", "count"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1, "maxLength": 255},
+        "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "bytes": {"type": "integer", "minimum": 0},
+        "count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "record_count": {"type": "integer", "minimum": 0},
+    "quality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_status", "source_blocker_count", "warning_count", "missing_abstract_count", "missing_keywords_count"],
+      "properties": {
+        "source_status": {"enum": ["READY_FOR_VECTOR_BUILD", "PASS_WITH_WARNINGS", "PASS_WITH_BLOCKERS"]},
+        "source_blocker_count": {"type": "integer", "minimum": 0},
+        "warning_count": {"type": "integer", "minimum": 0},
+        "missing_abstract_count": {"type": "integer", "minimum": 0},
+        "missing_keywords_count": {"type": "integer", "minimum": 0}
+      }
+    },
+    "metadata_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_fields", "source_mapping", "version_filter"],
+      "properties": {
+        "required_fields": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{1,63}$"}
+        },
+        "source_mapping": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["external_id", "vector_id", "embedding_version", "index_version", "namespace_name"],
+          "properties": {
+            "external_id": {"const": "vector_record.external_id"},
+            "vector_id": {"const": "vector_record.vector_id"},
+            "embedding_version": {"const": "vector_plan.embedding_version"},
+            "index_version": {"const": "vector_plan.index_version"},
+            "namespace_name": {"const": "vector_plan.namespace_name"}
+          }
+        },
+        "version_filter": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["embedding_version", "index_version"],
+          "properties": {
+            "embedding_version": {"const": "embedding_version"},
+            "index_version": {"const": "index_version"}
+          }
+        }
+      }
+    },
+    "write_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operation", "append_only", "overwrite_existing", "physical_delete", "activity_switch"],
+      "properties": {
+        "operation": {"const": "ADD_NEW_COLLECTION_ONLY"},
+        "append_only": {"const": true},
+        "overwrite_existing": {"const": false},
+        "physical_delete": {"const": false},
+        "activity_switch": {"const": false}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_reads", "database_writes", "external_store_writes", "expected_delete_count", "actual_delete_count", "overwritten_inputs", "files_deleted"],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 0},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "external_store_writes": {"type": "integer", "minimum": 0},
+        "expected_delete_count": {"type": "integer", "minimum": 0},
+        "actual_delete_count": {"type": "integer", "minimum": 0},
+        "overwritten_inputs": {"type": "integer", "minimum": 0},
+        "files_deleted": {"type": "integer", "minimum": 0}
+      }
+    },
+    "generated_at": {"type": "string", "format": "date-time"}
+  }
+}
