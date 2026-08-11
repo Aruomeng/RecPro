@@ -1065,6 +1065,25 @@ Gate：G7 真实 MySQL 推荐 POST（性能与事务边界）
 下一步唯一动作：确认上述新 plan hash 后，才重新执行一次受控 POST；若成功，再核验 13 张推荐/资源表及三个上下文表的前后计数、响应 GET 回读、幂等重放和事务闭环。
 ```
 
+## G7 新哈希真实推荐追加与只读回读记录
+
+```text
+交接ID：G7-RECOMMENDATION-APPLY-20260811-021
+Gate：G7 真实 MySQL 推荐 POST（一次受控追加与事务回读）
+状态：REAL_MYSQL_APPEND_PASS / TRANSACTION_COMMIT_PASS / READBACK_PASS / G7_CONTINUES
+时间：2026-08-11（Asia/Shanghai）
+授权边界：用户确认使用 plan hash=`2b115b3790a6281f4725be7fe29a5448e674c92570cdaac766cc0f40eb961d53`；仅允许对隔离 Compose MySQL 的一个新 `request_id` 执行一次 `S1_APPEND` 推荐请求，不允许重放，不触碰既有 Neo4j、Chroma 或其他数据库。
+执行目标：Compose project=`recpro-g2-tianyuhang-20260809a`；MySQL 本地端口=`62306`；ChangePlan=`artifacts/verification/g7/g7-recommendation-post-plan-20260811-004/recommendation-post-change-plan.json`；只读基线=`artifacts/verification/g7/g7-mysql-http-readonly-20260811-005/readonly.json`。
+真实结果：HTTP POST=`201`，`Idempotency-Replayed=false`；任务 `task_id=70c56792-b8ab-5244-a267-bac7020b704b`，回读状态=`COMPLETED`，record=`19`，trace 已关联。数据库追加 `37` 行：`recommendation_task +1`、`recommendation_task_transition +8`、`recommendation_candidate +15`、`recommendation_record +1`、`recommendation_item +5`、`recommendation_item_explanation +5`、`recommendation_policy_decision +1`、`recommendation_trace +1`；三个上下文表对该 task 均为 `0`。
+计数核验：资源事实表 `resource_catalog/resource_book_detail/tag_dictionary/resource_tag/resource_index_state` 前后分别为 `14,989/14,986/8,522/70,762/14,989`，全部 `delta=0`；推荐表与基线的 delta 与 ChangePlan 完全一致；健康 live/ready 和任务 GET 均为 `200`，`can_recommend=true`。
+执行器说明：POST 已提交后，原执行器因 GET 状态契约不返回顶层 `items` 而在证据组装阶段退出；该退出不影响已提交事务。已补充“items 可选、record_id 必须回读”的执行器兼容修复，并使用独立只读脚本完成事实回读，避免再次发送业务 POST。
+验证证据：`artifacts/verification/g7/g7-recommendation-post-reconcile-20260811-001/reconciliation.json`；新增 Make 目标 `verify-g7-recommendation-post-result` 可复核同一计划/基线。回读 SQL 只读，`reconciliation_database_writes=0`、`reconciliation_http_business_posts=0`、`external_requests=0`、`actual_delete_count=0`、`files_deleted=0`、`overwritten_inputs=0`。
+新增数据库对象和行数：0 个对象；仅按已批准 ChangePlan 追加上述 37 行，未执行 DDL、UPDATE、DELETE、迁移、seed、索引/向量/图写入。
+文件删除数量：0。
+数据库物理删除数量：0。
+下一步唯一动作：进入真实前端 API/浏览器闭环，将同一 `RecommendationClient` 接到显式 HTTP 组合根；继续保持默认 API/Worker 关闭，不在此阶段重复推荐请求或开放 DeepSeek 外部调用。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
