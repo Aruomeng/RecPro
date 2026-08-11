@@ -1340,6 +1340,26 @@ Gate：G4 动态多智能体闭环（初始 WAITING_CLARIFICATION 任务真实�
 下一步唯一动作：实现/生成澄清答案 continuation 的只读计划门禁，目标为 context_version=`2`；在新 plan_id/hash 获批前不追加答案。
 ```
 
+## G4 澄清答案真实续跑与独立回读记录
+
+```text
+交接ID：G4-CLARIFICATION-CONTINUATION-APPLY-20260811-037
+Gate：G4 动态多智能体闭环（context 1→2 真实澄清续跑）
+状态：REAL_MYSQL_CONTINUATION_PASS / PLAN_DELTA_EXACT / READONLY_READBACK_PASS
+时间：2026-08-11（Asia/Shanghai）
+授权：用户批准 plan_id=`e79afba2-7d68-56e3-909c-9d56a522adb4`、plan_hash=`f37437d853ee9b660e2fe1eced4a1ba4ba477b31025b352d9874b80e7d9ac7f6`；执行器仅运行一次，apply run=`g4-clarification-continuation-apply-20260811-001`。
+计划与环境：ChangePlan=`artifacts/verification/g4/g4-clarification-continuation-plan-20260811-002/g4-clarification-continuation-change-plan.json`，reviewed Git=`a7b76cb3aa1e3fb346504e541e0ca4309e3f9a70`，Compose project=`recpro-g2-tianyuhang-20260809a`，MySQL=`recpro`、本地端口=`62306`；runtime probe 与 grants guard 均通过。
+答案：resource_types=`BOOK`；topic=`多智能体+推荐系统+知识图谱`。该组合主题在 500 字符边界内保留为答案事实，资源类型仍使用封闭枚举。
+真实结果：同一 task=`b6dc4ed8-4c3d-500b-8026-7b5f7779f7cf`、trace=`76a31b9b-c613-5dbc-af53-4e2d398ea5fe` 从最新 WAITING context 1 进入 context 2，返回 `200`、`replayed=false`、状态=`COMPLETED`、record=`22`、5 个图书条目。
+精确追加：MySQL 共 `44` 行：transition=`+8`、candidate=`+5`、record=`+1`、item/explanation=`+5/+5`、policy=`+1`、trace_revision=`+1`、task_context/clarification=`+1/+1`、Agent message/result=`+7/+7`、artifact=`+1`、orchestration_result=`+1`；根 task 与原始 trace 不更新，资源事实表不变。
+计数回读：task/transition/candidate/record/item/explanation/policy/trace=`22/192/316/22/116/116/23/22`；trace_revision/context/clarification=`4/8/8`；Agent message/result/artifact/orchestration=`39/39/6/6`；resource_catalog/book_detail/tag_dictionary/resource_tag/index_state=`14,989/14,986/8,522/70,762/14,989`，与计划精确一致。
+独立只读回读：根 task 保留不可变快照 `WAITING_CLARIFICATION/context_version=1`；最新 context 2=`COMPLETED`，答案键为 resource_types/topic，response 包含 5 items；clarification 2 的 answered_at 非空；context 1 问题与空答案事实保留；context 2 trace revision `g4-trace-v1` complete=`true`、7 steps；context 2 有 8 transitions、7 Agent message/result，record 22 下 rank 1—5 的 5 个 item。独立回读 writes=`0`、deletes=`0`。
+副作用计数：本次数据库写入=`44`；Neo4j writes=`0`、Chroma writes=`0`、external_requests=`0`、external_llm_requests=`0`、files_deleted=`0`、actual_delete_count=`0`、overwritten_inputs=`0`。
+证据：`artifacts/verification/g4/g4-clarification-continuation-apply-20260811-001/g4-clarification-continuation-apply.json`、只读证据=`artifacts/verification/g4/g4-clarification-continuation-readonly-20260811-002/clarification-continuation-readonly.json`；均为新目录追加保存，未覆盖历史 artifact。
+未解决风险：本轮使用安全执行器关闭外部 LLM、Neo4j/Chroma 写入；默认 HTTP/Worker 仍不自动启用。下一阶段可在独立计划下接入真实 HTTP 工作台回读、幂等重放和 feedback/outbox，不得把本轮事实当作可覆盖状态。
+下一步唯一动作：整理 G4 真实闭环验收报告，随后生成下一项独立 DRY_RUN 计划；不对已提交事实做删除或 UPDATE。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
