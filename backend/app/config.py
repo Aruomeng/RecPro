@@ -135,10 +135,11 @@ class AppSettings(BaseSettings):
     # separate switch prevents a configured G4 service from being exposed by
     # the default health-only app or by the Compose command.
     g4_http_enabled: bool = False
-    # Real model use is capability-scoped.  The first production-like opt-in
-    # enables only intent classification; explanations remain evidence-bound
-    # templates so one recommendation cannot fan out into unbounded LLM calls.
+    # Real model use is capability-scoped. Intent and evidence-constrained
+    # explanation have independent gates so request cost and fallback evidence
+    # remain reviewable instead of changing with the provider setting alone.
     g4_llm_intent_enabled: bool = False
+    g4_llm_explanation_enabled: bool = False
     # G5 interaction HTTP is a second, independent opt-in.  It is deliberately
     # separate from the frontend flag and from ``g4_http_enabled`` so a local
     # recommendation server cannot acquire database-writing feedback routes by
@@ -253,16 +254,19 @@ class AppSettings(BaseSettings):
     def validate_llm_configuration(self) -> "AppSettings":
         if self.llm_provider == "deepseek" and self.llm_api_key is None:
             raise ValueError("llm API key is required when deepseek provider is enabled")
-        if self.g4_llm_intent_enabled and not self.g4_http_enabled:
+        enabled_g4_capabilities = (
+            self.g4_llm_intent_enabled or self.g4_llm_explanation_enabled
+        )
+        if enabled_g4_capabilities and not self.g4_http_enabled:
             raise ValueError(
-                "G4 LLM intent requires the explicit G4 HTTP composition"
+                "G4 LLM capabilities require the explicit G4 HTTP composition"
             )
-        if self.g4_llm_intent_enabled and self.llm_provider != "deepseek":
+        if enabled_g4_capabilities and self.llm_provider != "deepseek":
             raise ValueError(
-                "G4 LLM intent requires the deepseek provider"
+                "G4 LLM capabilities require the deepseek provider"
             )
-        if self.g4_llm_intent_enabled and self.app_env != "demo":
-            raise ValueError("G4 LLM intent is restricted to the demo environment")
+        if enabled_g4_capabilities and self.app_env != "demo":
+            raise ValueError("G4 LLM capabilities are restricted to the demo environment")
         return self
 
     @model_validator(mode="after")

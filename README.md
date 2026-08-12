@@ -38,6 +38,7 @@ DeepSeek 已通过本地“真实调用就绪预检”：`artifacts/verification
 用户随后明确批准了一次真实外部请求，已用固定非敏感 fixture 执行 `intent.classify`：`artifacts/verification/llm/llm-fixture-call-20260812-001/real-call.json`=`PASS`，1 次请求、约 1.81 秒、结果为 `BOOK_RECOMMENDATION`；未读取/写入 MySQL、Neo4j、Chroma，未 claim Outbox，未保存原始响应或密钥。该结果只证明 Intent provider 的单次真实调用链路可用，不代表默认 HTTP/Worker 或 Explanation/Feedback 已切换到真实 LLM。
 随后新增 Intent-only 的 G4 只读组合与 `make verify-g4-real-llm-readonly`。真实七 Agent 编排证据 `artifacts/verification/g4/g4-real-llm-readonly-20260812-002/real-llm-readonly.json` 为 `PASS`：DeepSeek `deepseek-v4-flash` 实际完成 `intent.classify`，无规则回退，7 个 Agent 全部调度，返回 8 个 `MYSQL+GRAPH+VECTOR` 候选；外部请求 1 次，MySQL/Neo4j/Chroma 写入均为 0。本机 G4 HTTP 入口现已通过独立开关接入真实 Intent Agent，Explanation/Feedback 和 Worker 不随之自动启用。
 真实 HTTP 持久化现已纳入同一 G4 ChangePlan 工具：计划可绑定无密钥的 DeepSeek Intent 策略指纹；获批执行必须通过实际 FastAPI POST、同 request_id 的 HTTP 幂等重放、任务 GET 回读和 Intent Agent 持久化回执，并将外部请求限制为首次请求的 1–2 次尝试。计划生成本身仍为零数据库写入、零外部请求。
+获批计划 `28d050ce-a922-5480-b326-38fdf8984fdf` 已真实执行并独立对账 PASS：DeepSeek `deepseek-v4-flash` Intent 调用 1 次、无 fallback，HTTP 首写 `201`、幂等重放 `200/zero-delta`，任务 `COMPLETED`、8 个推荐项，MySQL 精确追加 56 行；Neo4j/Chroma 写入和删除均为 0。G4 readiness 现对版本锁定的 Neo4j/Chroma 执行只读探测并报告实际 DeepSeek provider，不再固定显示 Mock；Explanation Agent 新增独立 DeepSeek 开关，真实运行仍需下一份限定调用预算的计划。
 
 数据库管理员凭据只保存在本机 `.env.user-secrets`（权限 `0600`，已被 `.gitignore` 忽略），不进入应用日志或提交。MySQL 应用运行账号仍保持最小权限；`root` 仅作为后续受控管理/迁移凭据使用。Neo4j Community 只提供默认 `neo4j` 数据库，因此 RecPro 使用独立 Compose 实例和独立数据卷隔离于本机已有 Neo4j；不会连接本机 `7474/7687` 上的既有图。
 

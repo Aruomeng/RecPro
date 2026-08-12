@@ -38,11 +38,12 @@ VITE_G5_INTERACTION_ENABLED=true npm run dev -- --host 127.0.0.1
 RECPRO_APP_ENV=demo \
 RECPRO_G4_HTTP_ENABLED=true \
 RECPRO_G4_LLM_INTENT_ENABLED=true \
+RECPRO_G4_LLM_EXPLANATION_ENABLED=true \
 RECPRO_G5_INTERACTION_HTTP_ENABLED=true \
 python -m uvicorn backend.app.g4_feedback_demo_main:app --host 127.0.0.1 --port 8000
 ```
 
-该入口要求已存在且版本匹配的 operator-only Chroma collection、隔离 Neo4j 只读凭据和隔离 MySQL 运行账号；构造阶段不连接数据库，只有显式 POST 才会追加 MySQL 事实或创建 Profile Outbox。DeepSeek 开关只替换 Intent Agent，Explanation 仍使用证据模板；Worker 也必须单独通过 `RECPRO_WORKER_ENABLED=true` 与 `RECPRO_WORKER_MODE=profile_outbox` 双闸门运行。启用前仍需为具体业务数据生成并批准新的 `plan_id`/`plan_hash`。
+该入口要求已存在且版本匹配的 operator-only Chroma collection、隔离 Neo4j 只读凭据和隔离 MySQL 运行账号；构造阶段不连接数据库，只有显式 POST 才会追加 MySQL 事实或创建 Profile Outbox。Intent 与 Explanation DeepSeek 能力分别由独立开关控制，解释仍必须通过证据引用校验；Worker 也必须单独通过 `RECPRO_WORKER_ENABLED=true` 与 `RECPRO_WORKER_MODE=profile_outbox` 双闸门运行。启用前仍需为具体业务数据生成并批准新的 `plan_id`/`plan_hash`。
 
 ```bash
 npm run test

@@ -44,6 +44,7 @@ class G4DemoEntrypointTests(unittest.TestCase):
             "RECPRO_APP_ENV": "demo",
             "RECPRO_G4_HTTP_ENABLED": "true",
             "RECPRO_G4_LLM_INTENT_ENABLED": "true",
+            "RECPRO_G4_LLM_EXPLANATION_ENABLED": "true",
             "RECPRO_G4_DEADLINE_SECONDS": "120",
             "RECPRO_MYSQL_PASSWORD": "demo-g4-entrypoint-password",
             "RECPRO_MYSQL_HOST": "127.0.0.1",
@@ -86,6 +87,7 @@ class G4DemoEntrypointTests(unittest.TestCase):
             runtime=runtime,
             enable_llm_provider=False,
             enable_llm_intent_provider=True,
+            enable_llm_explanation_provider=True,
             deadline_seconds=120.0,
         )
         self.assertIn("/api/v1/recommendation-tasks", module.app.openapi()["paths"])

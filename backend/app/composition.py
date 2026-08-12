@@ -30,6 +30,8 @@ from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
 from backend.app.profile.application.refresh import ProfileOutboxWorker
 from backend.app.observability.adapters.mysql_transition import MySQLStateTransitionWriter
+from backend.app.observability.adapters import AsyncOperationReadinessProbe
+from backend.app.observability.domain import ComponentReadiness, ComponentStatus
 from backend.app.platform.auth import (
     HMACBearerTokenResolver,
     build_formal_principal_resolver,
@@ -324,6 +326,7 @@ def build_research_g4_recommendation_service(
     index_version: str | None = None,
     enable_llm_provider: bool = False,
     enable_llm_intent_provider: bool = False,
+    enable_llm_explanation_provider: bool = False,
     deadline_seconds: float = 30.0,
 ) -> MySQLG4RecommendationTaskService:
     """Build the explicit G4 RecommendationTaskService without HTTP wiring.
@@ -338,7 +341,11 @@ def build_research_g4_recommendation_service(
         raise ValueError("G4 recommendation composition requires a non-production environment")
     llm_provider = (
         build_llm_provider(settings)
-        if enable_llm_provider or enable_llm_intent_provider
+        if (
+            enable_llm_provider
+            or enable_llm_intent_provider
+            or enable_llm_explanation_provider
+        )
         else None
     )
 
@@ -356,6 +363,9 @@ def build_research_g4_recommendation_service(
             llm_provider=llm_provider if enable_llm_provider else None,
             llm_intent_provider=(
                 llm_provider if enable_llm_intent_provider else None
+            ),
+            llm_explanation_provider=(
+                llm_provider if enable_llm_explanation_provider else None
             ),
         )
 
@@ -387,6 +397,8 @@ def build_research_g4_http_app(
     behavior_service: object | None = None,
     readiness_probe: object | None = None,
     config_bundle_probe: object | None = None,
+    component_readiness_probes: dict[str, object] | None = None,
+    component_readiness_overrides: dict[str, ComponentReadiness] | None = None,
     feedback_api_enabled: bool = False,
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
@@ -419,6 +431,8 @@ def build_research_g4_http_app(
         recommendation_api_enabled=True,
         recommendation_readiness_enabled=True,
         recommendation_version="recommendation-g4-graph-vector-v1",
+        component_readiness_probes=component_readiness_probes,
+        component_readiness_overrides=component_readiness_overrides,
         feedback_service=feedback_service,
         behavior_service=behavior_service,
         feedback_api_enabled=feedback_api_enabled,
@@ -434,6 +448,7 @@ def build_research_g4_recommendation_service_from_runtime(
     connection_factory: ConnectionFactory | None = None,
     enable_llm_provider: bool = False,
     enable_llm_intent_provider: bool = False,
+    enable_llm_explanation_provider: bool = False,
     deadline_seconds: float = 120.0,
 ) -> MySQLG4RecommendationTaskService:
     """Build G4 service with an explicit, version-pinned read-only runtime."""
@@ -450,6 +465,7 @@ def build_research_g4_recommendation_service_from_runtime(
         index_version=runtime.index_version,
         enable_llm_provider=enable_llm_provider,
         enable_llm_intent_provider=enable_llm_intent_provider,
+        enable_llm_explanation_provider=enable_llm_explanation_provider,
         deadline_seconds=deadline_seconds,
     )
 
@@ -462,6 +478,7 @@ def build_research_g4_http_app_from_runtime(
     connection_factory: ConnectionFactory | None = None,
     enable_llm_provider: bool = False,
     enable_llm_intent_provider: bool = False,
+    enable_llm_explanation_provider: bool = False,
     deadline_seconds: float = 120.0,
     feedback_service: object | None = None,
     behavior_service: object | None = None,
@@ -478,8 +495,52 @@ def build_research_g4_http_app_from_runtime(
         connection_factory=connection_factory,
         enable_llm_provider=enable_llm_provider,
         enable_llm_intent_provider=enable_llm_intent_provider,
+        enable_llm_explanation_provider=enable_llm_explanation_provider,
         deadline_seconds=deadline_seconds,
     )
+
+    async def check_graph() -> object:
+        return await runtime.graph.recall(
+            terms=("__recpro_readiness__",),
+            graph_version=runtime.graph_version,
+            limit=1,
+        )
+
+    async def check_vector() -> object:
+        return await runtime.vector.recall(
+            query_vector=runtime.query_embedder.embed("recpro readiness"),
+            embedding_version=runtime.embedding_version,
+            index_version=runtime.index_version,
+            limit=1,
+        )
+
+    llm_enabled = (
+        enable_llm_provider
+        or enable_llm_intent_provider
+        or enable_llm_explanation_provider
+    )
+    component_probes = {
+        "neo4j": AsyncOperationReadinessProbe(
+            operation=check_graph,
+            required=False,
+            active_version=runtime.graph_version,
+            error_code="GRAPH_READINESS_FAILED",
+        ),
+        "chroma": AsyncOperationReadinessProbe(
+            operation=check_vector,
+            required=False,
+            active_version=runtime.index_version,
+            error_code="VECTOR_READINESS_FAILED",
+        ),
+    }
+    component_overrides = {
+        "llm": ComponentReadiness(
+            status=ComponentStatus.UP if llm_enabled else ComponentStatus.MOCK,
+            required=False,
+            active_version=settings.llm_model if llm_enabled else "mock-v1",
+            provider=settings.llm_provider if llm_enabled else "MockLLMProvider",
+        )
+    }
     return build_research_g4_http_app(
         settings,
         recommendation_service=recommendation_service,
@@ -487,6 +548,8 @@ def build_research_g4_http_app_from_runtime(
         behavior_service=behavior_service,
         readiness_probe=readiness_probe,
         config_bundle_probe=config_bundle_probe,
+        component_readiness_probes=component_probes,
+        component_readiness_overrides=component_overrides,
         feedback_api_enabled=feedback_api_enabled,
     )
 

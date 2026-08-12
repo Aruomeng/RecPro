@@ -2022,6 +2022,18 @@ A02 执行边界修复：旧 G7 执行器只完成首写和 GET，不能证明�
 下一步唯一动作：提交并推送当前实现；在 clean commit 上只读生成 A02、A03/A04/A08/A23、A07/A09/A10 三批新计划，向用户报告精确 plan_id/hash，批准前保持数据库零写入。
 ```
 
+## G4 真实 DeepSeek HTTP 与能力化 Readiness
+
+```text
+交接ID：G4-DEEPSEEK-HTTP-20260812-001
+状态：INTENT_REAL_HTTP_PASS / EXPLANATION_WIRING_READY
+计划：plan_id=28d050ce-a922-5480-b326-38fdf8984fdf；plan_hash=f65cea3aba5698d31e550ae439e2f73d2df63844c79575dc81e015a4c461f554。
+真实结果：首次 POST=201，DeepSeek deepseek-v4-flash Intent attempts=1、fallback=false；任务 COMPLETED、8 个推荐项；相同请求重放=200、Idempotency-Replayed=true、零新增、未再次调用模型。
+数据影响：MySQL 只追加计划内 56 行；其他表零变化；Neo4j/Chroma 零写入；文件与数据库删除为 0。
+独立对账：g4-deepseek-http-reconcile-20260812-001=PASS，任务、record、12 条候选通道证据、8 个 item/解释及 7 个 Agent message/result 均精确匹配。
+后续代码：Readiness 改为对 G4 Neo4j/Chroma 做只读能力探测并报告实际 LLM provider；新增 RECPRO_G4_LLM_EXPLANATION_ENABLED 独立闸门，Intent/Explanation 可分别注入 DeepSeek。Explanation 尚未做真实外部运行，必须先冻结 Evidence Bundle 与最大调用次数。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

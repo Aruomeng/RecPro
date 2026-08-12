@@ -11,6 +11,7 @@ x-backend-environment: &backend-environment
   RECPRO_PRODUCTION_HTTP_ENABLED: "${RECPRO_PRODUCTION_HTTP_ENABLED:-false}"
   RECPRO_G4_HTTP_ENABLED: "${RECPRO_G4_HTTP_ENABLED:-false}"
   RECPRO_G4_LLM_INTENT_ENABLED: "${RECPRO_G4_LLM_INTENT_ENABLED:-false}"
+  RECPRO_G4_LLM_EXPLANATION_ENABLED: "${RECPRO_G4_LLM_EXPLANATION_ENABLED:-false}"
   # G5 interaction HTTP is a separate write-capable research composition;
   # the default backend command remains health-only even if this is changed.
   RECPRO_G5_INTERACTION_HTTP_ENABLED: "${RECPRO_G5_INTERACTION_HTTP_ENABLED:-false}"

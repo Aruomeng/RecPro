@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -26,6 +28,7 @@ from backend.app.observability.adapters import (
     JsonConfigBundleReadinessProbe,
 )
 from backend.app.observability.application import ReadinessService
+from backend.app.observability.domain import ComponentReadiness
 from backend.app.observability.ports import ReadinessProbe
 
 
@@ -39,6 +42,8 @@ def create_app(
     recommendation_api_enabled: bool = False,
     recommendation_readiness_enabled: bool = False,
     recommendation_version: str = "recommendation-g3-mysql-v1",
+    component_readiness_probes: Mapping[str, ReadinessProbe] | None = None,
+    component_readiness_overrides: Mapping[str, ComponentReadiness] | None = None,
     feedback_service: object | None = None,
     behavior_service: object | None = None,
     feedback_api_enabled: bool = False,
@@ -92,6 +97,8 @@ def create_app(
         configuration_error_code=state.error_code,
         recommendation_enabled=recommendation_readiness_enabled,
         recommendation_version=recommendation_version,
+        component_probes=component_readiness_probes,
+        component_overrides=component_readiness_overrides,
     )
 
     application = FastAPI(

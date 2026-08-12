@@ -102,6 +102,36 @@ class CompositionRootContractTests(unittest.TestCase):
             provider,
             orchestrator_builder.call_args.kwargs["llm_intent_provider"],
         )
+        self.assertIsNone(
+            orchestrator_builder.call_args.kwargs["llm_explanation_provider"]
+        )
+
+    def test_g4_explanation_opt_in_is_capability_scoped(self) -> None:
+        provider = object()
+        orchestrator = object()
+        with patch(
+            "backend.app.composition.build_llm_provider", return_value=provider
+        ) as provider_builder, patch(
+            "backend.app.composition.build_port_orchestrator",
+            return_value=orchestrator,
+        ) as orchestrator_builder:
+            service = build_research_g4_recommendation_service(
+                settings(app_env="demo"),
+                connection_factory=lambda: _never(),
+                enable_llm_explanation_provider=True,
+            )
+            observed = service._orchestrator_factory(object())
+
+        self.assertIs(orchestrator, observed)
+        provider_builder.assert_called_once()
+        self.assertIsNone(orchestrator_builder.call_args.kwargs["llm_provider"])
+        self.assertIsNone(
+            orchestrator_builder.call_args.kwargs["llm_intent_provider"]
+        )
+        self.assertIs(
+            provider,
+            orchestrator_builder.call_args.kwargs["llm_explanation_provider"],
+        )
 
     def test_g4_http_root_is_fail_closed_without_explicit_switch(self) -> None:
         with self.assertRaisesRegex(ValueError, "disabled by configuration"):

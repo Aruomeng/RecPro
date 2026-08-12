@@ -19,16 +19,17 @@ DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROV
 
 当前就绪证据：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。该检查只读取 `.env.host`、构造 DeepSeek provider 并验证 Prompt Bundle；`network_requests=0`、`external_llm_requests=0`、数据库读写=0。它证明“可以进入一次明确授权的真实调用”，不证明已经调用，也不会改变默认 Mock/关闭状态。
 
-要让 G4 HTTP 研究组合根使用真实 Intent 能力，还必须同时启用独立能力开关：
+要让 G4 HTTP 研究组合根使用真实 Intent 与证据解释能力，必须分别启用两个独立能力开关：
 
 ```dotenv
 RECPRO_APP_ENV=demo
 RECPRO_G4_HTTP_ENABLED=true
 RECPRO_G4_LLM_INTENT_ENABLED=true
+RECPRO_G4_LLM_EXPLANATION_ENABLED=true
 RECPRO_LLM_PROVIDER=deepseek
 ```
 
-入口把 provider 只注入 `IntentUnderstandingAgent`；实际请求只会在编排运行到 Intent Agent 且输入非空时发生。默认 `backend.app.main:app` 与 Worker 不读取该能力开关来挂载业务路径。
+入口只把 provider 注入明确启用的 `IntentUnderstandingAgent` 和/或 `ExplanationAgent`。Intent 在输入非空时调用一次；Explanation 仅消费排序项已有的证据引用，逐项执行引用白名单校验，失败立即回退模板。默认 `backend.app.main:app` 与 Worker 不读取这些能力开关来挂载业务路径。
 
 因此，真实调用的最早时点是完成一次单独的外部调用审批之后，而不是配置文件写入之后。需要同时满足：
 
@@ -63,12 +64,13 @@ RECPRO_LLM_PROVIDER=deepseek
 
 DeepSeek 使用 HTTPS OpenAI-compatible `/chat/completions` 端点，固定 `temperature=0`。每个能力最多两次尝试：一次正常请求加一次结构/临时网络故障重试；4xx 鉴权或配置错误不会无限重试。超时、不可用、无效 JSON、未知字段和证据引用越权均会进入 Agent 的规则/模板降级。
 
-当前已接入编排的 LLM Agent 是 `LLMIntentUnderstandingAgent`：
+当前已接入编排的 LLM Agent 是 `LLMIntentUnderstandingAgent` 与 `LLMExplanationAgent`：
 
 1. 空输入直接走规则路径，不调用 provider。
 2. 模型只返回意图枚举；主题词、资源类型和资源 ID 不由模型生成。
 3. Provider 异常、超时或非法枚举返回规则意图，结果标记 `fallback_used=true` 和 `LLM_INTENT_FALLBACK`。
-4. Explanation/Feedback 的 Prompt 已冻结，但仍由既有模板/规则链路负责最终业务接线，避免在 EvidenceValidator 和反馈事务边界完成前扩大外部调用面。
+4. Explanation 只允许使用输入 Evidence Bundle 中的引用，越权、遗漏引用、空输出或超长输出均回退模板。
+5. Feedback 的 Prompt 已冻结，但结构化反馈接口当前直接接收原因枚举，不需要把确定性事务改造成 LLM 调用；自由文本反馈解析仍未接入。
 
 ## 4. 本地验证
 
@@ -125,10 +127,16 @@ make PYTHON=.venv-g1-final-py311/bin/python \
   verify-g4-real-llm-readonly
 ```
 
-`g4-real-llm-readonly-20260812-002` 已形成 PASS artifact：DeepSeek `deepseek-v4-flash` 实际处理一次 `intent.classify`，`attempts=1`、无 fallback，七 Agent 编排完成并返回 8 条三通道候选；MySQL/Neo4j/Chroma 写入、Outbox、删除和覆盖均为 0。G4 HTTP 入口已支持同一 Intent-only 注入，可通过 `make run-g4-deepseek-demo` 启动；Explanation、Feedback LLM 和 Worker 仍保持独立关闭。
+`g4-real-llm-readonly-20260812-002` 已形成 PASS artifact：DeepSeek `deepseek-v4-flash` 实际处理一次 `intent.classify`，`attempts=1`、无 fallback，七 Agent 编排完成并返回 8 条三通道候选；MySQL/Neo4j/Chroma 写入、Outbox、删除和覆盖均为 0。G4 HTTP 入口支持 Intent 与 Explanation 独立注入；本机配置已准备同时启用，但 Explanation 的真实外部调用仍需新的只读/追加计划限定最大调用数并形成 PASS 证据。
 
 ## 8. 真实 HTTP 持久化审批边界
 
 `build-g4-recommendation-projection-plan` 支持 `G4_PROJECTION_ENABLE_DEEPSEEK_INTENT=true`。生成器只读取 PASS 基线和本机配置，将 provider、模型、HTTPS origin、Prompt Bundle、超时、token 上限、最大两次尝试和 Intent-only 范围哈希到计划中；API key 不进入计划或日志，生成计划时不调用模型、不写数据库。
 
 获批后的执行器使用实际 FastAPI `/api/v1/recommendation-tasks` 路由：第一次 POST 必须返回 201 并在一个事务中追加 G4/G3 事实；相同 request_id 的第二次 POST 必须返回同一 task、`Idempotency-Replayed=true`、数据库零增量且不再次调用 DeepSeek；最后 GET 回读持久化任务。执行器还会回读 `IntentUnderstandingAgent` 结果，要求 `intent-llm-prompt-v1`、provider=`deepseek`、无 fallback、prompt=`intent.classify`、尝试次数在 1–2 以内。任何提交、基线、计数、模型策略或请求漂移都会在执行前阻断。
+
+## 9. 真实 HTTP 首次执行结果与下一能力
+
+获批计划 `28d050ce-a922-5480-b326-38fdf8984fdf` 已通过真实 HTTP 执行和独立对账：首次 POST=`201`，DeepSeek Intent 调用 1 次、无 fallback，任务 `COMPLETED` 并返回 8 项；相同请求重放=`200`、零新增且未再次调用模型。MySQL 精确追加 56 行，Neo4j/Chroma 零写入，删除为 0。证据位于 `artifacts/verification/g4/g4-deepseek-http-apply-20260812-001/` 与 `g4-deepseek-http-reconcile-20260812-001/`。
+
+下一 LLM Gate 是 `explanation.render`：代码和独立配置开关已接好，但在批准最大外部调用次数、输入 Evidence Bundle 和回退策略的新计划之前，不把它宣称为真实运行 PASS。画像、语义探测、召回、策略和排序 Agent 使用真实数据库/图/向量/确定性算法完成各自职责，不属于 Mock LLM，也不应为了“全 LLM”而把事实计算交给生成模型。

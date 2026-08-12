@@ -8,11 +8,30 @@ from fastapi.testclient import TestClient
 from backend.app.composition import build_research_g4_http_app_from_runtime
 from backend.app.config import AppSettings
 from backend.app.catalog.runtime.g4_ports import build_g4_readonly_runtime
+from backend.app.catalog.runtime.g4_ports import G4ReadOnlyRuntime
 
 
 class _Collection:
     def query(self, **_: object) -> dict[str, list[list[object]]]:
         return {"ids": [[]], "distances": [[]], "metadatas": [[]]}
+
+
+class _Graph:
+    async def recall(self, **_: object) -> tuple[object, ...]:
+        return ()
+
+
+class _Vector:
+    async def recall(self, **_: object) -> tuple[object, ...]:
+        return ()
+
+
+class _Embedder:
+    embedding_version = "hash-char-ngram-v1"
+    dimension = 384
+
+    def embed(self, _: str) -> tuple[float, ...]:
+        return (1.0,) + (0.0,) * 383
 
 
 def runtime():
@@ -25,6 +44,19 @@ def runtime():
         embedding_version="hash-char-ngram-v1",
         index_version="lib-books-vector-v1-20260811",
         namespace_name="library_resources__hash_char_ngram_v1",
+    )
+
+
+def ready_runtime() -> G4ReadOnlyRuntime:
+    return G4ReadOnlyRuntime(
+        graph=_Graph(),
+        vector=_Vector(),
+        query_embedder=_Embedder(),
+        graph_version="lib-books-v1-20260810",
+        embedding_version="hash-char-ngram-v1",
+        index_version="lib-books-vector-v1-20260811",
+        namespace_name="library_resources__hash_char_ngram_v1",
+        dimension=384,
     )
 
 
@@ -63,7 +95,7 @@ class G4RuntimePortTests(unittest.TestCase):
                 mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
                 g4_http_enabled=True,
             ),
-            runtime=runtime(),
+            runtime=ready_runtime(),
             connection_factory=connection_factory,
         )
         self.assertFalse(opened)
@@ -81,15 +113,24 @@ class G4RuntimePortTests(unittest.TestCase):
                 app_env="demo",
                 mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
                 g4_http_enabled=True,
+                g4_llm_intent_enabled=True,
+                llm_provider="deepseek",
+                llm_api_key=SecretStr("local-test-deepseek-key-001"),
             ),
-            runtime=runtime(),
+            runtime=ready_runtime(),
             connection_factory=lambda: None,
+            enable_llm_intent_provider=True,
             readiness_probe=Probe(),
             config_bundle_probe=Probe(),
         )
         with TestClient(application) as client:
             body = client.get("/api/v1/health/ready").json()
         self.assertTrue(body["can_recommend"])
+        self.assertEqual("READY", body["status"])
+        self.assertEqual("UP", body["components"]["neo4j"]["status"])
+        self.assertEqual("UP", body["components"]["chroma"]["status"])
+        self.assertEqual("UP", body["components"]["llm"]["status"])
+        self.assertEqual("deepseek", body["components"]["llm"]["provider"])
         self.assertEqual(
             "recommendation-g4-graph-vector-v1",
             body["components"]["recommendation_pipeline"]["active_version"],
