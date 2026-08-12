@@ -136,6 +136,31 @@ class FeedbackApplicationTests(unittest.TestCase):
         self.assertEqual(BehaviorEventType.NOT_INTERESTED, behavior.commands[0].event_type)
         self.assertTrue(behavior.commands[0].enqueue_profile_update)
 
+    def test_already_read_marks_only_the_target_resource_state(self) -> None:
+        connection = FakeConnection()
+        behavior = FakeBehaviorPort()
+        store = FakeFeedbackStore()
+        service = FeedbackApplicationService(
+            connection_factory=lambda: _resolved(connection),
+            feedback_store=store,
+            behavior_port=behavior,
+        )
+        command = FeedbackCommand(
+            feedback_uuid=uuid4(),
+            recommendation_item_id=7,
+            user_id=1001,
+            feedback_type=FeedbackType.NOT_INTERESTED,
+            impression_uuid=uuid4(),
+            reason_code=NegativeReasonCode.ALREADY_READ,
+            occurred_at=now(),
+        )
+
+        receipt = asyncio.run(service.record_feedback(command))
+
+        self.assertEqual("READ", receipt.resource_state["state_type"])
+        self.assertEqual(NegativeReasonCode.ALREADY_READ.value, behavior.commands[0].reason_code)
+        self.assertTrue(behavior.commands[0].enqueue_profile_update)
+
     def test_invalid_borrow_rolls_back_without_behavior(self) -> None:
         connection = FakeConnection()
         behavior = FakeBehaviorPort()

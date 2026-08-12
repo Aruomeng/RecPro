@@ -83,6 +83,25 @@ class ProfileReplayTests(unittest.TestCase):
         self.assertGreaterEqual(left.profile_confidence, 0)
         self.assertLessEqual(left.profile_confidence, 1)
 
+    def test_already_read_preserves_topic_interest_without_creating_topic_negative(self) -> None:
+        snapshot = compute_profile_snapshot(
+            user_id=1001,
+            as_of=at("2025-02-01T00:00:00"),
+            events=(
+                BehaviorForReplay(
+                    event_id=1,
+                    event_uuid="already-read-1",
+                    event_type="VIEW_RESOURCE",
+                    resource_id=10,
+                    occurred_at=at("2025-01-01T00:00:00"),
+                    reason_code="ALREADY_READ",
+                    tags=(ResourceTagEvidence(7, 1.0, 1.0),),
+                ),
+            ),
+        )
+        self.assertEqual((7,), tuple(item.tag_id for item in snapshot.interests))
+        self.assertEqual((), snapshot.negatives)
+
 
 if __name__ == "__main__":
     unittest.main()
