@@ -95,6 +95,7 @@
   - 已完成数据平面只读健康门禁：`verify_data_plane_runtime` 只读取 Compose 服务状态、MySQL 表数量和 Neo4j 节点/关系数量；干净工作区证据 `data-plane-20260810-003` 为 PASS，MySQL=40 张表、Neo4j=0/0，database_writes=0、actual_delete_count=0、service_start_stop_actions=0。
   - 已完成图书数据接入前置契约：`book-record.schema.json` 固化脱离用户身份的规范化书目记录，`book-intake-manifest.schema.json` 固化来源、许可、文件 SHA-256、规范化、隐私和 MySQL/Neo4j 目标；`inspect_book_intake` 只读校验 JSONL、重复主键/ISBN/标签、许可引用和路径安全，在没有用户数据时明确阻断，不连接数据库。
   - 已完成 G5 Worker 运行态接线：`backend.app.worker` 以配置包校验和 `RECPRO_WORKER_ENABLED`/`RECPRO_WORKER_MODE` 双闸门启动；默认 Compose worker 保持 `false/disabled` 健康等待，不创建数据库连接。显式非 production `profile_outbox` 模式才装配受控 MySQL connection factory、batch/lease/retry/poll 参数和固定画像公式；新增只读 wiring verifier 与入口/配置测试。
+  - 已完成 G5 Worker 真实隔离空队列只读探针：先以运行账号验证无 `PENDING/PROCESSING`，再使用既有受控 migration 身份调用真实 `run_once(limit=1)`，receipts=`0`、40 张表计数与 Outbox 状态前后不变；运行账号首次 `SELECT ... FOR UPDATE` 被最小权限正确拒绝且未产生写入，修正为既有受控 Worker 凭据后通过。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -124,7 +125,7 @@
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
-| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；24 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算和默认安全 Worker 接线 PASS；认证运行态无数据库动作；production HTTP、外部 IdP/JWKS、正式 Worker 受控消费审批和发布凭据流程待补 |
+| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；24 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和真实隔离空队列探针 PASS；认证运行态无数据库动作；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json` | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；feedback/behavior 页面、正式部署接线和论文演示冻结流程仍待完成 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
@@ -137,7 +138,7 @@
 
 ## Working Set
 
-- `current_subtask`：G5 Profile Outbox Worker 的运行态接线、配置双闸门和默认 Compose 安全边界已完成；当前只读 wiring verifier PASS，默认 worker 不创建数据库连接。下一步是为一次真实消费单独生成并审批 Worker ChangePlan，或转入 G8 发布候选评审；继续保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_subtask`：G5 Profile Outbox Worker 的运行态接线、配置双闸门、默认 Compose 安全边界和真实隔离空队列只读探针已完成；当前 receipts=`0`、数据库写入=`0`、Outbox claim=`0`。下一步是为一次真实非空消费单独生成并审批 Worker ChangePlan，或转入 G8 发布候选评审；继续保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -1554,6 +1555,21 @@ Gate：G5 Profile Outbox Worker 运行态接线、配置校验与 Compose 默认
 只读证据：`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`，Compose 标记=5，database_connections=`0`、database_writes=`0`、outbox_claims=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`；默认 worker=`enabled:false/mode:disabled`。
 测试与版本：新增 Worker 配置/入口测试；本阶段需通过 G1/G5、架构、安全、契约、文档及 Compose 门禁后再提交。任何显式启用 Worker 或新的业务事实追加，仍须另行生成并批准精确 plan_id/hash，不得把本只读接线证据当作写入授权。
 下一步唯一动作：完成本提交的全量门禁并推送；随后若要验证运行态消费，先生成新的 Worker 专用 DRY_RUN/ChangePlan，批准后才可在明确范围内运行一次。
+```
+
+## G5 Worker 隔离空队列真实运行态只读探针记录
+
+```text
+交接ID：G5-WORKER-READONLY-RUNTIME-20260812-002
+Gate：G5 Profile Outbox Worker 真实隔离运行态空队列探针
+状态：READONLY_RUNTIME_PASS / EMPTY_QUEUE / COUNTS_UNCHANGED
+时间：2026-08-12（Asia/Shanghai）
+目标：在不追加任何业务事实的前提下，让新 Worker 接线实际走一次 `ProfileOutboxWorker.run_once(limit=1)`，证明空队列时不会产生消费或投影副作用。
+安全前置：探针先用运行账号读取完整 40 张表计数和 Outbox 状态，发现 `PENDING/PROCESSING=0` 才继续；第一次尝试使用运行账号执行 `SELECT ... FOR UPDATE` 被 MySQL 最小权限正确拒绝（1142），未产生写入。随后按既有 G5 设计改用单独受控 migration 身份重跑；不修改凭据、不扩大授权、不执行迁移。
+真实结果：隔离 Compose=`recpro-g2-tianyuhang-20260809a`、MySQL host port=`62306`；Worker mode=`profile_outbox`、batch_limit=`1`、formula=`profile-g2-v1`；实际 receipts=`0`。前后完整表计数完全一致：`profile_update_outbox=25`、`DONE=23`、`DEAD=2`，无 `PENDING/PROCESSING`；40 张表均未变化。
+安全计数：数据库连接=`3`（前置/Worker/后置只读连接）、database_writes=`0`、outbox_claims=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`；未访问 Neo4j/Chroma、未调用 DeepSeek。
+证据：`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；脚本=`scripts/verify_g5_worker_readonly_runtime.py`，Make=`verify-g5-worker-readonly-runtime`。
+下一步唯一动作：若要验证非空 Outbox 的真实受控消费，必须重新生成并批准新的 G5 Worker 专用 ChangePlan；在批准前不得追加行为/反馈事实、不得 claim Outbox、不得启用默认 Worker。
 ```
 
 ## 阶段交接模板
