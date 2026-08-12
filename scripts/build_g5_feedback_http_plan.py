@@ -70,6 +70,28 @@ def sha256_bytes(value: bytes) -> str:
     return hashlib.sha256(value).hexdigest()
 
 
+def target_snapshot_from_facts(target_facts: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the canonical mutable facts frozen by a G5 plan.
+
+    The snapshot intentionally contains the recommendation ownership chain,
+    the complete imported tag rows, user/resource state, Outbox status and
+    deterministic-id/latest-behavior guards.  Both the DRY_RUN builder and
+    the fail-closed executor use this helper so the hash cannot silently
+    describe different facts at review and apply time.
+    """
+
+    return {
+        "task": target_facts["task"],
+        "record": target_facts["record"],
+        "item": target_facts["item"],
+        "resource_tags": target_facts["resource_tags"],
+        "resource_states": target_facts["resource_states"],
+        "outbox_statuses": target_facts["outbox_statuses"],
+        "uuid_absence": target_facts["uuid_absence"],
+        "latest_behavior_at": target_facts["latest_behavior_at"],
+    }
+
+
 def resolve_inside_root(value: Path, *, label: str, strict: bool = True) -> Path:
     candidate = value if value.is_absolute() else PROJECT_ROOT / value
     resolved = candidate.resolve(strict=strict)
@@ -343,18 +365,16 @@ async def read_target_facts(
         raise ValueError("recommendation item ownership does not match the task")
     if item_facts["resource_type"] != "BOOK":
         raise ValueError("G5 interaction target must be a BOOK")
-    if len(tags) != 2 or set(tag["tag_id"] for tag in tags) != {102, 8463}:
-        raise ValueError("target resource tags must be exactly the frozen imported tags 102 and 8463")
-    expected_tags = {
-        (102, 0.8, 0.95, "IMPORT"),
-        (8463, 0.9, 0.9, "IMPORT"),
-    }
-    actual_tags = {
-        (tag["tag_id"], tag["weight"], tag["confidence"], tag["source"])
+    if not tags:
+        raise ValueError("target resource must have at least one imported resource_tag row")
+    if any(
+        tag["tag_id"] < 1
+        or not 0 <= tag["weight"] <= 1
+        or not 0 <= tag["confidence"] <= 1
+        or tag["source"] != "IMPORT"
         for tag in tags
-    }
-    if actual_tags != expected_tags:
-        raise ValueError("target resource tags do not match the frozen imported weights/confidence")
+    ):
+        raise ValueError("target resource tags must be valid imported rows with bounded weights/confidence")
     if any(state["state_type"] == "HIDDEN" for state in resource_states):
         raise ValueError("target resource already has a HIDDEN user_resource_state")
     if outbox_statuses.get("PENDING", 0) or outbox_statuses.get("PROCESSING", 0):
@@ -499,16 +519,7 @@ def build_plan(
         int(target["expected_after_min_count"]) - int(target["expected_before_count"])
         for target in target_list
     )
-    target_snapshot = {
-        "task": target_facts["task"],
-        "record": target_facts["record"],
-        "item": target_facts["item"],
-        "resource_tags": target_facts["resource_tags"],
-        "resource_states": target_facts["resource_states"],
-        "outbox_statuses": target_facts["outbox_statuses"],
-        "uuid_absence": target_facts["uuid_absence"],
-        "latest_behavior_at": target_facts["latest_behavior_at"],
-    }
+    target_snapshot = target_snapshot_from_facts(target_facts)
     config_path = PROJECT_ROOT / "contracts" / "config" / "examples" / "rec-1.0.0.json"
     interaction_hash = sha256_bytes(canonical(interaction_payload))
     host_fingerprint = "sha256:" + sha256_bytes(
@@ -552,7 +563,7 @@ def build_plan(
             "all full information_schema table names and exact expected_before_count values are re-read immediately before apply and match this plan",
             "runtime probe identity and least-privilege grant guard remain PASS; the runtime user is not a migration/root user",
             f"task {task_id}, record {record_id}, item {item_id}, resource {int(target_facts['item']['resource_id'])}, and user {user_id} remain owned and linked exactly as frozen; task is COMPLETED/context_version=1 and resource_type=BOOK",
-            "the target resource tags remain exactly tag_id 102 and 8463 with the frozen weight/confidence/source rows, and no HIDDEN user_resource_state exists for this user/resource",
+            f"the target resource retains the exact frozen imported resource_tag rows (tag_ids={','.join(str(tag['tag_id']) for tag in target_facts['resource_tags'])}) and target_snapshot hash {sha256_bytes(canonical(target_snapshot))}, with no HIDDEN user_resource_state for this user/resource",
             "the three deterministic interaction UUIDs are absent, or a retry is accepted only when every persisted payload field is byte-for-byte replay-identical",
             "profile_update_outbox has no pre-existing PENDING or PROCESSING row; feedback and direct behavior each enqueue exactly one new outbox row, while the impression-derived behavior enqueues none",
             "only the eleven MySQL targets in this plan may be touched; recommendation/resource/catalog/declared-profile facts, Neo4j, Chroma, migrations, seed data, and external LLM/network calls are outside the plan",

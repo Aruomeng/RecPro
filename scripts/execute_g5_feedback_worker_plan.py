@@ -48,6 +48,8 @@ from scripts.build_g5_feedback_http_plan import (
     read_identity_and_grants,
     read_snapshot,
     read_target_facts,
+    sha256_bytes,
+    target_snapshot_from_facts,
 )
 from scripts.validate_runtime_env import read_env, validate_compose
 from scripts.verify_g7_mysql_http_readonly import build_settings
@@ -390,6 +392,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
     finally:
         target_facts_connection.close()
+    target_snapshot_hash = sha256_bytes(canonical(target_snapshot_from_facts(target_facts)))
+    if target_snapshot_hash != str(plan["input_hashes"].get("target_snapshot", "")):
+        raise ValueError("live recommendation ownership/tag/state snapshot differs from the approved plan")
     identity = await read_identity_and_grants(values)
     if not identity.get("grants_safe"):
         raise ValueError("runtime grants failed the least-privilege guard")

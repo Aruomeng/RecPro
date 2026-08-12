@@ -20,6 +20,7 @@ from scripts.execute_g5_feedback_worker_plan import (
     _assert_delta,
     build_commands,
 )
+from scripts.build_g5_feedback_http_plan import canonical, sha256_bytes, target_snapshot_from_facts
 
 
 class G5FeedbackWorkerExecutorTests(unittest.TestCase):
@@ -31,6 +32,24 @@ class G5FeedbackWorkerExecutorTests(unittest.TestCase):
         _assert_delta({"a": 4}, {"a": 5}, {"a": 1})
         with self.assertRaises(ValueError):
             _assert_delta({"a": 4}, {"a": 6}, {"a": 1})
+
+    def test_target_snapshot_hash_freezes_all_reviewed_target_facts(self) -> None:
+        facts = {
+            "task": {"id": "task"},
+            "record": {"id": 24},
+            "item": {"id": 129, "resource_id": 6850},
+            "resource_tags": ({"tag_id": 102, "weight": 0.8, "confidence": 0.95, "source": "IMPORT"},),
+            "resource_states": (),
+            "outbox_statuses": {"DONE": 25},
+            "uuid_absence": {"impression_uuid": 0, "feedback_uuid": 0, "behavior_uuid": 0},
+            "latest_behavior_at": "2030-01-20T12:00:00",
+            "user_profile_count": 1,
+        }
+        snapshot = target_snapshot_from_facts(facts)
+        self.assertNotIn("user_profile_count", snapshot)
+        baseline_hash = sha256_bytes(canonical(snapshot))
+        facts["resource_tags"] = tuple((*facts["resource_tags"], {"tag_id": 8463, "weight": 0.9, "confidence": 0.9, "source": "IMPORT"}))
+        self.assertNotEqual(baseline_hash, sha256_bytes(canonical(target_snapshot_from_facts(facts))))
 
     def test_build_commands_freezes_the_three_interaction_boundaries(self) -> None:
         payload = {
