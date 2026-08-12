@@ -7,6 +7,7 @@ from uuid import UUID
 
 from backend.app.catalog.domain.models import ResourceSummary, ResourceTagEvidence
 from backend.app.profile.replay import InterestSignal, ProfileSnapshot
+from backend.app.llm.ports.public import LLMResult
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.orchestrator import (
     OrchestrationDeadlineExceeded,
@@ -93,6 +94,23 @@ class FakeProfile:
         )
 
 
+class IntentOnlyProvider:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def classify_intent(self, text: str) -> LLMResult:
+        self.calls += 1
+        return LLMResult(
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            prompt_version="prompt-v1",
+            prompt_id="intent.classify",
+            prompt_sha256="a" * 64,
+            payload={"intent": "BOOK_RECOMMENDATION"},
+            attempts=1,
+        )
+
+
 def request(*, deadline_at: datetime | None = None) -> OrchestrationRequest:
     return OrchestrationRequest(
         task_id=UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"),
@@ -166,6 +184,27 @@ class G4PortOrchestratorTests(unittest.TestCase):
                     request(deadline_at=datetime.now(UTC) - timedelta(seconds=1))
                 )
             )
+
+    def test_intent_capability_can_be_opted_in_without_explanation_calls(self) -> None:
+        provider = IntentOnlyProvider()
+        result = asyncio.run(
+            build_port_orchestrator(
+                FakeCatalog(),
+                FakeProfile(),
+                llm_intent_provider=provider,
+            ).run(request())
+        )
+        self.assertEqual(TaskStatus.COMPLETED, result.status)
+        self.assertEqual(1, provider.calls)
+        intent = next(
+            item for item in result.dispatches if item.message.receiver == "IntentUnderstandingAgent"
+        )
+        self.assertEqual("intent-llm-prompt-v1", intent.result.agent_version)
+        self.assertEqual("deepseek", intent.result.payload["llm_provider"])
+        explanation = next(
+            item for item in result.dispatches if item.message.receiver == "ExplanationAgent"
+        )
+        self.assertEqual("explanation-rule-v1", explanation.result.agent_version)
 
 
 if __name__ == "__main__":

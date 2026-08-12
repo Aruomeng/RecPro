@@ -50,12 +50,13 @@
   - 已完成向量计划 Schema、逐行哈希/维度校验器和数据库无关完整性报告；已新增版本化只读 `VectorRecallPort`/`ChromaVectorReader`、cosine 分数映射、元数据版本隔离和故障降级测试；MySQL `embedding_status` 仍保持 `PENDING`。
   - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端已锁定 `chromadb==1.5.9` 并仅用于隔离 operator venv。
   - 已在用户明确授权后创建正式 Chroma collection 并追加 14,983 条向量；全量回读验证、版本/元数据验证、数值容差验证、召回冒烟、幂等复跑和独立只读 verifier 均 PASS。首次验证因 Chroma 1.5.9 的 NumPy 返回类型兼容性阻断，现场和失败证据均保留，未执行任何清理或覆盖。
-  - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；用户提供的 DeepSeek 密钥已写入本机被 Git 忽略且权限为 `0600` 的 `.env.host`/`.env.compose`，未写入仓库，未发起外部请求。
-  - 已新增 `scripts/verify_llm_real_call_readiness.py`、`make verify-llm-real-call-readiness` 和 `tests/g1/backend/test_llm_real_call_readiness.py`；当前 `.env.host` 的 DeepSeek provider、`deepseek-v4-flash`、HTTPS、Prompt Bundle 和 key 存在性均通过本地预检，证据 `artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。预检网络请求、外部 LLM 请求、数据库读写、Outbox claim、删除和覆盖均为 0；实际调用仍需要一次单独的用户明确批准和显式 `enable_llm_provider=True` 组合根。
+  - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；用户提供的 DeepSeek 密钥仅写入本机被 Git 忽略且权限为 `0600` 的 `.env.host`/`.env.compose`，未写入仓库或日志。配置阶段未发起外部请求。
+  - 已新增 `scripts/verify_llm_real_call_readiness.py`、`make verify-llm-real-call-readiness` 和 `tests/g1/backend/test_llm_real_call_readiness.py`；当前 `.env.host` 的 DeepSeek provider、`deepseek-v4-flash`、HTTPS、Prompt Bundle 和 key 存在性均通过本地预检，证据 `artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。预检网络请求、外部 LLM 请求、数据库读写、Outbox claim、删除和覆盖均为 0；随后一次固定 fixture 已按用户授权执行并单独留存证据。
   - 用户明确批准后已完成首次真实 DeepSeek fixture 调用：新增 `scripts/execute_llm_fixture_call.py`、`make execute-llm-fixture-call` 与测试；`artifacts/verification/llm/llm-fixture-call-20260812-001/real-call.json`=`PASS`，`intent.classify`、`attempts=1`、约 `1808ms`、返回 `BOOK_RECOMMENDATION`。只发送固定非敏感文本，未读取/写入 MySQL、Neo4j、Chroma，未 claim Outbox，未保存原始响应或密钥。
   - 已完成版本化 Prompt Bundle：`contracts/prompts/rec-prompts-v1.0.0.json`（`prompt-v1`）及严格 Schema、变量白名单、上下文上限、输出 Schema、工具零授权和 SHA-256 绑定；新增只读 `verify_prompt_bundle` 门禁与 Prompt 配置文档。
   - 已完成 DeepSeek Prompt 接入：四个能力统一使用 Prompt Bundle，LLMResult 增加 `prompt_id/prompt_sha256/request_id/attempts` 审计字段；无效 JSON/结构输出最多一次重试，证据引用越权 fail-closed。
   - 已完成显式 LLM Intent Agent：`LLMIntentUnderstandingAgent` 只消费文本分类结果，主题词/资源类型仍由规则生成；外部 provider 异常、超时或空输入自动降级，默认规则编排和默认 HTTP/Worker 不改变。
+  - 已新增 capability-specific LLM 组合参数 `llm_intent_provider`/`llm_explanation_provider`，并新增 `scripts/verify_g4_real_llm_readonly.py`；离线 fake provider 回放确认一次真实 Intent 能力不会触发 Explanation 的批量外部请求。用户批准的 G4 真实只读探针已安全退出但未形成 PASS artifact，当前不能把它计作真实业务链路通过。
   - 已完成 G6 低耦合只读检索融合接线：新增 `QueryEmbeddingPort`/`HashCharNgramQueryEmbedder`，`CatalogCandidateRecallAgent` 可通过显式组合根融合 Neo4j GraphRecall 与 Chroma VectorRecall；版本、超时、证据引用和故障降级均由 fake/隔离测试覆盖，默认 MySQL-only 路径不变。
   - 已冻结数据字典、HTTP API、OpenAPI、Agent/Policy/状态机、配置 Bundle、ChangePlan 和错误码契约。
   - 已冻结 RQ1—RQ4、B0—B3、Proposed、消融、指标、时间切分和实验产物协议。
@@ -137,11 +138,11 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
-  - DeepSeek 已完成一次获批的非敏感 Intent fixture 真实调用，但默认 HTTP/Worker 仍未启用外部 provider；MockLLM/规则路径仍是安全默认。后续外部请求必须继续使用被 `.gitignore` 保护的本地配置，并遵守数据脱敏、伦理、费用、超时、回退和审计边界，不能将密钥写入 Git、Manifest、日志或 Agent 消息。
-  - LLM 当前阻塞已从“配置缺失”收敛为“外部调用授权未发生”：就绪预检已通过，但真实请求前仍需固定非敏感输入、字段脱敏、费用/超时/重试预算、失败回退与审计方案，并由用户明确批准一次 opt-in 请求；默认 Compose/HTTP/Worker 继续 Mock/关闭。
+  - DeepSeek 已完成一次获批的非敏感 Intent fixture 真实调用，但默认 HTTP/Worker 仍未启用外部 provider；MockLLM/规则路径仍是安全默认。G4 真实业务探针尚未形成 PASS artifact，不能声称真实推荐链路已切换。后续外部请求必须继续使用被 `.gitignore` 保护的本地配置，并遵守数据脱敏、伦理、费用、超时、回退和审计边界，不能将密钥写入 Git、Manifest、日志或 Agent 消息。
+  - LLM 当前阻塞已从“配置缺失”收敛为“真实业务链路证据不足”：provider-only fixture 已通过，选择性 Intent 接线和离线回放已通过，但 G4 真实只读探针需在新的明确授权下重新执行并生成 PASS artifact；默认 Compose/HTTP/Worker 继续 Mock/关闭。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
-  - `next_step`：依据与当前提交匹配的 `g8-final-revalidation-plan-20260812-004` 与 `g8-final-revalidation-audit-20260812-002`，补齐尚未有当前提交证据的只读/故障案例并保持追加式审计；A02/A03/A04/A07/A08/A09/A10/A23、任何浏览器业务流、非空 Worker claim、索引写入和 DeepSeek 请求必须另行生成精确 ChangePlan、plan_id/hash 并获批。25 项 final_revalidation 仍为 `PENDING`，随后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
+  - `next_step`：依据与当前提交匹配的 `g8-final-revalidation-plan-20260812-004` 与 `g8-final-revalidation-audit-20260812-002`，补齐尚未有当前提交证据的只读/故障案例并保持追加式审计；G4 真实 LLM 只读探针需新的外部请求批准后再执行，A02/A03/A04/A07/A08/A09/A10/A23、任何浏览器业务流、非空 Worker claim、索引写入也必须另行生成精确 ChangePlan、plan_id/hash 并获批。25 项 final_revalidation 仍为 `PENDING`，随后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
 
 ---
 
@@ -154,9 +155,9 @@
 | G1 可启动工程骨架 | COMPLETED | `docs/G1_RUNNABLE_SKELETON_MANIFEST.md`；本地 266 项测试；`artifacts/verification/g1/g1-runtime-20260802-014` 运行态证据 PASS | 五服务双次健康启动、三卷身份与探针计数保持一致；破坏性动作 0 |
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
-| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
+| G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试；选择性 LLM 接线离线回归 PASS | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；Intent-only provider 组合不会触发 Explanation 批量请求；G4 真实 LLM 只读探针尚未形成 PASS artifact；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
+| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py`；provider-only fixture artifact | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；真实 G4 LLM 业务探针仍待重新获批并生成 PASS artifact |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
 | G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；`artifacts/verification/g8/g8-acceptance-coverage-20260812-008/acceptance-coverage.json` 完成 A01—A25 映射；`artifacts/verification/g8/g8-final-revalidation-plan-20260812-003/final-revalidation-plan.json` 与 `g8-final-revalidation-audit-20260812-001/final-revalidation-audit.json` 冻结并审计最终复验范围 | 25 项映射无陈旧引用；25 项直接覆盖、0 项相关覆盖、0 项缺失；17 项可先只读验证、8 项需独立 ChangePlan；最终 A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
@@ -168,7 +169,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 发布候选只读/构建前置已通过，A01—A25 已全部达到 DIRECT 离线覆盖；当前计划 `g8-final-revalidation-plan-20260812-004` 与审计 `g8-final-revalidation-audit-20260812-002` 已与提交 `a490652` 匹配，当前提交已补充数据平面、G4 编排/融合/澄清、G6 融合和 G7 health-only 证据。17 项只读路径继续逐项补证，8 项及六个浏览器场景仍需独立 ChangePlan；G7 readiness=`DEGRADED` 仍是公开阻塞项。所有本轮数据库/Neo4j/Chroma 写入、Outbox claim、DeepSeek、删除/覆盖均为 0。
+- `current_subtask`：G8 发布候选只读/构建前置已通过，A01—A25 已全部达到 DIRECT 离线覆盖；当前计划 `g8-final-revalidation-plan-20260812-004` 与审计 `g8-final-revalidation-audit-20260812-002` 已与提交 `a490652` 匹配，当前提交已补充数据平面、G4 编排/融合/澄清、G6 融合和 G7 health-only 证据。17 项只读路径继续逐项补证，8 项及六个浏览器场景仍需独立 ChangePlan；G7 readiness=`DEGRADED` 仍是公开阻塞项。provider-only DeepSeek fixture 已 PASS；G4 真实 LLM 只读探针未形成 PASS artifact，不能提升为真实业务通过。探针未执行任何数据库/Neo4j/Chroma 写入、Outbox claim、删除或覆盖。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -188,7 +189,7 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-  - `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已完成显式组合根的真实只读融合但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐工作台与浏览器幂等闭环已完成，feedback/behavior 页面和论文演示冻结仍待完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已完成显式组合根的真实只读融合但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek provider-only fixture 已真实调用但 G4 业务探针尚未形成 PASS；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐工作台与浏览器幂等闭环已完成，feedback/behavior 页面和论文演示冻结仍待完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
 - `next_action`：先对照 G8 计划补齐剩余只读/故障运行证据并生成追加审计；不执行真实 Worker 消费。若需非空 Worker、业务 POST、澄清续跑、索引写入或 DeepSeek，先生成对应 DRY_RUN/精确 ChangePlan 并等待用户批准 hash，再做隔离追加和独立回读。
 
@@ -1920,6 +1921,23 @@ Gate：DeepSeek 外部调用单次受控验证
 安全计数：external_llm_requests=1、network_requests=1；database/Neo4j/Chroma reads+writes=0、outbox_claims=0、files_deleted=0、database_physical_deletions=0、artifact_overwrites=0。
 未解决风险：该证据只证明 Intent provider 的单次真实调用链路；默认 HTTP/Worker 仍不调用 DeepSeek，Explanation/Feedback 的真实业务接线、生产数据脱敏/伦理/费用策略和 G8/G9 最终验收仍未完成。
 下一步唯一动作：继续保持默认 Mock/关闭；若要扩大到真实推荐、解释、反馈或前端流程，先为每个范围生成独立 ChangePlan 和脱敏/审计方案，不能复用本次 fixture 授权。
+```
+
+## G4 选择性真实 LLM 只读探针记录
+
+```text
+交接ID：G4-LLM-READONLY-20260812-001
+Gate：G4 动态多智能体闭环（Intent-only DeepSeek 只读接线）
+状态：CODE_WIRING_PASS / OFFLINE_REPLAY_PASS / REAL_PROBE_NOT_PASSED
+时间：2026-08-12（Asia/Shanghai）
+目标：证明真实 Intent provider 可以进入 G4 端口编排，同时把 Explanation 保持为证据模板，避免一次业务验证因 8 个候选而放大外部请求。
+新增文件：`scripts/verify_g4_real_llm_readonly.py`；`make verify-g4-real-llm-readonly`；对应的 append-only 运行证据约定。
+修改文件：`backend/app/recommendation/application/orchestration.py` 增加 `llm_intent_provider`/`llm_explanation_provider` capability-specific 参数；`tests/g4/test_port_orchestrator.py` 增加 Intent-only 组合测试；默认 `llm_provider` 兼容行为保持不变。
+固定 fixture：只发送非敏感文本的 SHA-256 与长度；不发送用户画像、行为历史、书目原文、数据库凭据或 Agent trace。
+安全边界：脚本要求 `YES_REAL_EXTERNAL_LLM`；MySQL 只读 SELECT 并在连接关闭前 rollback；Neo4j 只调用参数化查询；Chroma 只调用 count/query；不启动 Worker、不写 Outbox、不执行 INSERT/UPDATE/DELETE、索引写入、文件删除或 artifact 覆盖。
+执行结果：用户批准后执行 `g4-real-llm-readonly-20260812-001`。进程最终以安全的 `ValueError` 状态退出，未生成 PASS artifact；因此不把这次探针算作真实 G4 业务通过，也不保存原始模型响应。离线 fake provider 重放已通过 G4 候选/三通道/计数不变断言，代码随后放宽了对合法归一化意图枚举的过窄断言。
+当前结论：provider-only fixture 的真实调用仍为 PASS；G4 Intent 真实业务链路尚无可审计 PASS 证据。默认 HTTP、Worker、Explanation、Feedback 仍不切换到 DeepSeek。
+下一步唯一动作：在新的明确外部请求授权下，用新 run_id 重新执行修正后的只读探针；不得复用失败目录、覆盖旧 artifact 或扩大到真实写入/前端业务流。
 ```
 
 ## 阶段交接模板

@@ -57,8 +57,18 @@ def build_port_orchestrator(
     index_version: str | None = None,
     retry_policy: RetryPolicy = RetryPolicy(),
     llm_provider: TextCapabilityProvider | None = None,
+    llm_intent_provider: TextCapabilityProvider | None = None,
+    llm_explanation_provider: TextCapabilityProvider | None = None,
 ) -> RecommendationOrchestrator:
-    """Compose read-only Catalog/Profile Agents without exposing adapters to HTTP."""
+    """Compose read-only Catalog/Profile Agents without exposing adapters to HTTP.
+
+    ``llm_provider`` remains the compatibility switch for enabling both LLM
+    Agents.  The capability-specific arguments allow a reviewed runtime
+    probe to exercise one external capability (for example Intent) while the
+    evidence-constrained explanation path remains the deterministic rule
+    implementation.  This keeps external-call scope explicit instead of
+    silently multiplying requests over every ranked item.
+    """
 
     agents = {
         agent.name: agent
@@ -87,8 +97,12 @@ def build_port_orchestrator(
         }
     )
     if llm_provider is not None:
-        agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_provider)
-        agents["ExplanationAgent"] = LLMExplanationAgent(llm_provider)
+        llm_intent_provider = llm_intent_provider or llm_provider
+        llm_explanation_provider = llm_explanation_provider or llm_provider
+    if llm_intent_provider is not None:
+        agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_intent_provider)
+    if llm_explanation_provider is not None:
+        agents["ExplanationAgent"] = LLMExplanationAgent(llm_explanation_provider)
     return RecommendationOrchestrator(AgentRegistry(agents))
 
 

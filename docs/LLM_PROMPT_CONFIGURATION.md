@@ -111,3 +111,18 @@ make PYTHON=.venv-g1-final-py311/bin/python \
 ## 6. 首次真实调用结果
 
 用户明确批准后，已按上述命令执行一次固定非敏感 `intent.classify` fixture。证据为 `artifacts/verification/llm/llm-fixture-call-20260812-001/real-call.json`：状态 `PASS`，`attempts=1`，延迟约 `1808ms`，返回意图 `BOOK_RECOMMENDATION`。安全计数为 `external_llm_requests=1`、`network_requests=1`，数据库/Neo4j/Chroma 读写、Outbox claim、删除和覆盖均为 `0`。该调用尚未接入默认 HTTP/Worker，也没有将 Explanation/Feedback 业务路径切换到 DeepSeek。
+
+## 7. G4 选择性真实链路边界
+
+为证明 provider 真正进入 G4 编排，同时控制外部请求数量，组合根新增 `llm_intent_provider` 与 `llm_explanation_provider` 两个 capability-specific 参数。`llm_provider` 旧参数仍表示同时启用两个 Agent；G4 只读探针只注入 Intent provider，Explanation 保持证据模板，因此一次编排最多触发一次 `intent.classify`。
+
+离线 fake provider 回放已经验证：7 个 Agent、MySQL/Graph/Vector 三通道、候选投影和 MySQL/Chroma 计数不变断言均可通过。用户批准的真实探针命令为：
+
+```bash
+make PYTHON=.venv-g1-final-py311/bin/python \
+  G4_REAL_LLM_READONLY_RUN_ID=g4-real-llm-readonly-<unique-id> \
+  G4_REAL_LLM_READONLY_CONFIRM=YES_REAL_EXTERNAL_LLM \
+  verify-g4-real-llm-readonly
+```
+
+本次 `g4-real-llm-readonly-20260812-001` 运行未形成 PASS artifact，不能据此声称 G4 真实推荐链路已通过；失败只保留类型级状态，不保留原始响应。修正后的探针需要新的 run id 和新的外部请求授权。默认 HTTP、Compose backend、Worker、Explanation 和 Feedback 仍保持 Mock/关闭。
