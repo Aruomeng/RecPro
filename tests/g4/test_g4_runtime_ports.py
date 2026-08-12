@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from pydantic import SecretStr
+from fastapi.testclient import TestClient
 
 from backend.app.composition import build_research_g4_http_app_from_runtime
 from backend.app.config import AppSettings
@@ -67,6 +68,32 @@ class G4RuntimePortTests(unittest.TestCase):
         )
         self.assertFalse(opened)
         self.assertIn("/api/v1/recommendation-tasks", application.openapi()["paths"])
+
+    def test_g4_http_readiness_identifies_the_g4_pipeline_version(self) -> None:
+        class Probe:
+            async def check(self):
+                from backend.app.observability.domain import ComponentReadiness, ComponentStatus
+
+                return ComponentReadiness(ComponentStatus.UP, required=True)
+
+        application = build_research_g4_http_app_from_runtime(
+            AppSettings(
+                app_env="demo",
+                mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
+                g4_http_enabled=True,
+            ),
+            runtime=runtime(),
+            connection_factory=lambda: None,
+            readiness_probe=Probe(),
+            config_bundle_probe=Probe(),
+        )
+        with TestClient(application) as client:
+            body = client.get("/api/v1/health/ready").json()
+        self.assertTrue(body["can_recommend"])
+        self.assertEqual(
+            "recommendation-g4-graph-vector-v1",
+            body["components"]["recommendation_pipeline"]["active_version"],
+        )
 
 
 if __name__ == "__main__":

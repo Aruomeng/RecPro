@@ -410,6 +410,7 @@ def build_research_g4_http_app(
         recommendation_service=recommendation_service,
         recommendation_api_enabled=True,
         recommendation_readiness_enabled=True,
+        recommendation_version="recommendation-g4-graph-vector-v1",
         feedback_service=feedback_service,
         behavior_service=behavior_service,
         feedback_api_enabled=feedback_api_enabled,

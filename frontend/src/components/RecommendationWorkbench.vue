@@ -17,15 +17,19 @@ const props = defineProps<{
   client: RecommendationClient;
 }>();
 
-const query = ref("多智能体系统与智慧图书馆的研究资料");
+const query = ref("多智能体系统与智慧图书馆");
 const selectedTypes = ref<ResourceType[]>(["BOOK"]);
-const limit = ref(6);
+const limit = ref(8);
 const phase = ref<"idle" | "demo" | "loading" | "success" | "clarification" | "error">("idle");
 const result = ref<RecommendationExecution | null>(null);
 const errorMessage = ref("");
 const notice = ref("");
 const selectedAnswers = ref<Record<string, string>>({});
-const sessionId = createRequestId();
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const configuredSessionId = (import.meta.env.VITE_G4_DEMO_SESSION_ID ?? "").trim();
+const configuredRequestId = (import.meta.env.VITE_G4_DEMO_REQUEST_ID ?? "").trim();
+const sessionId = UUID_PATTERN.test(configuredSessionId) ? configuredSessionId : createRequestId();
+let configuredRequestIdConsumed = false;
 let activeController: AbortController | undefined;
 onBeforeUnmount(() => activeController?.abort());
 
@@ -85,6 +89,14 @@ const demoItems: RecommendationItem[] = [
     },
   },
 ];
+
+function nextRequestId(): string {
+  if (!configuredRequestIdConsumed && UUID_PATTERN.test(configuredRequestId)) {
+    configuredRequestIdConsumed = true;
+    return configuredRequestId;
+  }
+  return createRequestId();
+}
 
 function createDemoExecution(): RecommendationExecution {
   return {
@@ -149,9 +161,10 @@ async function submit(): Promise<void> {
   activeController = controller;
   phase.value = "loading";
   result.value = null;
+  selectedAnswers.value = {};
   errorMessage.value = "";
   notice.value = "正在通过显式推荐 API 请求结果。";
-  const requestIdValue = createRequestId();
+  const requestIdValue = nextRequestId();
   try {
     const response = await client.value.createTask({
       request_id: requestIdValue,
@@ -185,6 +198,9 @@ async function submitClarification(): Promise<void> {
     errorMessage.value = "请先回答所有必答澄清问题。";
     return;
   }
+  activeController?.abort();
+  const controller = new AbortController();
+  activeController = controller;
   phase.value = "loading";
   errorMessage.value = "";
   try {
@@ -193,12 +209,17 @@ async function submitClarification(): Promise<void> {
       result.value.context_version,
       selectedAnswers.value,
       createRequestId(),
+      { signal: controller.signal },
     );
+    if (controller.signal.aborted) return;
     result.value = response;
     phase.value = response.status === "WAITING_CLARIFICATION" ? "clarification" : "success";
   } catch (error) {
+    if (controller.signal.aborted) return;
     phase.value = "error";
     errorMessage.value = presentError(error);
+  } finally {
+    if (activeController === controller) activeController = undefined;
   }
 }
 
@@ -208,6 +229,7 @@ function presentError(error: unknown): string {
       CORE_STORAGE_UNAVAILABLE: "推荐能力当前未就绪。",
       AUTHENTICATION_REQUIRED: "演示身份未通过认证。",
       REQUEST_DEADLINE_EXCEEDED: "推荐请求超时，请稍后重试。",
+      RECOMMENDATION_REQUEST_TIMEOUT: "推荐请求未在浏览器等待时间内完成，请稍后重试。",
       INVALID_RECOMMENDATION_RESPONSE: "推荐响应未通过契约校验。",
     };
     return messages[error.code] ?? `推荐请求失败（${error.code}）。`;
@@ -234,10 +256,10 @@ function typeLabel(type: ResourceType): string {
   <section class="recommendation-workbench" aria-labelledby="recommendation-title">
     <div class="workbench__header">
       <div>
-        <p class="eyebrow">G7 / RECOMMENDATION WORKBENCH</p>
+        <p class="eyebrow">G4 / RECOMMENDATION WORKBENCH</p>
         <h2 id="recommendation-title">把研究问题交给推荐协作链</h2>
         <p class="workbench__lede">
-          先用一个主题描述你的研究目标。真实请求只会在后端能力明确启用后发出；当前可安全查看本地演示路径。
+          先用一个主题描述你的研究目标。真实请求只会在 G4 后端能力明确启用后发出；当前可安全查看本地演示路径。
         </p>
       </div>
       <span class="workbench__mode" :class="{ 'workbench__mode--ready': pipelineEnabled }">
@@ -307,7 +329,7 @@ function typeLabel(type: ResourceType): string {
           <option v-for="option in question.options" :key="option" :value="option">{{ option }}</option>
         </select>
       </label>
-      <button class="primary-action" type="button" @click="submitClarification">继续同一任务</button>
+      <button class="primary-action" type="button" :disabled="isBusy" @click="submitClarification">继续同一任务</button>
     </div>
 
     <div v-if="items.length" class="recommendation-results" aria-live="polite">
@@ -318,6 +340,7 @@ function typeLabel(type: ResourceType): string {
         </div>
         <div v-if="result" class="results-meta">
           <span>{{ result.status }}</span>
+          <span>上下文 v{{ result.context_version }}</span>
           <code>trace {{ result.trace_id.slice(0, 8) }}</code>
         </div>
       </div>

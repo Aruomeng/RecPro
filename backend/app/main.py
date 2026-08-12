@@ -38,6 +38,7 @@ def create_app(
     recommendation_service: object | None = None,
     recommendation_api_enabled: bool = False,
     recommendation_readiness_enabled: bool = False,
+    recommendation_version: str = "recommendation-g3-mysql-v1",
     feedback_service: object | None = None,
     behavior_service: object | None = None,
     feedback_api_enabled: bool = False,
@@ -90,6 +91,7 @@ def create_app(
         configuration_valid=state.is_valid,
         configuration_error_code=state.error_code,
         recommendation_enabled=recommendation_readiness_enabled,
+        recommendation_version=recommendation_version,
     )
 
     application = FastAPI(

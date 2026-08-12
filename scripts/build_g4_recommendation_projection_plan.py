@@ -16,7 +16,7 @@ from pathlib import Path
 import re
 import subprocess
 from typing import Any, Sequence
-from uuid import NAMESPACE_URL, uuid5
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from jsonschema import Draft202012Validator, FormatChecker
 
@@ -111,11 +111,21 @@ def build_plan(
     mysql_baseline_path: Path,
     g4_baseline_path: Path,
     user_id: int,
+    input_text: str = "多智能体系统与智慧图书馆",
+    limit: int = 8,
+    request_id: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     if RUN_ID_PATTERN.fullmatch(run_id) is None:
         raise ValueError("run id must use 3-64 safe characters")
     if isinstance(user_id, bool) or user_id < 1:
         raise ValueError("user id must be positive")
+    if not isinstance(input_text, str) or not input_text.strip() or len(input_text) > 2000:
+        raise ValueError("input text must contain 1-2000 characters")
+    if isinstance(limit, bool) or not 1 <= limit <= 20:
+        raise ValueError("limit must be between 1 and 20")
+    if (request_id is None) != (session_id is None):
+        raise ValueError("request_id and session_id must be supplied together")
     mysql_baseline, mysql_raw = load_pass_evidence(
         mysql_baseline_path, label="MySQL baseline evidence"
     )
@@ -162,17 +172,30 @@ def build_plan(
     commit = git_commit()
     project = str(mysql_baseline.get("compose_project") or "recpro-isolated")
     database = "recpro"
-    request_id = uuid5(NAMESPACE_URL, f"g4-recommendation-projection-request:{run_id}")
-    session_id = uuid5(NAMESPACE_URL, f"g4-recommendation-projection-session:{run_id}")
+    if request_id is None:
+        request_uuid = uuid5(
+            NAMESPACE_URL, f"g4-recommendation-projection-request:{run_id}"
+        )
+        session_uuid = uuid5(
+            NAMESPACE_URL, f"g4-recommendation-projection-session:{run_id}"
+        )
+    else:
+        try:
+            request_uuid = UUID(request_id)
+            session_uuid = UUID(session_id or "")
+        except (ValueError, AttributeError) as exc:
+            raise ValueError("request_id and session_id must be UUIDs") from exc
+    if request_uuid.int == 0 or session_uuid.int == 0:
+        raise ValueError("request_id and session_id must not be the nil UUID")
     request_payload = {
-        "request_id": str(request_id),
-        "session_id": str(session_id),
+        "request_id": str(request_uuid),
+        "session_id": str(session_uuid),
         "user_id": user_id,
         "scene": "SEARCH_AFTER",
-        "input_text": "多智能体系统与智慧图书馆",
+        "input_text": input_text.strip(),
         "requested_resource_types": ["BOOK"],
         "requested_output_type": "TOPIC_RESOURCES",
-        "limit": 8,
+        "limit": limit,
         "g4_channels": ["MYSQL", "GRAPH", "VECTOR"],
     }
     config_path = PROJECT_ROOT / "contracts" / "config" / "examples" / "rec-1.0.0.json"
@@ -222,7 +245,9 @@ def build_plan(
             "config_bundle": config_hash,
             "request_payload": request_hash,
         },
-        "idempotency_key": str(request_id),
+        "idempotency_key": str(request_uuid),
+        "request_run_id": run_id,
+        "request_payload": request_payload,
         "max_changes": max_changes,
         "preconditions": [
             "target Compose project/database identity and both PASS baselines match immediately before apply",
@@ -260,6 +285,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--mysql-baseline", type=Path, required=True)
     parser.add_argument("--g4-baseline", type=Path, required=True)
     parser.add_argument("--user-id", type=int, default=1001)
+    parser.add_argument("--input-text", default="多智能体系统与智慧图书馆")
+    parser.add_argument("--limit", type=int, default=8)
+    parser.add_argument("--request-id")
+    parser.add_argument("--session-id")
     args = parser.parse_args(argv)
     try:
         plan = build_plan(
@@ -267,6 +296,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             mysql_baseline_path=args.mysql_baseline,
             g4_baseline_path=args.g4_baseline,
             user_id=args.user_id,
+            input_text=args.input_text,
+            limit=args.limit,
+            request_id=args.request_id,
+            session_id=args.session_id,
         )
         output_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / args.run_id
         if output_dir.exists():

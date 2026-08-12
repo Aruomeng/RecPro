@@ -5,6 +5,11 @@ export const RECOMMENDATION_PATHS = {
   tasks: "/api/v1/recommendation-tasks",
 } as const;
 
+// G4 may perform version-pinned Graph/Vector reads before it commits one
+// bounded task. Keep the browser deadline above the explicit 30—300 second
+// backend guard while still allowing callers/tests to provide a shorter one.
+export const DEFAULT_RECOMMENDATION_TIMEOUT_MS = 150_000;
+
 export type Fetcher = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 export interface RequestOptions {
@@ -156,7 +161,7 @@ export function createRecommendationClient(params: {
 } = {}): RecommendationClient {
   const baseUrl = normalizeBaseUrl(params.baseUrl ?? "");
   const fetcher = params.fetcher ?? globalThis.fetch.bind(globalThis);
-  const timeoutMs = params.timeoutMs ?? 15_000;
+  const timeoutMs = params.timeoutMs ?? DEFAULT_RECOMMENDATION_TIMEOUT_MS;
   const demoUserId = params.demoUserId ?? 1001;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive finite number");
   if (!Number.isInteger(demoUserId) || demoUserId < 1) throw new RangeError("demoUserId must be a positive integer");

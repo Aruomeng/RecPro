@@ -36,6 +36,17 @@ const response = {
   warnings: [],
 };
 
+const waitingResponse = {
+  ...response,
+  status: "WAITING_CLARIFICATION" as const,
+  questions: [{
+    slot: "resource_types",
+    question: "你需要哪类资源？",
+    options: ["BOOK", "PAPER"],
+    required: true,
+  }],
+};
+
 describe("RecommendationWorkbench", () => {
   it("keeps the real request disabled and makes the local demo boundary explicit", async () => {
     const createTask = vi.fn();
@@ -67,5 +78,27 @@ describe("RecommendationWorkbench", () => {
     expect(wrapper.text()).toContain("真实接口");
     expect(wrapper.text()).toContain("真实接口返回的书");
     expect(wrapper.text()).toContain("主题匹配");
+  });
+
+  it("continues a waiting task with the same client port and an abort signal", async () => {
+    const submitClarification = vi.fn().mockResolvedValue(response);
+    const client: RecommendationClient = {
+      createTask: vi.fn().mockResolvedValue(waitingResponse),
+      submitClarification,
+    };
+    const wrapper = mount(RecommendationWorkbench, {
+      props: { pipelineEnabled: true, client },
+    });
+
+    await wrapper.find("form").trigger("submit");
+    await wrapper.find(".clarification-question select").setValue("BOOK");
+    await wrapper.find(".clarification-panel .primary-action").trigger("click");
+
+    expect(submitClarification).toHaveBeenCalledTimes(1);
+    expect(submitClarification.mock.calls[0][0]).toBe(waitingResponse.task_id);
+    expect(submitClarification.mock.calls[0][1]).toBe(1);
+    expect(submitClarification.mock.calls[0][2]).toEqual({ resource_types: "BOOK" });
+    expect(submitClarification.mock.calls[0][4]).toEqual(expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(wrapper.text()).toContain("真实接口");
   });
 });

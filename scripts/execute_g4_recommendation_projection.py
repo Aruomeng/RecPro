@@ -210,25 +210,34 @@ def load_request_payload(
     if RUN_ID_PATTERN.fullmatch(request_run_id) is None:
         raise ValueError("request run id must use 3-64 safe characters")
     request_id = UUID(str(plan["idempotency_key"]))
-    expected_request_id = uuid5(
-        NAMESPACE_URL, f"g4-recommendation-projection-request:{request_run_id}"
-    )
-    expected_session_id = uuid5(
-        NAMESPACE_URL, f"g4-recommendation-projection-session:{request_run_id}"
-    )
-    if request_id != expected_request_id:
-        raise ValueError("request id does not match the reviewed request run id")
-    request_payload = {
-        "request_id": str(request_id),
-        "session_id": str(expected_session_id),
-        "user_id": 1001,
-        "scene": "SEARCH_AFTER",
-        "input_text": "多智能体系统与智慧图书馆",
-        "requested_resource_types": ["BOOK"],
-        "requested_output_type": "TOPIC_RESOURCES",
-        "limit": 8,
-        "g4_channels": ["MYSQL", "GRAPH", "VECTOR"],
-    }
+    reviewed_run_id = plan.get("request_run_id")
+    if reviewed_run_id is not None and str(reviewed_run_id) != request_run_id:
+        raise ValueError("request run id does not match the reviewed ChangePlan")
+    frozen_payload = plan.get("request_payload")
+    if frozen_payload is None:
+        expected_request_id = uuid5(
+            NAMESPACE_URL, f"g4-recommendation-projection-request:{request_run_id}"
+        )
+        expected_session_id = uuid5(
+            NAMESPACE_URL, f"g4-recommendation-projection-session:{request_run_id}"
+        )
+        if request_id != expected_request_id:
+            raise ValueError("request id does not match the reviewed request run id")
+        request_payload = {
+            "request_id": str(request_id),
+            "session_id": str(expected_session_id),
+            "user_id": 1001,
+            "scene": "SEARCH_AFTER",
+            "input_text": "多智能体系统与智慧图书馆",
+            "requested_resource_types": ["BOOK"],
+            "requested_output_type": "TOPIC_RESOURCES",
+            "limit": 8,
+            "g4_channels": ["MYSQL", "GRAPH", "VECTOR"],
+        }
+    elif isinstance(frozen_payload, Mapping):
+        request_payload = dict(frozen_payload)
+    else:
+        raise ValueError("ChangePlan request_payload must be an object")
     required = {
         "request_id",
         "session_id",
@@ -244,6 +253,24 @@ def load_request_payload(
         raise ValueError("ChangePlan request_payload fields are not frozen")
     if UUID(str(request_payload["request_id"])) != request_id:
         raise ValueError("request_payload.request_id does not match idempotency_key")
+    try:
+        UUID(str(request_payload["session_id"]))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("request_payload.session_id must be a UUID") from exc
+    if int(request_payload["user_id"]) < 1:
+        raise ValueError("request_payload user_id must be positive")
+    if request_payload["scene"] != "SEARCH_AFTER":
+        raise ValueError("request_payload scene is not SEARCH_AFTER")
+    if request_payload["requested_resource_types"] != ["BOOK"]:
+        raise ValueError("request_payload resource types are not the approved BOOK set")
+    if request_payload["requested_output_type"] != "TOPIC_RESOURCES":
+        raise ValueError("request_payload output type is not TOPIC_RESOURCES")
+    if request_payload["g4_channels"] != ["MYSQL", "GRAPH", "VECTOR"]:
+        raise ValueError("request_payload G4 channels are not the approved set")
+    if not isinstance(request_payload["input_text"], str) or not request_payload["input_text"].strip():
+        raise ValueError("request_payload input_text must be non-blank")
+    if isinstance(request_payload["limit"], bool) or not 1 <= int(request_payload["limit"]) <= 20:
+        raise ValueError("request_payload limit must be between 1 and 20")
     if sha256_bytes(canonical(request_payload)) != str(
         plan["input_hashes"]["request_payload"]
     ):
