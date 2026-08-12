@@ -9,6 +9,7 @@ from backend.app.feedback.domain.models import (
     ImpressionReceipt,
     ProfileRefreshReceipt,
     feedback_event_type,
+    is_valid_exposure,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "ImpressionReceipt",
     "ProfileRefreshReceipt",
     "feedback_event_type",
+    "is_valid_exposure",
 ]

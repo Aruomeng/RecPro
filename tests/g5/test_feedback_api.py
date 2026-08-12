@@ -164,6 +164,28 @@ class FeedbackAPITest(unittest.TestCase):
         self.assertEqual("DERIVED_EVENT_NOT_ALLOWED", derived.json()["error"]["code"])
         self.assertEqual(422, derived.status_code)
 
+    def test_same_behavior_uuid_replay_keeps_one_event_fact(self) -> None:
+        feedback = FakeFeedbackService()
+        behavior = FakeBehaviorService()
+        event_uuid = uuid4()
+        body = {
+            "event_uuid": str(event_uuid),
+            "session_id": str(uuid4()),
+            "event_type": "CLICK_RECOMMENDATION",
+            "recommendation_item_id": 7,
+            "impression_uuid": str(uuid4()),
+            "resource_id": 11,
+            "occurred_at": "2025-12-30T12:00:00Z",
+        }
+        headers = {"Idempotency-Key": str(event_uuid), "X-Demo-User-Id": "7"}
+        with TestClient(app_for(feedback, behavior)) as client:
+            first = client.post("/api/v1/behavior-events", json=body, headers=headers)
+            replay = client.post("/api/v1/behavior-events", json=body, headers=headers)
+        self.assertEqual(202, first.status_code)
+        self.assertEqual(200, replay.status_code)
+        self.assertEqual("true", replay.headers["Idempotency-Replayed"])
+        self.assertEqual(1, len(behavior.commands))
+
     def test_auth_and_opt_in_gate_fail_closed(self) -> None:
         feedback = FakeFeedbackService()
         behavior = FakeBehaviorService()

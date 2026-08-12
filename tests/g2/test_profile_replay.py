@@ -83,6 +83,34 @@ class ProfileReplayTests(unittest.TestCase):
         self.assertGreaterEqual(left.profile_confidence, 0)
         self.assertLessEqual(left.profile_confidence, 1)
 
+    def test_profile_snapshot_content_hash_is_replay_stable(self) -> None:
+        events = (
+            BehaviorForReplay(
+                event_id=2,
+                event_uuid="hash-event-2",
+                event_type="FAVORITE_RESOURCE",
+                resource_id=11,
+                occurred_at=at("2025-01-02T00:00:00"),
+                reason_code=None,
+                tags=(ResourceTagEvidence(8, 0.9, 0.8),),
+            ),
+            BehaviorForReplay(
+                event_id=1,
+                event_uuid="hash-event-1",
+                event_type="VIEW_RESOURCE",
+                resource_id=10,
+                occurred_at=at("2025-01-01T00:00:00"),
+                reason_code=None,
+                tags=(ResourceTagEvidence(7, 1.0, 1.0),),
+            ),
+        )
+        evaluation_at = at("2025-02-01T00:00:00")
+        first = compute_profile_snapshot(user_id=1001, as_of=evaluation_at, events=events)
+        second = compute_profile_snapshot(user_id=1001, as_of=evaluation_at, events=tuple(reversed(events)))
+        self.assertEqual(first.input_hash, second.input_hash)
+        self.assertEqual(64, len(first.input_hash))
+        self.assertEqual(first.event_count, second.event_count)
+
     def test_already_read_preserves_topic_interest_without_creating_topic_negative(self) -> None:
         snapshot = compute_profile_snapshot(
             user_id=1001,

@@ -186,6 +186,16 @@ def feedback_event_type(command: FeedbackCommand) -> BehaviorEventType:
     return BehaviorEventType.RATE_NEUTRAL
 
 
+def is_valid_exposure(*, visible_ms: int, max_visible_ratio: float) -> bool:
+    """Apply the frozen closed exposure thresholds without storage access."""
+
+    if visible_ms < 0:
+        raise ValueError("visible_ms must not be negative")
+    if not 0 <= max_visible_ratio <= 1:
+        raise ValueError("max_visible_ratio must be between 0 and 1")
+    return visible_ms >= 1000 and max_visible_ratio >= 0.5
+
+
 __all__ = [
     "BehaviorAppendCommand",
     "BehaviorReceipt",
@@ -195,4 +205,5 @@ __all__ = [
     "ImpressionReceipt",
     "ProfileRefreshReceipt",
     "feedback_event_type",
+    "is_valid_exposure",
 ]

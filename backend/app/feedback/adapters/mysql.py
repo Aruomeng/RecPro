@@ -12,6 +12,7 @@ from backend.app.feedback.domain.public import (
     FeedbackReceipt,
     ImpressionCommand,
     ImpressionReceipt,
+    is_valid_exposure,
 )
 from backend.app.feedback.ports.public import FeedbackStorePort
 from backend.app.observability.domain.public import StateTransition, transition_uuid
@@ -135,7 +136,10 @@ class MySQLFeedbackStore(FeedbackStorePort):
         command: ImpressionCommand,
     ) -> ImpressionReceipt:
         created_at = datetime.now(UTC).replace(tzinfo=None)
-        valid = command.visible_ms >= 1000 and command.max_visible_ratio >= 0.5
+        valid = is_valid_exposure(
+            visible_ms=command.visible_ms,
+            max_visible_ratio=command.max_visible_ratio,
+        )
         async with connection.cursor() as cursor:
             await cursor.execute(
                 "INSERT IGNORE INTO recommendation_impression "

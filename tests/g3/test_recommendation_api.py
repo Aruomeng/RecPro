@@ -22,6 +22,8 @@ class UpProbe:
 class FakeRecommendationService:
     def __init__(self) -> None:
         self.calls: list[RecommendationTaskCommand] = []
+        self.record_count = 0
+        self._seen_request_ids: set[str] = set()
 
     async def create_task(
         self,
@@ -30,9 +32,13 @@ class FakeRecommendationService:
         idempotency_key: str,
     ) -> RecommendationTaskResult:
         self.calls.append(command)
+        replayed = str(command.request_id) in self._seen_request_ids
+        if not replayed:
+            self._seen_request_ids.add(str(command.request_id))
+            self.record_count += 1
         return RecommendationTaskResult(
-            status_code=201 if len(self.calls) == 1 else 200,
-            replayed=len(self.calls) > 1,
+            status_code=200 if replayed else 201,
+            replayed=replayed,
             payload={
                 "task_id": str(command.request_id),
                 "record_id": 1,
@@ -152,6 +158,25 @@ class RecommendationAPITest(unittest.TestCase):
         self.assertIn("X-Trace-Id", first.headers)
         self.assertEqual(200, task.status_code)
         self.assertEqual("COMPLETED", task.json()["status"])
+
+    def test_same_request_replay_keeps_one_recommendation_record(self) -> None:
+        service = FakeRecommendationService()
+        request_id = uuid4()
+        body = {
+            "request_id": str(request_id),
+            "session_id": str(uuid4()),
+            "scene": "SEARCH_AFTER",
+            "input_text": "多智能体推荐系统",
+            "limit": 5,
+        }
+        headers = {"Idempotency-Key": str(request_id), "X-Demo-User-Id": "7"}
+        with TestClient(app_for(service)) as client:
+            first = client.post("/api/v1/recommendation-tasks", json=body, headers=headers)
+            replay = client.post("/api/v1/recommendation-tasks", json=body, headers=headers)
+        self.assertEqual(201, first.status_code)
+        self.assertEqual(200, replay.status_code)
+        self.assertEqual(first.json()["task_id"], replay.json()["task_id"])
+        self.assertEqual(1, service.record_count)
 
     def test_request_id_mismatch_is_rejected_before_service(self) -> None:
         service = FakeRecommendationService()

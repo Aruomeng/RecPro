@@ -7,6 +7,7 @@ from datetime import datetime
 from backend.app.catalog.domain.public import ResourceSummary, ResourceTagEvidence
 from backend.app.recommendation.application.intent import classify_intent
 from backend.app.recommendation.application.public import execute_recommendation
+from backend.app.recommendation.domain.fingerprint import execution_fingerprint
 from backend.app.recommendation.domain.public import ProfileSignal, RecommendationRequest
 
 
@@ -72,6 +73,44 @@ class G3RecommendationServiceTests(unittest.TestCase):
         self.assertTrue(all(item.evidence_refs for item in first.items))
         self.assertIn("RRF_RANKING_MMR", {step["name"] for step in first.trace_steps})
 
+    def test_fixed_snapshot_versions_seed_and_time_have_stable_fingerprint(self) -> None:
+        resources = tuple(resource(index, "多智能体" if index < 4 else "智慧图书馆") for index in range(1, 7))
+        tags = tuple(
+            ResourceTagEvidence(item.id, 1, "multi-agent", 0.9, 0.9, "IMPORT")
+            for item in resources
+        )
+        request = RecommendationRequest(
+            user_id=1001,
+            input_text="多智能体推荐系统",
+            resource_types=("BOOK", "PAPER"),
+            limit=5,
+            evaluation_at=datetime(2026, 1, 1),
+        )
+        first = execute_recommendation(
+            request,
+            resources=resources,
+            tags=tags,
+            profile_signals=(ProfileSignal(1, 0.8),),
+            behavior_events=((1, "FAVORITE_RESOURCE"),),
+        )
+        second = execute_recommendation(
+            request,
+            resources=tuple(reversed(resources)),
+            tags=tuple(reversed(tags)),
+            profile_signals=(ProfileSignal(1, 0.8),),
+            behavior_events=((1, "FAVORITE_RESOURCE"),),
+        )
+        metadata = {
+            "config_bundle_version": "rec-1.0.0",
+            "dataset_version": "lib-books-v1",
+            "seed": "evaluation-seed-001",
+            "evaluation_at": datetime(2026, 1, 1),
+        }
+        self.assertEqual(
+            execution_fingerprint(first, **metadata),
+            execution_fingerprint(second, **metadata),
+        )
+
     def test_topic_negative_penalty_is_bounded_and_explanation_is_template(self) -> None:
         resources = (resource(1, "多智能体系统"), resource(2, "智慧图书馆"))
         tags = (
@@ -87,6 +126,31 @@ class G3RecommendationServiceTests(unittest.TestCase):
         self.assertEqual(2, len(result.items))
         self.assertTrue(all(0 <= item.feature.final_score <= 1 for item in result.items))
         self.assertTrue(any("惩罚" in item.explanation for item in result.items))
+
+    def test_topic_negative_counterfactual_strictly_lowers_target_score(self) -> None:
+        resources = (resource(1, "多智能体系统"), resource(2, "智慧图书馆"))
+        tags = (
+            ResourceTagEvidence(1, 7, "multi-agent", 1.0, 1.0, "IMPORT"),
+            ResourceTagEvidence(2, 8, "digital-library", 1.0, 1.0, "IMPORT"),
+        )
+        request = RecommendationRequest(
+            1001,
+            "多智能体",
+            ("BOOK", "PAPER"),
+            2,
+            datetime(2026, 1, 1),
+        )
+        baseline = execute_recommendation(request, resources=resources, tags=tags)
+        counterfactual = execute_recommendation(
+            request,
+            resources=resources,
+            tags=tags,
+            profile_signals=(ProfileSignal(7, 0.9, negative=True),),
+        )
+        baseline_target = next(item.feature for item in baseline.items if item.feature.resource.id == 1)
+        counterfactual_target = next(item.feature for item in counterfactual.items if item.feature.resource.id == 1)
+        self.assertGreater(counterfactual_target.negative_penalty, 0.0)
+        self.assertLess(counterfactual_target.final_score, baseline_target.final_score)
 
     def test_limit_is_fail_closed(self) -> None:
         with self.assertRaises(ValueError):
