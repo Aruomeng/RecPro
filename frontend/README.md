@@ -20,8 +20,16 @@ G4 入口示例（默认 Compose backend 不改变）：
 cd ..
 set -a; source .env.compose; source .env.user-secrets; set +a
 RECPRO_APP_ENV=demo RECPRO_G4_HTTP_ENABLED=true \
-  python -m uvicorn backend.app.g4_demo_main:app --host 127.0.0.1 --port 8000
+python -m uvicorn backend.app.g4_demo_main:app --host 127.0.0.1 --port 8000
 ```
+
+G5 交互工作台默认只展示安全边界，不会自动提交曝光、反馈或行为。只有在独立审查的环境中显式设置 `VITE_G5_INTERACTION_ENABLED=true`，页面按钮才会调用三个 opt-in 交互端点；这项开关不替代后端配置、用户授权或新的 ChangePlan/plan_hash 审批：
+
+```bash
+VITE_G5_INTERACTION_ENABLED=true npm run dev -- --host 127.0.0.1
+```
+
+交互端口位于 `src/api/interactionClient.ts`，响应会先通过严格契约校验；`InteractionPanel.vue` 要求先显式记录 impression，再允许反馈或点击行为，避免产生无法关联的事实。未设置该变量时，按钮只显示说明或本地交互演示，不发起网络请求。
 
 ```bash
 npm run test

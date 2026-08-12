@@ -690,6 +690,115 @@ h2 {
   color: #41534a;
 }
 
+.interaction-panel {
+  display: grid;
+  gap: 16px;
+  margin-top: 20px;
+  padding: 22px;
+  border: 1px solid #d8c8aa;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fffaf0, #f7f3e8);
+}
+
+.interaction-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.interaction-panel h3 {
+  margin: 7px 0 0;
+  font-family: Georgia, "Songti SC", serif;
+  font-size: 1.35rem;
+  font-weight: 560;
+}
+
+.interaction-panel__lede {
+  max-width: 650px;
+  margin: 10px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.6;
+}
+
+.interaction-panel__mode {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid #d8c8aa;
+  border-radius: 999px;
+  color: #8c520e;
+  background: #fff4df;
+  font-size: 0.72rem;
+  font-weight: 720;
+  white-space: nowrap;
+}
+
+.interaction-panel__mode > span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.interaction-panel__mode--ready {
+  border-color: #b8d9c5;
+  color: var(--forest);
+  background: #edf8f1;
+}
+
+.interaction-panel__body {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr);
+  align-items: center;
+  gap: 9px 12px;
+  padding: 16px;
+  border: 1px solid #e2d7bf;
+  border-radius: 11px;
+  background: rgb(255 255 255 / 62%);
+}
+
+.interaction-panel__select {
+  color: var(--ink);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.interaction-panel__body select {
+  min-height: 34px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #cbd2ca;
+  border-radius: 8px;
+  color: var(--ink);
+  background: #fff;
+}
+
+.interaction-panel__resource,
+.interaction-panel__audit,
+.interaction-panel__empty {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.interaction-panel__actions {
+  display: flex;
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.interaction-panel__audit code {
+  color: var(--forest-dark);
+}
+
 footer {
   display: flex;
   justify-content: space-between;
@@ -747,9 +856,19 @@ footer {
 
   .workbench__header,
   .results-heading,
-  .clarification-question {
+  .clarification-question,
+  .interaction-panel__header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .interaction-panel__body {
+    grid-template-columns: 1fr;
+  }
+
+  .interaction-panel__select,
+  .interaction-panel__body select {
+    width: 100%;
   }
 
   .form-actions {

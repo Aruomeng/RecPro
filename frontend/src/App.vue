@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import { healthClient } from "./api/healthClient";
+import { interactionClient } from "./api/interactionClient";
 import { recommendationClient } from "./api/recommendationClient";
 import RecommendationWorkbench from "./components/RecommendationWorkbench.vue";
 import SystemStatus from "./components/SystemStatus.vue";
@@ -15,6 +16,7 @@ let activeController: AbortController | undefined;
 const recommendationPipelineEnabled = computed(
   () => readiness.value.phase === "success" && readiness.value.value.can_recommend,
 );
+const interactionPipelineEnabled = import.meta.env.VITE_G5_INTERACTION_ENABLED === "true";
 
 async function refresh(): Promise<void> {
   activeController?.abort();
@@ -75,6 +77,8 @@ onBeforeUnmount(() => activeController?.abort());
     <RecommendationWorkbench
       :pipeline-enabled="recommendationPipelineEnabled"
       :client="recommendationClient"
+      :interaction-enabled="interactionPipelineEnabled"
+      :interaction-client="interactionClient"
     />
 
     <footer>

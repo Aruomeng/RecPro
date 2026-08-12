@@ -7,15 +7,22 @@ import type {
   RecommendationItem,
   ResourceType,
 } from "../domain/recommendation";
+import type { InteractionClient } from "../domain/interaction";
 import {
   createRequestId,
   isRecommendationFailure,
 } from "../domain/recommendation";
+import InteractionPanel from "./InteractionPanel.vue";
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   pipelineEnabled?: boolean;
   client: RecommendationClient;
-}>();
+  interactionEnabled?: boolean;
+  interactionClient?: InteractionClient;
+}>(), {
+  pipelineEnabled: false,
+  interactionEnabled: false,
+});
 
 const query = ref("多智能体系统与智慧图书馆");
 const selectedTypes = ref<ResourceType[]>(["BOOK"]);
@@ -362,5 +369,14 @@ function typeLabel(type: ResourceType): string {
       </div>
       <p v-if="result?.warnings?.length" class="result-warning">{{ result.warnings.join(" · ") }}</p>
     </div>
+
+    <InteractionPanel
+      v-if="interactionClient"
+      :items="items"
+      :task-id="result?.task_id"
+      :session-id="sessionId"
+      :enabled="interactionEnabled"
+      :client="interactionClient"
+    />
   </section>
 </template>
