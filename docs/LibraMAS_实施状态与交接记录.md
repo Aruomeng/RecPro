@@ -1473,6 +1473,22 @@ Gate：G4 版本锁定 Graph/Vector HTTP 入口与前端请求身份冻结
 下一步唯一动作：完成代码/前端/文档/契约/安全门禁并推送后，提交该 DRY_RUN 计划的精确 hash；仅在用户明确批准同一 hash 后，执行一次隔离追加，再做浏览器 POST、GET、幂等和计数回读。
 ```
 
+## G4 前端真实推荐与幂等浏览器闭环验收记录
+
+```text
+交接ID：G4-FRONTEND-BROWSER-CLOSURE-20260812-002
+Gate：G4 版本锁定 Graph/Vector 推荐入口、批准追加、HTTP 回读与浏览器幂等重放
+状态：APPROVED_APPEND_PASS / READONLY_RECONCILIATION_PASS / BROWSER_REPLAY_PASS / NO_DESTRUCTIVE_ACTION
+时间：2026-08-12（Asia/Shanghai）
+批准范围：用户批准 plan_id=`419b030a-d0ed-531f-812c-d45843d560e5`、plan_hash=`8a7f4c326500dddb8da30943792baed71f886dbd649aa4c9b3348de287bdf06e`；计划绑定 Git=`215a436125f0da9c318e4831ba8b74f71bc17726`、request_id=`6d558332-5cca-41c1-b1e2-8a707e75a372`、session_id=`ec16eb21-2da6-4047-8138-d4dbbae0e09f`。
+真实追加：`g4-frontend-browser-apply-20260812-001` 执行一次 `APPLY_ONE_BOUNDED_APPEND`，隔离 Compose=`recpro-g2-tianyuhang-20260809a`、MySQL=`recpro`、端口=`62306`；服务返回 `201/COMPLETED`，task=`b476b901-b78e-5c3e-afd9-6fc880f20623`、record=`24`、trace=`e9f97880-eb96-5693-b630-0ff5fc0cec42`、8 个 item/context v1。严格追加 57 行：task=`+1`、transition=`+8`、candidate=`+13`、record=`+1`、item=`+8`、explanation=`+8`、policy=`+1`、trace=`+1`、Agent message/result=`+7/+7`、artifact=`+1`、orchestration result=`+1`。
+独立回读：`g4-frontend-browser-reconcile-20260812-001` 与浏览器重放后的 `g4-frontend-browser-reconcile-20260812-002` 均为 `PASS`；MySQL 计数与 apply 证据一致，HTTP live/ready/task GET=`200`，task=`COMPLETED/context_version=1`，Chroma=`14,983 -> 14,983`，回读写入=`0`、业务 POST=`0`。资源事实表与非目标表均无变化。
+浏览器闭环：首次固定身份重放暴露前端漏传 `requested_output_type`，后端按契约返回 `409 IDEMPOTENCY_KEY_REUSED`，未产生写入；提交 `18d92a4 fix(frontend): preserve G4 request identity on replay` 后，前端发送与批准 payload 完全一致的 `TOPIC_RESOURCES` 请求，服务返回 `200` 幂等重放，页面渲染 8 条真实结果，控制台 error/warning=`0`。该修复只影响浏览器请求契约，不得复用旧计划执行新的追加。
+安全边界：批准执行未发生 UPDATE/DELETE/DROP/TRUNCATE/迁移；Neo4j writes=`0`、Chroma writes=`0`、external LLM requests=`0`、files_deleted=`0`、database physical deletions=`0`。配置虽保留 `RECPRO_LLM_PROVIDER=deepseek`，本次入口和执行器均显式禁用外部 LLM。
+验证证据：`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-001/reconciliation.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`。
+下一步唯一动作：进入 feedback/behavior 受控 API 验证；Worker/Outbox、正式认证与 production 组合根仍保持独立 Gate，DeepSeek 外部调用仍需单独脱敏、费用、超时、审计和 opt-in 计划。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
