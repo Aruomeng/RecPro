@@ -271,6 +271,14 @@ execute-g5-feedback-worker-plan:
 	@test -n "$(G5_FEEDBACK_APPLY_BASELINE)" || { echo "G5_FEEDBACK_APPLY_BASELINE is required and must point to the matching PASS read-only baseline"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g5_feedback_worker_plan --apply --plan "$(G5_FEEDBACK_APPLY_PLAN)" --plan-id "$(G5_FEEDBACK_APPLY_PLAN_ID)" --approved-plan-hash "$(G5_FEEDBACK_APPLY_PLAN_HASH)" --baseline "$(G5_FEEDBACK_APPLY_BASELINE)" --run-id "$(G5_FEEDBACK_APPLY_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
 
+verify-g5-feedback-worker-reconcile:
+	@test -n "$(G5_FEEDBACK_RECONCILE_RUN_ID)" || { echo "G5_FEEDBACK_RECONCILE_RUN_ID is required and must identify a new read-only evidence run"; exit 2; }
+	@test -n "$(G5_FEEDBACK_RECONCILE_PLAN)" || { echo "G5_FEEDBACK_RECONCILE_PLAN is required and must point to the attempted G5 ChangePlan"; exit 2; }
+	@test -n "$(G5_FEEDBACK_RECONCILE_PLAN_ID)" || { echo "G5_FEEDBACK_RECONCILE_PLAN_ID is required and must match the attempted plan_id"; exit 2; }
+	@test -n "$(G5_FEEDBACK_RECONCILE_PLAN_HASH)" || { echo "G5_FEEDBACK_RECONCILE_PLAN_HASH is required and must match the attempted plan_hash"; exit 2; }
+	@test -n "$(G5_FEEDBACK_RECONCILE_BASELINE)" || { echo "G5_FEEDBACK_RECONCILE_BASELINE is required and must point to the matching PASS read-only baseline"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g5_feedback_worker_reconcile --plan "$(G5_FEEDBACK_RECONCILE_PLAN)" --plan-id "$(G5_FEEDBACK_RECONCILE_PLAN_ID)" --approved-plan-hash "$(G5_FEEDBACK_RECONCILE_PLAN_HASH)" --baseline "$(G5_FEEDBACK_RECONCILE_BASELINE)" --run-id "$(G5_FEEDBACK_RECONCILE_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
+
 verify-g5-worker-wiring:
 	@test -n "$(G5_WORKER_WIRING_RUN_ID)" || { echo "G5_WORKER_WIRING_RUN_ID is required and must identify a new read-only evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g5_worker_wiring --run-id "$(G5_WORKER_WIRING_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"

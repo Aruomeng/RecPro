@@ -40,10 +40,13 @@ from backend.app.shared_kernel.contracts.enums import (
     NegativeReasonCode,
 )
 from scripts.build_g5_feedback_http_plan import (
+    G5_FIXED_FINAL_DELTAS,
     G5_TABLES,
+    MAX_G5_CHANGES,
     SCHEMA_PATH,
     canonical,
     connect_runtime,
+    expected_final_deltas,
     load_pass_baseline,
     read_identity_and_grants,
     read_snapshot,
@@ -180,10 +183,19 @@ def validate_plan(
         - int(target["expected_before_count"])
         for table, target in target_tables.items()
     }
-    if observed_deltas != FINAL_DELTAS:
-        raise ValueError(f"ChangePlan deltas do not match the bounded G5 contract: {observed_deltas}")
-    if int(plan.get("max_changes", -1)) != 26:
-        raise ValueError("G5 ChangePlan max_changes must equal 26")
+    for table, expected in G5_FIXED_FINAL_DELTAS.items():
+        if table in {"user_interest_tag", "user_negative_preference"}:
+            if observed_deltas[table] < 0:
+                raise ValueError(f"ChangePlan contains a negative projection delta for {table}")
+        elif observed_deltas[table] != expected:
+            raise ValueError(
+                f"ChangePlan delta for {table} does not match the bounded G5 contract: "
+                f"expected {expected}, observed {observed_deltas[table]}"
+            )
+    if int(plan.get("max_changes", -1)) != sum(observed_deltas.values()):
+        raise ValueError("G5 ChangePlan max_changes must equal the sum of its bounded table deltas")
+    if int(plan.get("max_changes", -1)) > MAX_G5_CHANGES:
+        raise ValueError("G5 ChangePlan max_changes exceeds the bounded safety cap")
     payload = plan.get("interaction_payload")
     if not isinstance(payload, Mapping):
         raise ValueError("ChangePlan interaction_payload is missing")
@@ -395,6 +407,17 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     target_snapshot_hash = sha256_bytes(canonical(target_snapshot_from_facts(target_facts)))
     if target_snapshot_hash != str(plan["input_hashes"].get("target_snapshot", "")):
         raise ValueError("live recommendation ownership/tag/state snapshot differs from the approved plan")
+    planned_deltas = {
+        str(target["identifier"]).rsplit(".", maxsplit=1)[-1]: int(target["expected_after_min_count"])
+        - int(target["expected_before_count"])
+        for target in plan["targets"]
+    }
+    expected_deltas = expected_final_deltas(target_facts)
+    if planned_deltas != expected_deltas:
+        raise ValueError(
+            "approved ChangePlan projection deltas do not match the live target key sets: "
+            f"planned={planned_deltas}, expected={expected_deltas}"
+        )
     identity = await read_identity_and_grants(values)
     if not identity.get("grants_safe"):
         raise ValueError("runtime grants failed the least-privilege guard")
@@ -454,11 +477,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     if {int(receipt.source_event_id) for receipt in receipts} != expected_source_ids:
         raise ValueError("Worker consumed an unexpected source-event set")
     after_names, after_counts = await _snapshot(values)
-    _assert_delta(baseline_counts, after_counts, FINAL_DELTAS)
+    _assert_delta(baseline_counts, after_counts, planned_deltas)
     if after_names != before_names:
         raise ValueError("approved interaction changed the database table set")
     for table in baseline_counts:
-        if table not in FINAL_DELTAS and after_counts[table] != baseline_counts[table]:
+        if table not in planned_deltas and after_counts[table] != baseline_counts[table]:
             raise ValueError(f"approved interaction changed a protected/non-target table: {table}")
     statuses_after = await read_outbox_statuses(values)
     if statuses_after.get("PENDING", 0) or statuses_after.get("PROCESSING", 0):
@@ -507,11 +530,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "before_counts": baseline_counts,
         "after_interaction_counts": after_interaction_counts,
         "after_worker_counts": after_counts,
-        "expected_total_delta": FINAL_DELTAS,
+        "expected_total_delta": planned_deltas,
         "observed_total_delta": {
-            table: after_counts[table] - baseline_counts[table] for table in FINAL_DELTAS
+            table: after_counts[table] - baseline_counts[table] for table in planned_deltas
         },
-        "database_writes": 26,
+        "database_writes": sum(planned_deltas.values()),
         "business_posts": 0,
         "outbox_claims": 2,
         "external_requests": 0,

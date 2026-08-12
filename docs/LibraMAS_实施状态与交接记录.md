@@ -96,6 +96,9 @@
   - 已完成图书数据接入前置契约：`book-record.schema.json` 固化脱离用户身份的规范化书目记录，`book-intake-manifest.schema.json` 固化来源、许可、文件 SHA-256、规范化、隐私和 MySQL/Neo4j 目标；`inspect_book_intake` 只读校验 JSONL、重复主键/ISBN/标签、许可引用和路径安全，在没有用户数据时明确阻断，不连接数据库。
   - 已完成 G5 Worker 运行态接线：`backend.app.worker` 以配置包校验和 `RECPRO_WORKER_ENABLED`/`RECPRO_WORKER_MODE` 双闸门启动；默认 Compose worker 保持 `false/disabled` 健康等待，不创建数据库连接。显式非 production `profile_outbox` 模式才装配受控 MySQL connection factory、batch/lease/retry/poll 参数和固定画像公式；新增只读 wiring verifier 与入口/配置测试。
   - 已完成 G5 Worker 真实隔离空队列只读探针：先以运行账号验证无 `PENDING/PROCESSING`，再使用既有受控 migration 身份调用真实 `run_once(limit=1)`，receipts=`0`、40 张表计数与 Outbox 状态前后不变；运行账号首次 `SELECT ... FOR UPDATE` 被最小权限正确拒绝且未产生写入，修正为既有受控 Worker 凭据后通过。
+  - 已完成 G5 第二个真实推荐项的受控交互链尝试：用户批准 `plan_id=4bb3a297-1f93-58e8-a476-b82b32c50b50`、`plan_hash=fa19aca430597d6b13486ecfd2f5c657d4e3e0348b0c727dd25b5383842611eb` 后，item=`129`/resource=`6850` 的 impression、feedback、direct behavior、2 条 Outbox、2 次画像重放和 9 条状态转移均落库；执行器最终计数断言发现真实标签集合使正/负画像新增各为 3 行而计划静态预算为各 2 行，未重试、未回滚、未删除任何数据。
+  - 已完成该次受控链的独立只读 reconciliation：`recommendation_impression/feedback/user_behavior_event/profile_update_outbox/user_resource_state/profile_replay_run/profile_change_log/domain_state_transition` 分别为 `+1/+1/+3/+2/+1/+2/+3/+9`，正/负画像为 `+3/+3`，Outbox=`33/34` 均 `DONE`、全局无 `PENDING/PROCESSING`，非目标表 delta=`0`；证据状态为 `PARTIAL_APPLY_RECONCILED`，不是原计划 `PASS`。
+  - 已修正 G5 计划/执行器：计划快照现在冻结用户已有画像键集合，动态计算 upsert 表的真实新增行数；执行器在任何业务写入前核对计划 delta 与实时画像键集合，避免再次出现“写入完成后才发现预算漂移”。新增纯只读 reconciliation verifier 与 Make 目标，默认仍不启用 Worker。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -111,7 +114,8 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
-- `next_step`：Worker 代码与默认安全接线已完成；如需让隔离 Worker 实际消费 Outbox，必须先基于当前 Git/数据库只读基线生成新的 G5 Worker 专用 DRY_RUN ChangePlan，用户批准精确 plan_id/hash 后才可执行一次受控运行并独立回读，之后进入 G8 可靠性与发布候选评审。
+  - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
+- `next_step`：先提交并推送画像 delta 预检与 reconciliation verifier；随后进入 G7 feedback/behavior 前端真实只读页面和 opt-in API 接线。任何新的数据库业务追加仍须重新生成并批准精确 plan_id/hash，之后再进入 G8 可靠性与发布候选评审。
 
 ---
 
@@ -125,7 +129,7 @@
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
-| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；24 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和真实隔离空队列探针 PASS；认证运行态无数据库动作；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
+| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json` | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；feedback/behavior 页面、正式部署接线和论文演示冻结流程仍待完成 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
@@ -1570,6 +1574,36 @@ Gate：G5 Profile Outbox Worker 真实隔离运行态空队列探针
 安全计数：数据库连接=`3`（前置/Worker/后置只读连接）、database_writes=`0`、outbox_claims=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`；未访问 Neo4j/Chroma、未调用 DeepSeek。
 证据：`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；脚本=`scripts/verify_g5_worker_readonly_runtime.py`，Make=`verify-g5-worker-readonly-runtime`。
 下一步唯一动作：若要验证非空 Outbox 的真实受控消费，必须重新生成并批准新的 G5 Worker 专用 ChangePlan；在批准前不得追加行为/反馈事实、不得 claim Outbox、不得启用默认 Worker。
+```
+
+## G5 第二个推荐项受控追加与安全失败记录
+
+```text
+交接ID：G5-FEEDBACK-WORKER-APPLY-20260812-002
+Gate：G5 反馈、行为与画像 Outbox Worker 的第二个真实推荐项受控追加
+状态：APPROVED_PLAN_EXECUTED / FINAL_COUNT_GUARD_FAILED / NO_RETRY
+时间：2026-08-12（Asia/Shanghai）
+批准范围：用户批准 plan_id=`4bb3a297-1f93-58e8-a476-b82b32c50b50`、plan_hash=`fa19aca430597d6b13486ecfd2f5c657d4e3e0348b0c727dd25b5383842611eb`；执行绑定 Git=`df8f072285723f82cbd78093fa29b39e9b8b68e4`，隔离 Compose=`recpro-g2-tianyuhang-20260809a`、MySQL=`recpro`。
+目标与事实：task=`b476b901-b78e-5c3e-afd9-6fc880f20623`、record=`24`、item=`129`、resource=`6850`、user=`1001`；图书《智慧图书馆与阅读推广》、BOOK；impression UUID=`be3fba8e-4dfb-59d3-b9ca-3d00b4f883a8`、feedback UUID=`2d7b8dbe-9dda-54e9-b59b-c7743ee8205f`、behavior UUID=`cfb6fb2d-ad62-5e47-b50d-77ad82a2e678`。
+执行结果：impression、feedback、direct behavior 均唯一落库；Outbox=`33/34` 首轮均 `DONE`、attempts=`1`；Worker 首轮消费 2 条、二次运行 0 条；资源 `6850` 为 user `1001` 创建 `HIDDEN`，source_event_id=`49`；画像 replay profile_version=`26/27`，change_log=`+3`，state transition=`+9`。
+安全失败：执行器最终固定 delta 检查发现 `user_interest_tag` 实际 `+3`、`user_negative_preference` 实际 `+3`，而该旧计划静态预期均为 `+2`，因此返回 `count delta mismatch`；没有重试、没有补偿删除、没有回滚或覆盖，原计划不再可执行。
+实际全库 delta：`recommendation_impression/feedback/user_behavior_event/profile_update_outbox/user_resource_state/profile_replay_run/profile_change_log/user_interest_tag/user_negative_preference/domain_state_transition/user_profile`=`+1/+1/+3/+2/+1/+2/+3/+3/+3/+9/0`；所有资源、任务、标签、声明画像、索引和其他非目标表 delta=`0`。
+安全计数：本次原执行器没有文件删除、数据库物理删除、Neo4j/Chroma 写入或外部 LLM 请求；后续只允许读取和审计，不得复用本计划。
+```
+
+## G5 第二个推荐项只读 reconciliation 与动态预算修复
+
+```text
+交接ID：G5-FEEDBACK-WORKER-RECONCILE-20260812-003
+Gate：G5 受控追加后独立只读回读与画像 upsert 预算修复
+状态：PARTIAL_APPLY_RECONCILED / CODE_GUARD_FIXED / NO_DATABASE_WRITE
+时间：2026-08-12（Asia/Shanghai）
+只读证据：`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；runtime user=`recpro_runtime@%`、database=`recpro`、grants guard=`PASS`。
+回读结果：3 个确定性 interaction UUID 各 1 行；Outbox=`33/34` 均 `DONE`，全局 `DONE=25、DEAD=2` 且无 `PENDING/PROCESSING`；目标 HIDDEN state、2 个 replay、3 个 replay change-log 和 9 个 profile/domain transition 均存在；全库非目标表 delta=`0`。
+状态解释：事实链完整，但原计划状态不是 PASS，而是 `PARTIAL_APPLY_RECONCILED`；计划预计画像表各新增 2 行，实际各新增 3 行，原因是资源标签 `(102,6178,6962,7885,8463)` 中 6178/6962/7885 是用户首次出现的正/负画像键，102/8463 已存在，属于确定性 upsert 的真实行数变化。
+代码修复：`scripts/build_g5_feedback_http_plan.py` 将用户现有正向 tag_id 与负向 `(tag_id,reason_code)` 集合作为 target snapshot 的一部分，并动态计算画像表新增行数；`scripts/execute_g5_feedback_worker_plan.py` 在任何业务写入前比较 live target snapshot 与计划 delta；新增 `scripts/verify_g5_feedback_worker_reconcile.py` 和 Make 目标 `verify-g5-feedback-worker-reconcile`，只执行 SELECT/SHOW GRANTS。
+验证边界：本修复未连接 Neo4j/Chroma、未调用 DeepSeek、未运行迁移/seed、未更新或删除任何数据库数据；测试覆盖画像键差异会改变计划 hash 和 delta。
+下一步唯一动作：提交并推送本修复后，进入 G7 feedback/behavior 前端真实只读页面；若需要新的数据库业务追加，必须重新生成并批准新的 plan_id/hash。
 ```
 
 ## 阶段交接模板

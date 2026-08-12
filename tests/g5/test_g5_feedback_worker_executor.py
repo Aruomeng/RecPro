@@ -20,7 +20,12 @@ from scripts.execute_g5_feedback_worker_plan import (
     _assert_delta,
     build_commands,
 )
-from scripts.build_g5_feedback_http_plan import canonical, sha256_bytes, target_snapshot_from_facts
+from scripts.build_g5_feedback_http_plan import (
+    canonical,
+    expected_final_deltas,
+    sha256_bytes,
+    target_snapshot_from_facts,
+)
 
 
 class G5FeedbackWorkerExecutorTests(unittest.TestCase):
@@ -44,12 +49,34 @@ class G5FeedbackWorkerExecutorTests(unittest.TestCase):
             "uuid_absence": {"impression_uuid": 0, "feedback_uuid": 0, "behavior_uuid": 0},
             "latest_behavior_at": "2030-01-20T12:00:00",
             "user_profile_count": 1,
+            "user_interest_tag_ids": (102,),
+            "user_negative_preference_keys": ({"tag_id": 102, "reason_code": "TOPIC_NOT_INTERESTED"},),
         }
         snapshot = target_snapshot_from_facts(facts)
         self.assertNotIn("user_profile_count", snapshot)
         baseline_hash = sha256_bytes(canonical(snapshot))
         facts["resource_tags"] = tuple((*facts["resource_tags"], {"tag_id": 8463, "weight": 0.9, "confidence": 0.9, "source": "IMPORT"}))
         self.assertNotEqual(baseline_hash, sha256_bytes(canonical(target_snapshot_from_facts(facts))))
+
+    def test_projection_deltas_count_only_new_profile_keys(self) -> None:
+        facts = {
+            "resource_tags": (
+                {"tag_id": 102},
+                {"tag_id": 6178},
+                {"tag_id": 6962},
+                {"tag_id": 7885},
+                {"tag_id": 8463},
+            ),
+            "user_interest_tag_ids": (1, 2, 3, 4, 5, 6, 102, 8463),
+            "user_negative_preference_keys": tuple(
+                {"tag_id": tag_id, "reason_code": "TOPIC_NOT_INTERESTED"}
+                for tag_id in (1, 2, 3, 4, 5, 6, 102, 8463)
+            ),
+        }
+        deltas = expected_final_deltas(facts)
+        self.assertEqual(3, deltas["user_interest_tag"])
+        self.assertEqual(3, deltas["user_negative_preference"])
+        self.assertEqual(28, sum(deltas.values()))
 
     def test_build_commands_freezes_the_three_interaction_boundaries(self) -> None:
         payload = {

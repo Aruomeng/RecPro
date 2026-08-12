@@ -46,6 +46,20 @@ G5_TABLES = (
     "user_interest_tag",
     "user_negative_preference",
 )
+G5_FIXED_FINAL_DELTAS = {
+    "recommendation_impression": 1,
+    "recommendation_feedback": 1,
+    "user_behavior_event": 3,
+    "profile_update_outbox": 2,
+    "user_resource_state": 1,
+    "profile_replay_run": 2,
+    "profile_change_log": 3,
+    "user_interest_tag": 0,
+    "user_negative_preference": 0,
+    "domain_state_transition": 9,
+    "user_profile": 0,
+}
+MAX_G5_CHANGES = 100
 PROTECTED_TABLES = (
     "resource_catalog",
     "resource_book_detail",
@@ -89,7 +103,32 @@ def target_snapshot_from_facts(target_facts: Mapping[str, Any]) -> dict[str, Any
         "outbox_statuses": target_facts["outbox_statuses"],
         "uuid_absence": target_facts["uuid_absence"],
         "latest_behavior_at": target_facts["latest_behavior_at"],
+        "user_interest_tag_ids": target_facts.get("user_interest_tag_ids", ()),
+        "user_negative_preference_keys": target_facts.get("user_negative_preference_keys", ()),
     }
+
+
+def expected_final_deltas(target_facts: Mapping[str, Any]) -> dict[str, int]:
+    """Derive bounded row deltas from the frozen target/profile key sets.
+
+    The two projection tables are upserts.  Their row-count increase therefore
+    depends on how many target resource tags are absent from the user's current
+    positive/negative key sets, while the remaining interaction/worker deltas
+    are fixed by the G5 contract.
+    """
+
+    tag_ids = {int(tag["tag_id"]) for tag in target_facts["resource_tags"]}
+    existing_interest_ids = {int(tag_id) for tag_id in target_facts.get("user_interest_tag_ids", ())}
+    existing_negative_keys = {
+        (int(item["tag_id"]), str(item["reason_code"]))
+        for item in target_facts.get("user_negative_preference_keys", ())
+    }
+    deltas = dict(G5_FIXED_FINAL_DELTAS)
+    deltas["user_interest_tag"] = len(tag_ids - existing_interest_ids)
+    deltas["user_negative_preference"] = len(
+        {(tag_id, "TOPIC_NOT_INTERESTED") for tag_id in tag_ids} - existing_negative_keys
+    )
+    return deltas
 
 
 def resolve_inside_root(value: Path, *, label: str, strict: bool = True) -> Path:
@@ -322,6 +361,20 @@ async def read_target_facts(
             (user_id,),
         )
         negative_count = int((await cursor.fetchone())[0])
+        await cursor.execute(
+            "SELECT tag_id FROM user_interest_tag WHERE user_id = %s ORDER BY tag_id",
+            (user_id,),
+        )
+        interest_tag_ids = tuple(int(row[0]) for row in await cursor.fetchall())
+        await cursor.execute(
+            "SELECT tag_id, reason_code FROM user_negative_preference "
+            "WHERE user_id = %s ORDER BY tag_id, reason_code",
+            (user_id,),
+        )
+        negative_preference_keys = tuple(
+            {"tag_id": int(row[0]), "reason_code": str(row[1])}
+            for row in await cursor.fetchall()
+        )
     if task is None:
         raise ValueError(f"recommendation task does not exist: {task_id}")
     if record is None:
@@ -367,6 +420,8 @@ async def read_target_facts(
         raise ValueError("G5 interaction target must be a BOOK")
     if not tags:
         raise ValueError("target resource must have at least one imported resource_tag row")
+    if len({tag["tag_id"] for tag in tags}) != len(tags):
+        raise ValueError("target resource tags must not contain duplicate tag_id rows")
     if any(
         tag["tag_id"] < 1
         or not 0 <= tag["weight"] <= 1
@@ -395,30 +450,35 @@ async def read_target_facts(
         "user_profile_count": profile_count,
         "user_interest_count": interest_count,
         "user_negative_count": negative_count,
+        "user_interest_tag_ids": interest_tag_ids,
+        "user_negative_preference_keys": negative_preference_keys,
     }
 
 
 def target_specs(
-    counts: Mapping[str, int], *, project: str, database: str
+    counts: Mapping[str, int], *, project: str, database: str, deltas: Mapping[str, int]
 ) -> tuple[dict[str, Any], ...]:
     operations = (
-        ("recommendation_impression", "APPEND", 1),
-        ("recommendation_feedback", "APPEND", 1),
-        ("user_behavior_event", "APPEND", 3),
-        ("profile_update_outbox", "APPEND", 2),
-        ("user_resource_state", "CREATE", 1),
-        ("profile_replay_run", "APPEND", 2),
-        ("profile_change_log", "APPEND", 3),
-        ("user_interest_tag", "APPEND", 2),
-        ("user_negative_preference", "APPEND", 2),
-        ("domain_state_transition", "APPEND", 9),
-        ("user_profile", "UPDATE_STATUS", 0),
+        ("recommendation_impression", "APPEND"),
+        ("recommendation_feedback", "APPEND"),
+        ("user_behavior_event", "APPEND"),
+        ("profile_update_outbox", "APPEND"),
+        ("user_resource_state", "CREATE"),
+        ("profile_replay_run", "APPEND"),
+        ("profile_change_log", "APPEND"),
+        ("user_interest_tag", "APPEND"),
+        ("user_negative_preference", "APPEND"),
+        ("domain_state_transition", "APPEND"),
+        ("user_profile", "UPDATE_STATUS"),
     )
     targets: list[dict[str, Any]] = []
-    for table, operation, delta in operations:
+    for table, operation in operations:
         if table not in counts:
             raise ValueError(f"live database snapshot is missing target table: {table}")
+        if table not in deltas or int(deltas[table]) < 0:
+            raise ValueError(f"missing or negative bounded delta for {table}")
         before = int(counts[table])
+        delta = int(deltas[table])
         targets.append(
             {
                 "kind": "MYSQL",
@@ -514,7 +574,15 @@ def build_plan(
     if project != str(values.get("COMPOSE_PROJECT_NAME")):
         raise ValueError("baseline Compose project does not match the current environment")
     merged_counts = {str(key): int(value) for key, value in current_counts.items()}
-    target_list = list(target_specs(merged_counts, project=project, database=database))
+    expected_deltas = expected_final_deltas(target_facts)
+    target_list = list(
+        target_specs(
+            merged_counts,
+            project=project,
+            database=database,
+            deltas=expected_deltas,
+        )
+    )
     max_changes = sum(
         int(target["expected_after_min_count"]) - int(target["expected_before_count"])
         for target in target_list
@@ -564,6 +632,7 @@ def build_plan(
             "runtime probe identity and least-privilege grant guard remain PASS; the runtime user is not a migration/root user",
             f"task {task_id}, record {record_id}, item {item_id}, resource {int(target_facts['item']['resource_id'])}, and user {user_id} remain owned and linked exactly as frozen; task is COMPLETED/context_version=1 and resource_type=BOOK",
             f"the target resource retains the exact frozen imported resource_tag rows (tag_ids={','.join(str(tag['tag_id']) for tag in target_facts['resource_tags'])}) and target_snapshot hash {sha256_bytes(canonical(target_snapshot))}, with no HIDDEN user_resource_state for this user/resource",
+            f"the profile projection row deltas remain exactly user_interest_tag=+{expected_deltas['user_interest_tag']} and user_negative_preference=+{expected_deltas['user_negative_preference']}; existing keys are upserted, not duplicated",
             "the three deterministic interaction UUIDs are absent, or a retry is accepted only when every persisted payload field is byte-for-byte replay-identical",
             "profile_update_outbox has no pre-existing PENDING or PROCESSING row; feedback and direct behavior each enqueue exactly one new outbox row, while the impression-derived behavior enqueues none",
             "only the eleven MySQL targets in this plan may be touched; recommendation/resource/catalog/declared-profile facts, Neo4j, Chroma, migrations, seed data, and external LLM/network calls are outside the plan",
@@ -589,8 +658,10 @@ def build_plan(
             ".".join(str(item) for item in error.absolute_path) for error in errors
         )
         raise ValueError(f"generated ChangePlan violates schema: {locations}")
-    if max_changes != 26:
-        raise ValueError(f"bounded G5 delta unexpectedly changed: max_changes={max_changes}")
+    if max_changes != sum(expected_deltas.values()):
+        raise ValueError(f"bounded G5 delta unexpectedly changed: max_changes={max_changes}, expected={sum(expected_deltas.values())}")
+    if max_changes > MAX_G5_CHANGES:
+        raise ValueError(f"bounded G5 change budget exceeds safety cap: max_changes={max_changes}")
     return plan
 
 
