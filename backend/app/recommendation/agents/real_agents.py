@@ -12,6 +12,11 @@ from backend.app.catalog.ports.public import (
     QueryEmbeddingPort,
     VectorRecallPort,
 )
+from backend.app.shared_kernel.contracts.autonomy import (
+    attach_decision,
+    default_decision,
+    validate_decision,
+)
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.agents.base import (
     Agent,
@@ -20,7 +25,8 @@ from backend.app.recommendation.agents.base import (
     call_with_retry,
 )
 from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
-from backend.app.shared_kernel.contracts.enums import AgentResultStatus
+from backend.app.shared_kernel.contracts.agent import AgentDecision
+from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
 
 
 def _evaluation_at(message: AgentMessage) -> datetime:
@@ -44,7 +50,17 @@ def _result(
     warnings: tuple[str, ...] = (),
     fallback_used: bool = False,
     tool_calls: tuple[dict[str, object], ...] = (),
+    decision: AgentDecision | None = None,
 ) -> AgentResult[dict[str, object]]:
+    resolved_decision = validate_decision(
+        agent_name,
+        decision
+        or default_decision(
+            agent_name,
+            status=status,
+            fallback_used=fallback_used,
+        ),
+    )
     return AgentResult(
         result_id=uuid5(message.message_id, f"result:{agent_name}:{message.attempt}"),
         input_message_id=message.message_id,
@@ -52,12 +68,13 @@ def _result(
         agent_version=agent_version,
         status=status,
         confidence=max(0.0, min(1.0, confidence)),
-        payload=payload,
+        payload=attach_decision(dict(payload), resolved_decision),
         evidence_refs=(f"port:{agent_name}:{agent_version}",),
         warnings=warnings,
         fallback_used=fallback_used,
         tool_calls=tool_calls,
         duration_ms=0,
+        decision=resolved_decision,
     )
 
 
@@ -115,6 +132,12 @@ class MySQLProfileAgent:
                 warnings=("PROFILE_READ_UNAVAILABLE",),
                 fallback_used=True,
                 tool_calls=_failure_metadata(error),
+                decision=AgentDecision(
+                    action=AgentActionType.FALLBACK,
+                    target="RecommendationOrchestrator",
+                    reason_code="PROFILE_READ_UNAVAILABLE",
+                    confidence=0.1,
+                ),
             )
         signals = [
             {"tag_id": signal.tag_id, "weight": signal.weight, "negative": False}
@@ -147,6 +170,12 @@ class MySQLProfileAgent:
             warnings=("PROFILE_PROJECTION_CURRENT_AS_OF",) if snapshot.as_of != as_of else (),
             fallback_used=False,
             tool_calls=({"operation": "profile.get_snapshot", "attempts": attempts, "outcome": "SUCCESS"},),
+            decision=AgentDecision(
+                action=AgentActionType.READ_PROFILE,
+                target="RecommendationOrchestrator",
+                reason_code="PROFILE_SNAPSHOT_READY",
+                confidence=snapshot.profile_confidence,
+            ),
         )
 
 
@@ -209,6 +238,12 @@ class CatalogResourceSemanticAgent:
                 warnings=("CATALOG_READ_UNAVAILABLE",),
                 fallback_used=True,
                 tool_calls=_failure_metadata(error),
+                decision=AgentDecision(
+                    action=AgentActionType.DEGRADE,
+                    target="RecommendationPolicyAgent",
+                    reason_code="CATALOG_READ_UNAVAILABLE",
+                    confidence=0.2,
+                ),
             )
         metadata_coverage = (
             sum(max(0.0, min(1.0, resource.metadata_quality)) for resource in resources)
@@ -244,6 +279,12 @@ class CatalogResourceSemanticAgent:
             tool_calls=(
                 {"operation": "catalog.list_resources.probe", "attempts": resource_attempts, "outcome": "SUCCESS"},
                 {"operation": "catalog.list_resource_tags.probe", "attempts": tag_attempts, "outcome": "SUCCESS"},
+            ),
+            decision=AgentDecision(
+                action=AgentActionType.PROBE_RESOURCES,
+                target="RecommendationPolicyAgent",
+                reason_code="RESOURCE_PROBE_READY" if resources else "CATALOG_EMPTY",
+                confidence=metadata_coverage,
             ),
         )
 
@@ -317,6 +358,12 @@ class CatalogCandidateRecallAgent:
                 warnings=("CATALOG_RECALL_UNAVAILABLE",),
                 fallback_used=True,
                 tool_calls=_failure_metadata(error),
+                decision=AgentDecision(
+                    action=AgentActionType.DEGRADE,
+                    target="RankingAgent",
+                    reason_code="CATALOG_RECALL_UNAVAILABLE",
+                    confidence=0.1,
+                ),
             )
         tags_by_resource: dict[int, list[Any]] = {}
         for tag in tags:
@@ -546,6 +593,20 @@ class CatalogCandidateRecallAgent:
             )
             + graph_tool_calls
             + vector_tool_calls,
+            decision=AgentDecision(
+                action=AgentActionType.DEGRADE
+                if (graph_warning or vector_warning or not selected)
+                else AgentActionType.SELECT_CHANNELS,
+                target="RankingAgent",
+                reason_code=(
+                    "OPTIONAL_CHANNEL_DEGRADED"
+                    if (graph_warning or vector_warning)
+                    else "CATALOG_EMPTY"
+                    if not selected
+                    else "RECALL_CHANNELS_SELECTED"
+                ),
+                confidence=0.3 if not selected else 0.8,
+            ),
         )
 
 

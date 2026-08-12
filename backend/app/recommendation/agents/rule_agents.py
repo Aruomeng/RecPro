@@ -10,6 +10,12 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.recommendation.agents.base import Agent
+from backend.app.shared_kernel.contracts.autonomy import (
+    attach_decision,
+    default_decision,
+    validate_decision,
+)
+from backend.app.shared_kernel.contracts.agent import AgentDecision
 from backend.app.recommendation.domain.output_type_stability import (
     DEFAULT_HYSTERESIS_MARGIN,
     DEFAULT_MIN_OUTPUT_TYPE_ROUNDS,
@@ -18,7 +24,7 @@ from backend.app.recommendation.domain.output_type_stability import (
     stabilize_output_type,
 )
 from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
-from backend.app.shared_kernel.contracts.enums import AgentResultStatus
+from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
 
 
 def _result(
@@ -32,7 +38,17 @@ def _result(
     warnings: tuple[str, ...] = (),
     fallback_used: bool = False,
     error_code: str | None = None,
+    decision: AgentDecision | None = None,
 ) -> AgentResult[dict[str, object]]:
+    resolved_decision = validate_decision(
+        agent_name,
+        decision
+        or default_decision(
+            agent_name,
+            status=status,
+            fallback_used=fallback_used,
+        ),
+    )
     return AgentResult(
         result_id=uuid5(message.message_id, f"result:{agent_name}:{message.attempt}"),
         input_message_id=message.message_id,
@@ -40,13 +56,14 @@ def _result(
         agent_version=agent_version,
         status=status,
         confidence=max(0.0, min(1.0, confidence)),
-        payload=payload,
+        payload=attach_decision(dict(payload or {}), resolved_decision),
         evidence_refs=(f"rule:{agent_name}:{agent_version}",),
         warnings=warnings,
         fallback_used=fallback_used,
         tool_calls=(),
         error_code=error_code,
         duration_ms=0,
+        decision=resolved_decision,
     )
 
 
@@ -72,6 +89,12 @@ class RuleIntentUnderstandingAgent:
                 agent_version=self.version,
                 payload=payload,
                 confidence=0.2,
+                decision=AgentDecision(
+                    action=AgentActionType.ASK_CLARIFICATION,
+                    target="User",
+                    reason_code="MISSING_REQUIRED_SLOTS",
+                    confidence=0.2,
+                ),
             )
         tokens = sorted({part for part in text.replace(",", " ").replace("，", " ").split() if part})
         return _result(
@@ -86,6 +109,12 @@ class RuleIntentUnderstandingAgent:
                 "reason_codes": ["EXPLICIT_INPUT"] if text else ["DEFAULT_RESOURCE_TYPES"],
             },
             confidence=0.86 if text else 0.58,
+            decision=AgentDecision(
+                action=AgentActionType.RETURN_RESULT,
+                target="RecommendationOrchestrator",
+                reason_code="EXPLICIT_INPUT" if text else "DEFAULT_RESOURCE_TYPES",
+                confidence=0.86 if text else 0.58,
+            ),
         )
 
 
@@ -111,6 +140,12 @@ class RuleUserProfileAgent:
             confidence=confidence,
             warnings=("SESSION_ONLY_PROFILE",) if empty else (),
             fallback_used=empty,
+            decision=AgentDecision(
+                action=AgentActionType.FALLBACK if empty else AgentActionType.READ_PROFILE,
+                target="RecommendationOrchestrator",
+                reason_code="PROFILE_EMPTY" if empty else "PROFILE_SNAPSHOT_READY",
+                confidence=confidence,
+            ),
         )
 
 
@@ -136,6 +171,12 @@ class RuleResourceSemanticAgent:
             confidence=coverage,
             warnings=("VECTOR_CHANNEL_UNAVAILABLE", "KG_CHANNEL_UNAVAILABLE") if degraded else (),
             fallback_used=degraded,
+            decision=AgentDecision(
+                action=AgentActionType.DEGRADE if degraded else AgentActionType.PROBE_RESOURCES,
+                target="RecommendationPolicyAgent",
+                reason_code="INDEX_CHANNEL_UNAVAILABLE" if degraded else "RESOURCE_PROBE_READY",
+                confidence=coverage,
+            ),
         )
 
 
@@ -261,6 +302,12 @@ class RuleRecommendationPolicyAgent:
                     ],
                 },
                 confidence=0.9,
+                decision=AgentDecision(
+                    action=AgentActionType.ASK_CLARIFICATION,
+                    target="User",
+                    reason_code="MISSING_REQUIRED_SLOTS",
+                    confidence=0.9,
+                ),
             )
         delivery = "DEGRADED" if degraded else "DIRECT"
         return _result(
@@ -295,6 +342,12 @@ class RuleRecommendationPolicyAgent:
             confidence=0.62 if degraded else 0.88,
             warnings=tuple(policy_warnings),
             fallback_used=degraded,
+            decision=AgentDecision(
+                action=AgentActionType.DEGRADE if degraded else AgentActionType.PLAN_RECALL,
+                target="CandidateRecallAgent",
+                reason_code="DEGRADED_POLICY" if degraded else "RECALL_PLAN_READY",
+                confidence=0.62 if degraded else 0.88,
+            ),
         )
 
 
@@ -325,6 +378,12 @@ class RuleCandidateRecallAgent:
             status=AgentResultStatus.PARTIAL if degraded else AgentResultStatus.SUCCESS,
             warnings=("INSUFFICIENT_RESOURCE_COVERAGE",) if degraded else (),
             fallback_used=degraded,
+            decision=AgentDecision(
+                action=AgentActionType.DEGRADE if degraded else AgentActionType.SELECT_CHANNELS,
+                target="RankingAgent",
+                reason_code="INSUFFICIENT_RESOURCE_COVERAGE" if degraded else "MYSQL_CHANNEL_SELECTED",
+                confidence=0.55 if degraded else 0.86,
+            ),
         )
 
 
@@ -346,6 +405,12 @@ class RuleRankingAgent:
                 confidence=0.45,
                 status=AgentResultStatus.PARTIAL,
                 warnings=("REPLAN_REQUIRED",),
+                decision=AgentDecision(
+                    action=AgentActionType.REQUEST_REPLAN,
+                    target="RecommendationPolicyAgent",
+                    reason_code="COVERAGE_BELOW_THRESHOLD",
+                    confidence=0.45,
+                ),
             )
         ranked = [
             {**candidate, "rank_no": index}
@@ -360,6 +425,12 @@ class RuleRankingAgent:
             agent_version=self.version,
             payload={"ranked_items": ranked, "replan_required": False},
             confidence=0.82,
+            decision=AgentDecision(
+                action=AgentActionType.RETURN_RESULT,
+                target="ExplanationAgent",
+                reason_code="RANKING_READY",
+                confidence=0.82,
+            ),
         )
 
 
@@ -385,6 +456,12 @@ class RuleExplanationAgent:
             payload={"explanations": explanations, "provider": "TEMPLATE"},
             confidence=0.84 if explanations else 0.5,
             warnings=("LIMITED_EVIDENCE",) if not explanations else (),
+            decision=AgentDecision(
+                action=AgentActionType.RENDER_EVIDENCE if explanations else AgentActionType.FALLBACK,
+                target="RecommendationOrchestrator",
+                reason_code="EVIDENCE_RENDERED" if explanations else "NO_RANKED_ITEMS",
+                confidence=0.84 if explanations else 0.5,
+            ),
         )
 
 

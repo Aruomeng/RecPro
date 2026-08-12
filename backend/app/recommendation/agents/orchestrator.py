@@ -9,7 +9,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from backend.app.recommendation.agents.registry import AgentRegistry
 from backend.app.shared_kernel.contracts.agent import AgentDispatch, AgentMessage, AgentResult
-from backend.app.shared_kernel.contracts.enums import MessageType, TaskStatus
+from backend.app.shared_kernel.contracts.enums import AgentActionType, MessageType, TaskStatus
 from backend.app.shared_kernel.contracts.state import can_transition
 
 
@@ -155,6 +155,7 @@ class RecommendationOrchestrator:
                     "duration_ms": result.duration_ms,
                     "warnings": list(result.warnings),
                     "error_code": result.error_code,
+                    "autonomy": result.decision.as_dict() if result.decision else None,
                     "input_digest": f"message:{message.message_id}",
                 }
             )
@@ -207,7 +208,13 @@ class RecommendationOrchestrator:
             },
         )
         warnings = self._collect_warnings(results)
-        if policy.get("delivery_strategy") == "GUIDED":
+        orchestration_warnings: list[str] = []
+        policy_result = results["RecommendationPolicyAgent"]
+        if policy_result.decision is None:
+            raise RuntimeError("RecommendationPolicyAgent returned no autonomy decision")
+        if policy_result.decision.action is AgentActionType.ASK_CLARIFICATION:
+            if policy.get("delivery_strategy") != "GUIDED":
+                raise RuntimeError("policy clarification action conflicts with delivery strategy")
             transition(TaskStatus.WAITING_CLARIFICATION, "MISSING_REQUIRED_SLOTS")
             payload = {
                 "task_id": str(request.task_id),
@@ -230,6 +237,13 @@ class RecommendationOrchestrator:
                 transitions=tuple(transitions),
                 trace=tuple(trace),
                 dispatches=tuple(dispatches),
+            )
+        if policy_result.decision.action not in {
+            AgentActionType.PLAN_RECALL,
+            AgentActionType.DEGRADE,
+        }:
+            raise RuntimeError(
+                "RecommendationPolicyAgent proposed an action that cannot continue the task"
             )
 
         transition(TaskStatus.RECALLING, "G4_RULE_RECALL")
@@ -259,7 +273,10 @@ class RecommendationOrchestrator:
                 "replan_count": replan_count,
             },
         )
-        if ranking.get("replan_required") and replan_count == 0:
+        ranking_result = results["RankingAgent"]
+        if ranking_result.decision is None:
+            raise RuntimeError("RankingAgent returned no autonomy decision")
+        if ranking_result.decision.action is AgentActionType.REQUEST_REPLAN and replan_count == 0:
             transition(TaskStatus.REPLANNING, "COVERAGE_BELOW_THRESHOLD")
             replan_count = 1
             policy = await dispatch(
@@ -276,6 +293,16 @@ class RecommendationOrchestrator:
                 },
                 attempt=2,
             )
+            policy_result = results["RecommendationPolicyAgent"]
+            if policy_result.decision is None:
+                raise RuntimeError("RecommendationPolicyAgent returned no replan autonomy decision")
+            if policy_result.decision.action not in {
+                AgentActionType.PLAN_RECALL,
+                AgentActionType.DEGRADE,
+            }:
+                raise RuntimeError(
+                    "RecommendationPolicyAgent proposed an unsupported replan action"
+                )
             transition(TaskStatus.RECALLING, "G4_REPLAN_RECALL")
             recall = await dispatch(
                 receiver="CandidateRecallAgent",
@@ -305,19 +332,40 @@ class RecommendationOrchestrator:
                 },
                 attempt=2,
             )
+        elif ranking_result.decision.action is AgentActionType.REQUEST_REPLAN:
+            orchestration_warnings.append("REPLAN_BUDGET_EXHAUSTED")
+        elif ranking_result.decision.action not in {
+            AgentActionType.RETURN_RESULT,
+            AgentActionType.DEGRADE,
+        }:
+            raise RuntimeError("RankingAgent proposed an unsupported continuation action")
+        if replan_count == 1:
+            ranking_result = results["RankingAgent"]
+            if ranking_result.decision is None:
+                raise RuntimeError("RankingAgent returned no replan autonomy decision")
+            if ranking_result.decision.action is AgentActionType.REQUEST_REPLAN:
+                orchestration_warnings.append("REPLAN_BUDGET_EXHAUSTED")
+            elif ranking_result.decision.action not in {
+                AgentActionType.RETURN_RESULT,
+                AgentActionType.DEGRADE,
+            }:
+                raise RuntimeError("RankingAgent proposed an unsupported replan continuation action")
         transition(TaskStatus.EXPLAINING, "G4_RULE_EXPLAIN")
         explanation = await dispatch(
             receiver="ExplanationAgent",
             message_type=MessageType.EXPLAIN_EXECUTE,
             payload={"ranked_items": ranking.get("ranked_items", []), "policy": policy},
         )
+        warnings = self._collect_warnings(results)
+        for warning in orchestration_warnings:
+            if warning not in warnings:
+                warnings.append(warning)
         degraded = policy.get("delivery_strategy") == "DEGRADED" or bool(warnings) or not ranking.get("ranked_items")
         transition(TaskStatus.PERSISTING, "G4_RESULT_READY")
         transition(
             TaskStatus.DEGRADED_COMPLETED if degraded else TaskStatus.COMPLETED,
             "G4_DEGRADED" if degraded else "G4_COMPLETED",
         )
-        warnings = self._collect_warnings(results)
         payload = {
             "task_id": str(request.task_id),
             "trace_id": str(request.trace_id),
@@ -361,6 +409,8 @@ class RecommendationOrchestrator:
                 "warnings": list(result.warnings),
                 "fallback_used": result.fallback_used,
                 "evidence_refs": list(result.evidence_refs),
+                "role": result.agent_name,
+                "autonomy": result.decision.as_dict() if result.decision else None,
             }
             for name, result in results.items()
         }

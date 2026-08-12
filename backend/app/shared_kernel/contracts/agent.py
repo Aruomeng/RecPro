@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from math import isfinite
 from typing import Any, Generic, TypeVar
 from uuid import UUID
 
-from .enums import AgentResultStatus, MessageType
+from .enums import AgentActionType, AgentResultStatus, MessageType
 
 
 PayloadT = TypeVar("PayloadT")
@@ -118,6 +118,53 @@ class AgentMessage:
 
 
 @dataclass(frozen=True, slots=True)
+class AgentDecision:
+    """A bounded local action proposal emitted by one Agent.
+
+    The decision describes what the Agent believes should happen next.  It
+    does not mutate global task state; only the Orchestrator may accept it and
+    perform a legal state transition.
+    """
+
+    action: AgentActionType
+    target: str
+    reason_code: str
+    confidence: float
+    parameters: dict[str, Any] = field(default_factory=dict)
+    evidence_refs: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.action, AgentActionType):
+            raise ValueError("action must be an AgentActionType")
+        _require_non_blank(self.target, "target")
+        _require_non_blank(self.reason_code, "reason_code")
+        if (
+            not isinstance(self.confidence, (int, float))
+            or isinstance(self.confidence, bool)
+            or not 0.0 <= self.confidence <= 1.0
+        ):
+            raise ValueError("decision confidence must be between 0 and 1")
+        if not isinstance(self.parameters, dict) or not _is_json_value(self.parameters):
+            raise ValueError("decision parameters must be JSON-compatible")
+        if not isinstance(self.evidence_refs, tuple) or not all(
+            isinstance(item, str) and item.strip() for item in self.evidence_refs
+        ):
+            raise ValueError("decision evidence_refs must be non-blank strings")
+        if len(set(self.evidence_refs)) != len(self.evidence_refs):
+            raise ValueError("decision evidence_refs must not contain duplicates")
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "action": self.action.value,
+            "target": self.target,
+            "reason_code": self.reason_code,
+            "confidence": float(self.confidence),
+            "parameters": dict(self.parameters),
+            "evidence_refs": list(self.evidence_refs),
+        }
+
+
+@dataclass(frozen=True, slots=True)
 class AgentResult(Generic[PayloadT]):
     result_id: UUID
     input_message_id: UUID
@@ -132,6 +179,7 @@ class AgentResult(Generic[PayloadT]):
     tool_calls: tuple[dict[str, Any], ...] = ()
     error_code: str | None = None
     duration_ms: int = 0
+    decision: AgentDecision | None = None
 
     def __post_init__(self) -> None:
         _require_uuid(self.result_id, "result_id")
@@ -165,6 +213,8 @@ class AgentResult(Generic[PayloadT]):
             raise ValueError("warnings must be a tuple of non-blank strings")
         if not isinstance(self.fallback_used, bool):
             raise ValueError("fallback_used must be boolean")
+        if self.decision is not None and not isinstance(self.decision, AgentDecision):
+            raise ValueError("decision must be an AgentDecision or null")
         if not isinstance(self.tool_calls, tuple) or not all(
             isinstance(item, dict) and _is_json_value(item)
             for item in self.tool_calls

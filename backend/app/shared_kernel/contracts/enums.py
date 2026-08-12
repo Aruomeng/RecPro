@@ -75,6 +75,27 @@ class AgentResultStatus(StrEnum):
     FAILED = "FAILED"
 
 
+class AgentActionType(StrEnum):
+    """Finite local actions an Agent may propose to the Orchestrator.
+
+    These are deliberately not free-form natural-language intentions.  An
+    Agent can choose only an action declared by its role profile; the
+    Orchestrator remains the sole owner of global task-state transitions.
+    """
+
+    RETURN_RESULT = "RETURN_RESULT"
+    FALLBACK = "FALLBACK"
+    ASK_CLARIFICATION = "ASK_CLARIFICATION"
+    READ_PROFILE = "READ_PROFILE"
+    PROBE_RESOURCES = "PROBE_RESOURCES"
+    PLAN_RECALL = "PLAN_RECALL"
+    SELECT_CHANNELS = "SELECT_CHANNELS"
+    REQUEST_REPLAN = "REQUEST_REPLAN"
+    RENDER_EVIDENCE = "RENDER_EVIDENCE"
+    PROPOSE_PROFILE_DELTA = "PROPOSE_PROFILE_DELTA"
+    DEGRADE = "DEGRADE"
+
+
 class TaskStatus(StrEnum):
     CREATED = "CREATED"
     UNDERSTANDING = "UNDERSTANDING"

@@ -14,9 +14,14 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.llm.ports.public import TextCapabilityProvider
+from backend.app.shared_kernel.contracts.autonomy import (
+    attach_decision,
+    default_decision,
+    validate_decision,
+)
 from backend.app.recommendation.agents.base import Agent
-from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
-from backend.app.shared_kernel.contracts.enums import AgentResultStatus
+from backend.app.shared_kernel.contracts.agent import AgentDecision, AgentMessage, AgentResult
+from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
 
 
 def _result(
@@ -31,7 +36,17 @@ def _result(
     fallback_used: bool = False,
     status: AgentResultStatus = AgentResultStatus.SUCCESS,
     error_code: str | None = None,
+    decision: AgentDecision | None = None,
 ) -> AgentResult[dict[str, object]]:
+    resolved_decision = validate_decision(
+        agent_name,
+        decision
+        or default_decision(
+            agent_name,
+            status=status,
+            fallback_used=fallback_used,
+        ),
+    )
     return AgentResult(
         result_id=uuid5(message.message_id, f"result:{agent_name}:{message.attempt}"),
         input_message_id=message.message_id,
@@ -39,13 +54,14 @@ def _result(
         agent_version=version,
         status=status,
         confidence=max(0.0, min(1.0, confidence)),
-        payload=payload,
+        payload=attach_decision(dict(payload), resolved_decision),
         evidence_refs=(evidence_ref,),
         warnings=warnings,
         fallback_used=fallback_used,
         tool_calls=(),
         error_code=error_code,
         duration_ms=0,
+        decision=resolved_decision,
     )
 
 
@@ -99,6 +115,12 @@ class LLMIntentUnderstandingAgent:
                 evidence_ref="rule:intent-fallback-v1",
                 warnings=("LLM_INTENT_SKIPPED_EMPTY_INPUT",),
                 fallback_used=True,
+                decision=AgentDecision(
+                    action=AgentActionType.FALLBACK,
+                    target="RecommendationOrchestrator",
+                    reason_code="LLM_INTENT_SKIPPED_EMPTY_INPUT",
+                    confidence=min(confidence, 0.62),
+                ),
             )
 
         try:
@@ -145,6 +167,13 @@ class LLMIntentUnderstandingAgent:
                 payload=payload,
                 confidence=0.78,
                 evidence_ref=audit_ref,
+                decision=AgentDecision(
+                    action=AgentActionType.RETURN_RESULT,
+                    target="RecommendationOrchestrator",
+                    reason_code="LLM_CLASSIFICATION",
+                    confidence=0.78,
+                    evidence_refs=(audit_ref,),
+                ),
             )
         except asyncio.CancelledError:
             raise
@@ -160,6 +189,12 @@ class LLMIntentUnderstandingAgent:
                 warnings=("LLM_INTENT_FALLBACK",),
                 fallback_used=True,
                 status=AgentResultStatus.PARTIAL,
+                decision=AgentDecision(
+                    action=AgentActionType.FALLBACK,
+                    target="RecommendationOrchestrator",
+                    reason_code="LLM_INTENT_FALLBACK",
+                    confidence=min(confidence, 0.62),
+                ),
             )
 
 
@@ -267,6 +302,12 @@ class LLMExplanationAgent:
             warnings=unique_warnings,
             fallback_used=fallback_used,
             status=AgentResultStatus.PARTIAL if fallback_used else AgentResultStatus.SUCCESS,
+            decision=AgentDecision(
+                action=AgentActionType.FALLBACK if fallback_used else AgentActionType.RENDER_EVIDENCE,
+                target="RecommendationOrchestrator",
+                reason_code="EVIDENCE_VALIDATION_FAILED" if fallback_used else "EVIDENCE_RENDERED",
+                confidence=0.55 if fallback_used else 0.78,
+            ),
         )
 
 
