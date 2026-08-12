@@ -190,8 +190,8 @@ CASE_COVERAGE: Mapping[str, dict[str, Any]] = {
         "artifact_globs": ["artifacts/verification/g5/g5-http-*/http-runtime.json", "artifacts/verification/g7/g7-frontend-browser-mysql-readonly-*/readonly.json"],
     },
     "A11": {
-        "offline_assessment": "RELATED",
-        "assessment_reason": "Vector/Chroma failure fallback is tested; the final candidate field semantic_score=null contract is not separately asserted.",
+        "offline_assessment": "DIRECT",
+        "assessment_reason": "A vector recall timeout is bounded, preserves MySQL candidates, and explicitly emits semantic_score=null instead of a fabricated vector score.",
         "test_refs": ["tests/g6/test_retrieval_fusion.py::test_vector_failure_is_bounded_and_falls_back_to_mysql", "tests/g6/test_vector_recall.py::test_reader_fails_closed_on_store_error_and_malformed_metadata"],
         "source_refs": ["backend/app/catalog/adapters/chroma.py", "backend/app/recommendation/application/orchestration.py"],
         "tool_refs": ["scripts/verify_g6_readonly_fusion.py"],
@@ -206,9 +206,9 @@ CASE_COVERAGE: Mapping[str, dict[str, Any]] = {
         "artifact_globs": ["artifacts/verification/g6/g6-retrieval-fusion-readonly-*/readonly.json"],
     },
     "A13": {
-        "offline_assessment": "RELATED",
-        "assessment_reason": "MySQL fallback when an optional channel fails is covered; simultaneous Graph+Vector outage with sufficient MySQL candidates is not isolated.",
-        "test_refs": ["tests/g6/test_retrieval_fusion.py::test_vector_failure_is_bounded_and_falls_back_to_mysql"],
+        "offline_assessment": "DIRECT",
+        "assessment_reason": "A simultaneous Graph+Vector timeout keeps sufficient MySQL candidates, marks both optional dependencies unavailable, and omits optional-channel evidence references.",
+        "test_refs": ["tests/g6/test_retrieval_fusion.py::test_graph_and_vector_outage_keeps_sufficient_mysql_candidates"],
         "source_refs": ["backend/app/recommendation/application/orchestration.py", "backend/app/catalog/application/public.py"],
         "tool_refs": ["scripts/verify_g6_readonly_fusion.py"],
         "artifact_globs": ["artifacts/verification/g6/g6-retrieval-fusion-readonly-*/readonly.json"],

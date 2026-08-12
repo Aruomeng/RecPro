@@ -193,6 +193,43 @@ class RetrievalFusionTests(unittest.TestCase):
         self.assertTrue(all("VECTOR" not in item["channel"] for item in result.payload["candidates"]))
         self.assertTrue(all(item["semantic_score"] is None for item in result.payload["candidates"]))
 
+    def test_graph_and_vector_outage_keeps_sufficient_mysql_candidates(self) -> None:
+        graph = FakeGraphTimeout()
+        vector = FakeVector(fail=True)
+        agent = CatalogCandidateRecallAgent(
+            FakeCatalog(),
+            graph=graph,
+            graph_version="lib-books-v1-20260810",
+            vector=vector,
+            query_embedder=HashCharNgramQueryEmbedder(),
+            embedding_version=EMBEDDING_VERSION,
+            index_version=INDEX_VERSION,
+            retry_policy=RetryPolicy(max_attempts=2),
+        )
+        result = asyncio.run(agent.handle(recall_message()))
+        self.assertEqual(AgentResultStatus.PARTIAL, result.status)
+        self.assertTrue(result.fallback_used)
+        self.assertIn("GRAPH_RECALL_UNAVAILABLE", result.warnings)
+        self.assertIn("VECTOR_RECALL_UNAVAILABLE", result.warnings)
+        self.assertEqual("UNAVAILABLE", result.payload["dependency_status"]["GRAPH"])
+        self.assertEqual("UNAVAILABLE", result.payload["dependency_status"]["VECTOR"])
+        candidates = list(result.payload["candidates"])
+        self.assertEqual(2, len(candidates))
+        self.assertTrue(all(item["channel"] == "MYSQL" for item in candidates))
+        self.assertTrue(all(item["kg_score"] is None for item in candidates))
+        self.assertTrue(all(item["semantic_score"] is None for item in candidates))
+        self.assertTrue(all(":graph:" not in item["evidence_ref"] for item in candidates))
+        self.assertTrue(all(":vector:" not in item["evidence_ref"] for item in candidates))
+        self.assertEqual((2, 2), (graph.calls, len(vector.calls)))
+        self.assertEqual(
+            {"operation": "catalog.graph_recall", "attempts": 2, "outcome": "TIMEOUT"},
+            result.tool_calls[-2],
+        )
+        self.assertEqual(
+            {"operation": "catalog.vector_recall", "attempts": 2, "outcome": "TIMEOUT"},
+            result.tool_calls[-1],
+        )
+
     def test_graph_timeout_is_null_and_explanation_cannot_invent_graph_path(self) -> None:
         graph = FakeGraphTimeout()
         agent = CatalogCandidateRecallAgent(
