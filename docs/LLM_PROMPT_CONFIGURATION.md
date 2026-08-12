@@ -15,7 +15,7 @@ RECPRO_PROMPT_BUNDLE_SHA256=bad547702e4c3b42395280ea44781e60992a85f981605afbcd29
 
 DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROVIDER=deepseek` 和 `RECPRO_LLM_API_KEY` 后才允许构造。密钥不能写入仓库、Prompt Bundle、Agent 消息、日志、实验 Manifest 或验证 artifact；仓库不保存真实密钥。
 
-当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-v4-flash`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。已完成离线 provider 构造验证和 Compose 环境结构校验，尚未发起任何 DeepSeek 网络请求。
+当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-v4-flash`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。就绪预检阶段未发起网络请求；首次获批的固定 fixture 请求结果见下文。
 
 当前就绪证据：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。该检查只读取 `.env.host`、构造 DeepSeek provider 并验证 Prompt Bundle；`network_requests=0`、`external_llm_requests=0`、数据库读写=0。它证明“可以进入一次明确授权的真实调用”，不证明已经调用，也不会改变默认 Mock/关闭状态。
 
@@ -107,3 +107,7 @@ make PYTHON=.venv-g1-final-py311/bin/python \
 ```
 
 命令不会保存原始响应或密钥，只保存校验后的意图枚举、Prompt/请求审计字段、延迟和安全计数；运行前后不执行 MySQL/Neo4j/Chroma 操作、不 claim Outbox。
+
+## 6. 首次真实调用结果
+
+用户明确批准后，已按上述命令执行一次固定非敏感 `intent.classify` fixture。证据为 `artifacts/verification/llm/llm-fixture-call-20260812-001/real-call.json`：状态 `PASS`，`attempts=1`，延迟约 `1808ms`，返回意图 `BOOK_RECOMMENDATION`。安全计数为 `external_llm_requests=1`、`network_requests=1`，数据库/Neo4j/Chroma 读写、Outbox claim、删除和覆盖均为 `0`。该调用尚未接入默认 HTTP/Worker，也没有将 Explanation/Feedback 业务路径切换到 DeepSeek。

@@ -29,6 +29,7 @@ G4 澄清续跑适配器随后已完成代码级实现：Orchestrator 可从 `WA
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和图计划只读校验，再由 `scripts/import_book_graph.py` 以显式 `--apply` 追加到带 `graph_version` 的 Neo4j 影子图；实体/关系见 [图书图谱模型与导入契约](docs/book_graph_model.md)。仓库不保存外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；DeepSeek 适配器已准备并保持默认关闭，当前本机的 opt-in 配置只能通过被 Git 忽略的环境文件注入，禁止提交到 Git。详见 [LLM 与 Prompt 配置基线](docs/LLM_PROMPT_CONFIGURATION.md)。
 DeepSeek 当前已通过本地“真实调用就绪预检”而非真实网络调用：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`，provider/model/HTTPS/Prompt Bundle/key 存在性均通过，网络和外部 LLM 请求仍为 `0`。真实调用只有在显式研究组合根传入 `enable_llm_provider=True`、固定非敏感 fixture 与费用/超时/回退/审计边界，并获得用户单次明确批准后才会发生；默认 Compose、HTTP、Worker 继续使用 Mock/关闭。
+用户随后明确批准了一次真实外部请求，已用固定非敏感 fixture 执行 `intent.classify`：`artifacts/verification/llm/llm-fixture-call-20260812-001/real-call.json`=`PASS`，1 次请求、约 1.81 秒、结果为 `BOOK_RECOMMENDATION`；未读取/写入 MySQL、Neo4j、Chroma，未 claim Outbox，未保存原始响应或密钥。该结果只证明 Intent provider 的单次真实调用链路可用，不代表默认 HTTP/Worker 或 Explanation/Feedback 已切换到真实 LLM。
 
 数据库管理员凭据只保存在本机 `.env.user-secrets`（权限 `0600`，已被 `.gitignore` 忽略），不进入应用日志或提交。MySQL 应用运行账号仍保持最小权限；`root` 仅作为后续受控管理/迁移凭据使用。Neo4j Community 只提供默认 `neo4j` 数据库，因此 RecPro 使用独立 Compose 实例和独立数据卷隔离于本机已有 Neo4j；不会连接本机 `7474/7687` 上的既有图。
 
