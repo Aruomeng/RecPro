@@ -103,6 +103,7 @@
   - 已完成 G7 G4+G5 独立后端入口：新增 `backend.app.g4_feedback_demo_main:app` 与 `RECPRO_G5_INTERACTION_HTTP_ENABLED` 双闸门；只有显式入口同时注入 G4 Graph/Vector 推荐、G5 Feedback/Behavior 服务时才挂载真实交互 POST，默认 Compose backend、Worker、DeepSeek 仍关闭；后端镜像补齐冻结 Prompt Bundle 文件。
   - 已开始 G8 发布候选前置：新增 `scripts/verify_g8_release_preflight.py`、`tests/g8/test_release_preflight.py` 与 `make verify-g8-release-preflight`，将默认安全配置、静态门禁、后端/前端测试、追加式前端构建、本地后端镜像检查和 Git 源码哈希清单固化为不可覆盖报告；本工具不启动服务、不连接数据库、不 claim Outbox、不调用 DeepSeek。
   - 已完成 G8 发布候选前置首次运行：`artifacts/verification/g8/g8-release-preflight-20260812-001/release-preflight.json`=`PASS_WITH_BLOCKERS`；契约、文档、架构、安全、G1/G4/G5/G7/G8 测试、前端测试/构建、默认 fail-closed 配置和后端镜像检查共 12 项技术检查全部 PASS；源码清单 402 个文件，root_sha256=`3733f3963e2a18985517e65b566d40537e71300d4cc5cb1c7e5340edc8c88e2c`。
+  - 已完成 G8 发布候选前置扩展运行：`artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；G0 合约/架构/安全测试、G1—G9 测试、契约/文档/架构/安全脚本、Compose config、前端测试/构建、默认 fail-closed 配置和后端镜像检查共 20 项技术检查全部 PASS；源码清单 402 个文件，root_sha256=`1c4ed1df042989fbacae81c09e1f7949155e7e72320fe516e5c7fa312815b0b5`。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -137,7 +138,7 @@
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
-| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-001/release-preflight.json`=`PASS_WITH_BLOCKERS`；12 项技术检查 PASS；源码清单 402 个文件 | 只读/构建前置已通过；A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
+| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；源码清单 402 个文件 | 只读/构建前置已通过；A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
@@ -147,7 +148,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 发布候选只读/构建前置已通过，报告为 `PASS_WITH_BLOCKERS`。`g8-release-preflight-20260812-001` 的数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步是补齐 A01—A25/六场景 E2E 与故障矩阵，仍不能替代真实 G5 ChangePlan。
+- `current_subtask`：G8 发布候选只读/构建前置已通过，扩展报告 `g8-release-preflight-20260812-002` 为 `PASS_WITH_BLOCKERS`。20 项技术检查全部 PASS，数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步是补齐 A01—A25/六场景 E2E 与故障矩阵，仍不能替代真实 G5 ChangePlan。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -1658,6 +1659,21 @@ Gate：G8 可靠性、安全与发布候选前置
 证据：`artifacts/verification/g8/g8-release-preflight-20260812-001/release-preflight.json`。
 删除与数据库边界：文件删除=0，数据库物理删除=0，数据库读取/写入=0，Neo4j/Chroma 写入=0，外部 LLM 请求=0。
 下一步唯一动作：执行新 run_id 的前置报告；若命令失败只修复代码并使用新的 run_id 重跑，不覆盖旧证据。
+```
+
+## G8 发布候选离线门禁扩展复验
+
+```text
+交接ID：G8-RELEASE-PREFLIGHT-20260812-002
+Gate：G8 可靠性、安全与发布候选离线门禁扩展
+状态：PREFLIGHT_PASS / PASS_WITH_BLOCKERS
+时间：2026-08-12（Asia/Shanghai）
+实际命令：`make PYTHON=.venv-g1-final-py311/bin/python G8_RELEASE_RUN_ID=g8-release-preflight-20260812-002 G8_FRONTEND_RUN_ID=g8-release-ui-20260812-002 G8_BACKEND_IMAGE=recpro-backend:g7-g4-g5-entrypoint-check-20260812 verify-g8-release-preflight`。
+检查结果：20 项全部 PASS：契约、文档、架构、安全脚本；G0 合约/架构/安全测试；G1、G2、G3、G4、G5、G6、G7、G8、G9 测试；Compose config；前端测试与追加式构建；默认 fail-closed 配置；后端镜像用户/命令检查。
+产物：`artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`；前端 `dist/g8-release-ui-20260812-002`；源码清单 402 个文件，root_sha256=`1c4ed1df042989fbacae81c09e1f7949155e7e72320fe516e5c7fa312815b0b5`。
+状态解释：报告保持 `PASS_WITH_BLOCKERS`，阻塞项为 A01—A25 最终复验、六场景浏览器 E2E、G5 真实浏览器写入/非空 Worker 的新 ChangePlan、生产 OIDC/JWKS、DeepSeek 外部调用审查和 G9 输入冻结。
+安全计数：database_reads=0、database_writes=0、Outbox claim=0、Neo4j reads/writes=0、Chroma reads/writes=0、DeepSeek requests=0、文件删除=0、数据库物理删除=0、旧证据覆盖=0。
+下一步唯一动作：在不触碰数据库的前提下补齐 A01—A25/故障矩阵覆盖审计；真实 G5 业务追加仍须新的精确 plan_id/hash 和单独批准。
 ```
 
 ## 阶段交接模板
