@@ -131,13 +131,17 @@ CHROMA_IMPORT_PLAN ?=
 CHROMA_IMPORT_CHROMA_PATH ?= data/chroma
 CHROMA_OPERATOR_PYTHON ?= .venv-chroma-g6-20260811/bin/python
 HOST_ENV_SYNC_RUN_ID ?=
+G8_RELEASE_RUN_ID ?=
+G8_FRONTEND_RUN_ID ?=
+G8_BACKEND_IMAGE ?=
+G8_DOCKER_CLI ?= $(DOCKER_CLI)
 
 .PHONY: \
 	bootstrap bootstrap-check \
 	plan-host-env-sync sync-host-env-from-compose verify-host-env \
 	safety-check architecture-check docs-check contracts-check \
 	test-g0 test-g1-python frontend-test frontend-build \
-	test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
+	test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g8 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
 	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g4-readonly-fusion verify-g5-runtime compose-config \
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
@@ -146,6 +150,7 @@ HOST_ENV_SYNC_RUN_ID ?=
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
+	verify-g8-release-preflight \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -208,6 +213,9 @@ test-g6:
 test-g7:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g7 -t tests -p 'test_*.py'
 
+test-g8:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g8 -t tests -p 'test_*.py'
+
 test-g9:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m unittest discover -s tests/g9 -t tests -p 'test_*.py'
 
@@ -227,6 +235,11 @@ frontend-test:
 frontend-build:
 	@test -n "$(BUILD_RUN_ID)" || { echo "BUILD_RUN_ID is required and must name a new append-only frontend build"; exit 2; }
 	RECPRO_BUILD_RUN_ID="$(BUILD_RUN_ID)" $(NPM) --prefix frontend run build
+
+verify-g8-release-preflight:
+	@test -n "$(G8_RELEASE_RUN_ID)" || { echo "G8_RELEASE_RUN_ID is required and must name a new evidence run"; exit 2; }
+	@test -n "$(G8_FRONTEND_RUN_ID)" || { echo "G8_FRONTEND_RUN_ID is required and must name a new frontend build"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_release_preflight --run-id "$(G8_RELEASE_RUN_ID)" --frontend-run-id "$(G8_FRONTEND_RUN_ID)" --python "$(PYTHON)" --npm "$(NPM)" --docker-cli "$(G8_DOCKER_CLI)" $(if $(G8_BACKEND_IMAGE),--backend-image "$(G8_BACKEND_IMAGE)",)
 
 verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 
