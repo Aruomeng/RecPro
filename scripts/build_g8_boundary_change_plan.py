@@ -105,11 +105,15 @@ def _resolve_inside_project(value: Path, *, label: str) -> Path:
 
 
 def _latest_behavior_at(*targets: Mapping[str, Any]) -> datetime | None:
-    values = [
-        _parse_time(str(target["latest_behavior_at"]))
-        for target in targets
-        if target.get("latest_behavior_at") is not None
-    ]
+    values: list[datetime] = []
+    for target in targets:
+        raw = target.get("latest_behavior_at")
+        if raw is None:
+            continue
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if parsed.tzinfo is None or parsed.utcoffset() is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        values.append(parsed.astimezone(UTC))
     return max(values, default=None)
 
 

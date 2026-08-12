@@ -51,6 +51,7 @@ from scripts.build_g5_feedback_http_plan import (
     read_identity_and_grants,
     read_snapshot,
     read_target_facts,
+    require_interaction_after_latest_behavior,
     sha256_bytes,
     target_snapshot_from_facts,
 )
@@ -407,6 +408,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     target_snapshot_hash = sha256_bytes(canonical(target_snapshot_from_facts(target_facts)))
     if target_snapshot_hash != str(plan["input_hashes"].get("target_snapshot", "")):
         raise ValueError("live recommendation ownership/tag/state snapshot differs from the approved plan")
+    require_interaction_after_latest_behavior(
+        target_facts,
+        impression_rendered_at=parse_utc(
+            str(payload["impression_rendered_at"]),
+            label="impression_rendered_at",
+        ),
+    )
     planned_deltas = {
         str(target["identifier"]).rsplit(".", maxsplit=1)[-1]: int(target["expected_after_min_count"])
         - int(target["expected_before_count"])

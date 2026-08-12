@@ -23,12 +23,25 @@ from scripts.execute_g5_feedback_worker_plan import (
 from scripts.build_g5_feedback_http_plan import (
     canonical,
     expected_final_deltas,
+    require_interaction_after_latest_behavior,
     sha256_bytes,
     target_snapshot_from_facts,
 )
 
 
 class G5FeedbackWorkerExecutorTests(unittest.TestCase):
+    def test_new_interaction_must_follow_latest_database_utc_behavior(self) -> None:
+        facts = {"latest_behavior_at": "2030-01-20T12:06:00"}
+        require_interaction_after_latest_behavior(
+            facts,
+            impression_rendered_at=datetime(2030, 1, 20, 13, 0, tzinfo=UTC),
+        )
+        with self.assertRaises(ValueError):
+            require_interaction_after_latest_behavior(
+                facts,
+                impression_rendered_at=datetime(2030, 1, 20, 12, 6, tzinfo=UTC),
+            )
+
     def test_bounded_deltas_sum_to_approved_change_budget(self) -> None:
         self.assertEqual(26, sum(FINAL_DELTAS.values()))
         self.assertEqual(11, sum(INTERACTION_DELTAS.values()))

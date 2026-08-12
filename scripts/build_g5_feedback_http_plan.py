@@ -165,6 +165,21 @@ def iso_z(value: datetime) -> str:
     return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 
+def require_interaction_after_latest_behavior(
+    target_facts: Mapping[str, Any], *, impression_rendered_at: datetime
+) -> None:
+    """Prevent a new online interaction from replaying an older profile horizon."""
+
+    raw = target_facts.get("latest_behavior_at")
+    if raw is None:
+        return
+    latest = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    if latest.tzinfo is None or latest.utcoffset() is None:
+        latest = latest.replace(tzinfo=UTC)
+    if impression_rendered_at.astimezone(UTC) <= latest.astimezone(UTC):
+        raise ValueError("impression timestamp must be later than the user's latest behavior")
+
+
 def current_git_commit() -> str:
     result = subprocess.run(
         ["git", "rev-parse", "HEAD"],
@@ -535,6 +550,10 @@ def build_plan(
         raise ValueError("direct behavior visibility values are out of range")
     if not impression_rendered_at <= feedback_occurred_at <= behavior_occurred_at:
         raise ValueError("interaction timestamps must be ordered impression <= feedback <= behavior")
+    require_interaction_after_latest_behavior(
+        target_facts,
+        impression_rendered_at=impression_rendered_at,
+    )
     interaction_namespace = f"g5-feedback-interaction:{run_id}"
     impression_uuid = uuid5(NAMESPACE_URL, f"{interaction_namespace}:impression")
     feedback_uuid = uuid5(NAMESPACE_URL, f"{interaction_namespace}:feedback")

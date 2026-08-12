@@ -66,6 +66,32 @@ class BoundaryChangePlanTest(unittest.TestCase):
         self.assertEqual(EXPECTED_DELTAS, observed)
         self.assertTrue(all(item["expected_after_count"] >= item["expected_before_count"] for item in plan["targets"]))
 
+    def test_naive_mysql_latest_behavior_is_interpreted_as_utc(self) -> None:
+        read_target = target(item_id=131, resource_id=6299)
+        exposure_target = target(item_id=132, resource_id=7999)
+        read_target["latest_behavior_at"] = "2030-01-20T12:06:00"
+        exposure_target["latest_behavior_at"] = "2030-01-20T12:06:00"
+        common = {
+            "run_id": "g8-boundary-latest-time-test-001",
+            "baseline_path": Path("artifacts/baseline.json").resolve(),
+            "baseline": {"compose_project": "recpro-test"},
+            "baseline_raw": b"{}",
+            "current_counts": {table: 10 for table in EXPECTED_DELTAS},
+            "identity": {"database": "recpro"},
+            "read_target": read_target,
+            "exposure_target": exposure_target,
+            "uuids": {
+                "duration_impression": "22222222-2222-4222-8222-222222222222",
+                "ratio_impression": "33333333-3333-4333-8333-333333333333",
+                "read_impression": "44444444-4444-4444-8444-444444444444",
+                "read_feedback": "55555555-5555-4555-8555-555555555555",
+            },
+        }
+        with self.assertRaises(ValueError):
+            build_plan(base_at=datetime(2030, 1, 20, 12, 6, tzinfo=UTC), **common)
+        plan = build_plan(base_at=datetime(2030, 1, 20, 13, 0, tzinfo=UTC), **common)
+        self.assertEqual("2030-01-20T13:00:00.000Z", plan["scenarios"]["duration_below_threshold"]["rendered_at"])
+
 
 if __name__ == "__main__":
     unittest.main()
