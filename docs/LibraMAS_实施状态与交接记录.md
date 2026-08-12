@@ -1489,6 +1489,22 @@ Gate：G4 版本锁定 Graph/Vector 推荐入口、批准追加、HTTP 回读与
 下一步唯一动作：进入 feedback/behavior 受控 API 验证；Worker/Outbox、正式认证与 production 组合根仍保持独立 Gate，DeepSeek 外部调用仍需单独脱敏、费用、超时、审计和 opt-in 计划。
 ```
 
+## G5 feedback/behavior opt-in 路由只读审计记录
+
+```text
+交接ID：G5-FEEDBACK-HTTP-READONLY-20260812-001
+Gate：G5 feedback/behavior HTTP 契约、权限与只读健康边界
+状态：READONLY_PASS / ROUTES_PRESENT / COUNTS_UNCHANGED / NO_BUSINESS_POST
+时间：2026-08-12（Asia/Shanghai）
+目标：在不扩大 G4 批准范围的前提下，核验 feedback/behavior opt-in 组合根可以安全构造，路由存在且默认运行时仍不暴露；不执行迁移、seed、反馈、行为或 Worker 写入。
+新增只读验证器：`scripts/verify_g5_feedback_http_readonly.py`；Make 目标=`verify-g5-feedback-http-readonly`。该验证器只构造真实 `build_demo_mysql_http_app(... feedback_api_enabled=True)`，调用 live/ready GET，读取全表计数、runtime probe 和 grants；不会调用 `scripts/verify_g5_http_runtime.py`，因为后者包含迁移、seed、业务 POST 与 Worker 消费。
+路由结果：`POST /api/v1/recommendation-impressions/batch`、`POST /api/v1/recommendation-items/{item_id}/feedback`、`POST /api/v1/behavior-events` 均存在且方法集合严格为 POST；健康 live/ready=`200`、`can_recommend=true`。
+只读数据证据：G5 表计数为 impression=`6`、feedback=`5`、behavior=`29`、outbox=`23`、user_resource_state=`3`、profile_replay_run=`26`、profile_change_log=`29`、user_profile=`2`、interest=`9`、negative=`6`，全库表计数前后完全一致；runtime user=`recpro_runtime@%`、database=`recpro`、least-privilege grants guard=`PASS`。
+验证证据：`artifacts/verification/g5/g5-feedback-http-readonly-20260812-001/readonly.json`；`database_writes=0`、`business_posts=0`、`outbox_claims=0`、`external_requests=0`、`files_deleted=0`、`actual_delete_count=0`。
+安全边界：没有执行 INSERT/UPDATE/DELETE/DROP/TRUNCATE、迁移、seed、Neo4j/Chroma 写入或外部 LLM 请求；未删除任何文件、artifact、容器、卷、数据库对象或数据库数据。
+下一步唯一动作：为一次受控 impression + feedback + direct behavior + outbox worker 幂等验证单独设计 DRY_RUN/append-only ChangePlan，重新读取基线并等待用户批准；不得把本只读证据当作新的写入授权。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
