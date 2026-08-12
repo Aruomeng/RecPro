@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-boundary-apply-evidence.schema.json",
+  "title": "LibraMAS G8 A07/A09/A10 boundary apply evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "run_id", "plan_id", "plan_hash", "git_commit", "case_ids", "before_counts", "after_interaction_counts", "after_counts", "observed_deltas", "exposure_validity", "already_read_state", "same_uuid_replay_zero_delta", "worker", "profile_signal_content_hash_before", "profile_signal_content_hash_after", "database_row_count_increase", "controlled_projection_updates", "outbox_claims", "business_posts", "external_llm_requests", "neo4j_writes", "chroma_writes", "actual_delete_count", "files_deleted", "overwritten_inputs", "identity"],
+  "properties": {
+    "schema_version": {"const": "g8-boundary-apply-evidence-v1"},
+    "status": {"const": "PASS"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_id": {"type": "string", "format": "uuid"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "case_ids": {"type": "array", "prefixItems": [{"const": "A07"}, {"const": "A09"}, {"const": "A10"}], "items": false, "minItems": 3, "maxItems": 3},
+    "before_counts": {"$ref": "#/$defs/counts"},
+    "after_interaction_counts": {"$ref": "#/$defs/counts"},
+    "after_counts": {"$ref": "#/$defs/counts"},
+    "observed_deltas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["recommendation_impression", "recommendation_feedback", "user_behavior_event", "profile_update_outbox", "user_resource_state", "profile_replay_run", "profile_change_log", "user_interest_tag", "user_negative_preference", "domain_state_transition", "user_profile"],
+      "properties": {
+        "recommendation_impression": {"const": 3},
+        "recommendation_feedback": {"const": 1},
+        "user_behavior_event": {"const": 4},
+        "profile_update_outbox": {"const": 1},
+        "user_resource_state": {"const": 1},
+        "profile_replay_run": {"const": 1},
+        "profile_change_log": {"const": 4},
+        "user_interest_tag": {"const": 0},
+        "user_negative_preference": {"const": 0},
+        "domain_state_transition": {"const": 5},
+        "user_profile": {"const": 0}
+      }
+    },
+    "exposure_validity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["duration_999ms", "ratio_0_49", "valid_control"],
+      "properties": {
+        "duration_999ms": {"const": false},
+        "ratio_0_49": {"const": false},
+        "valid_control": {"const": true}
+      }
+    },
+    "already_read_state": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["state_type", "suppress_until", "source_event_id", "last_feedback_at", "state_version"],
+      "properties": {
+        "state_type": {"const": "READ"},
+        "suppress_until": {"type": "null"},
+        "source_event_id": {"type": "integer", "minimum": 1},
+        "last_feedback_at": {"type": "string", "minLength": 1},
+        "state_version": {"const": 1}
+      }
+    },
+    "same_uuid_replay_zero_delta": {"const": true},
+    "worker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["first_receipt_count", "second_receipt_count", "statuses_after"],
+      "properties": {
+        "first_receipt_count": {"const": 1},
+        "second_receipt_count": {"const": 0},
+        "statuses_after": {"$ref": "#/$defs/statusCounts"}
+      }
+    },
+    "profile_signal_content_hash_before": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "profile_signal_content_hash_after": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "database_row_count_increase": {"const": 20},
+    "controlled_projection_updates": {"type": "array", "prefixItems": [{"const": "profile_update_outbox"}, {"const": "user_profile"}, {"const": "user_interest_tag"}, {"const": "user_negative_preference"}], "items": false, "minItems": 4, "maxItems": 4},
+    "outbox_claims": {"const": 1},
+    "business_posts": {"const": 0},
+    "external_llm_requests": {"const": 0},
+    "neo4j_writes": {"const": 0},
+    "chroma_writes": {"const": 0},
+    "actual_delete_count": {"const": 0},
+    "files_deleted": {"const": 0},
+    "overwritten_inputs": {"const": 0},
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["probe_id", "database", "current_user", "grants_safe"],
+      "properties": {
+        "probe_id": {"type": "string", "minLength": 1},
+        "database": {"type": "string", "minLength": 1},
+        "current_user": {"type": "string", "minLength": 1},
+        "grants_safe": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "minProperties": 40,
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    },
+    "statusCounts": {
+      "type": "object",
+      "propertyNames": {"enum": ["PENDING", "PROCESSING", "DONE", "DEAD"]},
+      "additionalProperties": {"type": "integer", "minimum": 0}
+    }
+  }
+}

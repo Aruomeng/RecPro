@@ -128,6 +128,8 @@
   - 已在当前提交完成首批真实只读运行态复验：`data-plane-20260812-004` 验证隔离 Compose 的 backend/frontend/mysql/neo4j 均 healthy、MySQL=40 张表、Neo4j=0/0；`g4-orchestrator-20260812-006` 验证 direct/guided/degraded/replanning 四分支；`g4-readonly-fusion-20260812-012` 验证 7 Agent、8 候选、`MYSQL+GRAPH+VECTOR`、MySQL/Chroma 计数不变；`g4-clarification-readonly-20260812-004` 验证 HOME 空请求为 `WAITING_CLARIFICATION`、4 Agent、19 张相关表计数不变；`g6-retrieval-fusion-readonly-20260812-012` 验证三通道融合和 Chroma=14,983；`g7-mysql-http-readonly-20260812-006` 验证 live/ready health-only、13 张相关表前后不变、业务 POST/数据库写入=0。G7 的 readiness 仍为 `DEGRADED`，未被误报为生产就绪；以上证据均未调用 DeepSeek、claim Outbox 或执行任何数据库/图/向量写入、删除、覆盖。
   - 已基于提交 `a490652664306d4fe89bcbc9a16a608e02f6ff5b` 重新生成最终复验计划 `artifacts/verification/g8/g8-final-revalidation-plan-20260812-004/final-revalidation-plan.json`（`plan_hash=0cac04a818e9ff61ae2df7c3a6e4f90a414462ff7f755aa9d7171cfd528d9dfb`）和审计 `artifacts/verification/g8/g8-final-revalidation-audit-20260812-002/final-revalidation-audit.json`；计划 Git 匹配当前提交，25/25 有效，17 项只读、8 项需独立 ChangePlan，final_pass=0、final_pending=25，审计安全计数仍全为 0。
   - 已实现 G8 统一只读/故障矩阵执行器与严格证据消费门禁：从当前提交绑定的计划精确选择 A01/A05/A06/A11—A22/A24/A25 共 17 项，隔离执行 13 个测试模块并生成 fault-matrix 与 `g8-final-runtime-evidence-v1`；外部网络、DeepSeek、数据库、Neo4j、Chroma、Outbox 和业务 POST 全部关闭。审计器现在要求每个 PASS 引用仓库内真实 JSON artifact，并逐项核验存在性、SHA-256、schema version；8 个追加型用例仍必须携带独立精确 ChangePlan。
+  - 已在提交 `405ffe61e5bff63859710fb8909b9d587ea20fc4` 上完成统一只读/故障矩阵与最终审计：61 项测试 PASS，A01/A05/A06/A11—A22/A24/A25 共 17 项 final PASS，A02/A03/A04/A07/A08/A09/A10/A23 共 8 项 PENDING，0 FAIL；全部安全计数为 0。
+  - 已实现剩余边界用例的专用计划与执行能力：`g8-boundary-change-plan-v1`、`build_g8_boundary_change_plan.py` 和 `execute_g8_boundary_change_plan.py` 精确覆盖 A07/A09/A10，冻结 `ALREADY_READ -> READ`、`999ms/0.8`、`1000ms/0.49`、同 UUID 重放和单条 Outbox Worker；执行前必须核对 clean commit、隔离环境、完整 40 表计数、目标快照、最小权限和精确审批，最多产生 20 行增量，不包含删除、迁移、Neo4j/Chroma 写入、HTTP 或外部 LLM 请求。当前只完成代码与全量离线门禁，尚未生成当前 clean commit 的最终计划，也未执行数据库写入。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -146,7 +148,7 @@
   - LLM 当前阻塞已从“配置缺失”收敛为“真实业务链路证据不足”：provider-only fixture 已通过，选择性 Intent 接线和离线回放已通过，但 G4 真实只读探针需在新的明确授权下重新执行并生成 PASS artifact；默认 Compose/HTTP/Worker 继续 Mock/关闭。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
-  - `next_step`：在本实现提交后生成与当前 clean commit 绑定的新 G8 计划，执行 17 项统一只读/故障矩阵并提交追加式审计；随后只剩 A02/A03/A04/A07/A08/A09/A10/A23 八项追加型 final revalidation。G4 真实 LLM 只读探针、任何浏览器业务流、非空 Worker claim 和索引写入仍需新的明确授权或精确 ChangePlan；之后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
+  - `next_step`：提交并推送本轮专用执行器后，在 clean commit 上重新生成 G7/G5 只读基线和三批互不耦合的 ChangePlan：A02；A03/A04/A08/A23；A07/A09/A10。向用户报告每批精确 plan_id/hash，获批后才逐批追加、回读并更新最终审计。G4 真实 LLM 只读探针、浏览器业务流、索引写入仍需新的明确授权；之后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
 
 ---
 
@@ -173,7 +175,7 @@
 
 ## Working Set
 
-- `current_subtask`：G4 Agent 自主动作与 HTTP/G5 边界验证已经完成；当前转入 G8 final revalidation。统一只读/故障矩阵执行器已经实现，可在 clean commit 上一次执行 A01/A05/A06/A11—A22/A24/A25 共 17 项，并生成严格可消费的 final runtime evidence；A02/A03/A04/A07/A08/A09/A10/A23 及六个浏览器写入场景继续由精确 ChangePlan 隔离。provider-only DeepSeek fixture 已 PASS，G4 真实 LLM 业务探针仍未形成 PASS artifact。默认 HTTP/Worker/DeepSeek 保持关闭。
+- `current_subtask`：G8 final revalidation 已达到 `17 PASS / 8 PENDING / 0 FAIL`。A02 与 A03/A04/A08/A23 已有可复用的独立执行边界；A07/A09/A10 的专用计划生成器、严格 Schema、执行器和精确回读已完成代码与离线门禁。下一步是在本轮提交后的 clean commit 上生成三批新计划并逐批等待精确批准。provider-only DeepSeek fixture 已 PASS，G4 真实 LLM 业务探针仍未形成 PASS artifact；默认 HTTP/Worker/DeepSeek 保持关闭。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -195,7 +197,7 @@
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已完成显式组合根的真实只读融合但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek provider-only fixture 已真实调用但 G4 业务探针尚未形成 PASS；G4 HTTP trace action 与 G5 FeedbackLearningAgent 已完成离线边界验证，但真实业务/Worker 接入、Outbox 消费和前端写入仍待独立 Gate；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐工作台与浏览器幂等闭环已完成，feedback/behavior 页面和论文演示冻结仍待完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：先对照 G8 计划补齐剩余只读/故障运行证据并生成追加审计；不执行真实 Worker 消费。若需非空 Worker、业务 POST、澄清续跑、索引写入或 DeepSeek，先生成对应 DRY_RUN/精确 ChangePlan 并等待用户批准 hash，再做隔离追加和独立回读。
+- `next_action`：提交当前代码后先执行新的 G7/G5 只读基线；随后生成 A02、A03/A04/A08/A23、A07/A09/A10 三个互相独立的 DRY_RUN ChangePlan。未获得各自精确 plan_id/hash 批准前，不执行推荐 POST、feedback/behavior 追加或非空 Worker claim。
 
 ---
 
@@ -1995,6 +1997,25 @@ Gate：G8 A01—A25 final revalidation（17 项无授权写入路径）
 运行证据：`artifacts/verification/g8/g8-readonly-fault-matrix-20260812-001/readonly-fault-matrix.json` 与同目录 `final-runtime-evidence.json` 已在 clean commit 上生成；13 个目标模块共 61 项测试 PASS，17 项 final PASS、8 项 PENDING。首次聚合审计 `g8-final-revalidation-audit-20260812-003` 数值为 17/8，但发现计划旧总括 blocker 仍残留，已修正后重新生成最终证据，不将该文案瑕疵误报为最终审计。
 安全边界：执行器从子进程环境移除外部 LLM key，强制 provider=mock、production/recommendation/feedback HTTP=false、Worker=disabled；不连接数据库、Neo4j、Chroma，不 claim Outbox，不发送外部网络请求，不删除或覆盖文件。
 下一步唯一动作：使用修正后的审计器在最终 clean commit 上重新生成计划、只读矩阵和审计；确认旧总括 blocker 消失、八个 PENDING 用例逐项显示 `separate_exact_change_plan_required` 后，再为八个追加型案例分批生成精确 ChangePlan。
+```
+
+## G8 剩余交互边界计划与执行器
+
+```text
+交接ID：G8-BOUNDARY-CHANGE-PLAN-20260812-001
+Gate：G8 A07/A09/A10 final revalidation 的受控交互边界
+状态：CODE_COMPLETE / FULL_OFFLINE_GATE_PASS / PLAN_NOT_YET_GENERATED
+时间：2026-08-12（Asia/Shanghai）
+目标：为 ALREADY_READ 与两个闭区间曝光阈值提供独立、低耦合、fail-closed 的计划和执行器，使剩余用例可以在精确审批后真实验证，而不复用其他业务授权。
+新增文件：`contracts/verification/g8-boundary-change-plan.schema.json`、`contracts/verification/g8-boundary-apply-evidence.schema.json`、`scripts/build_g8_boundary_change_plan.py`、`scripts/execute_g8_boundary_change_plan.py`、`tests/g8/test_boundary_change_plan.py`、`tests/g8/test_boundary_change_executor.py`。
+修改文件：`Makefile` 增加计划/执行目标；`scripts/validate_contracts.py` 冻结两份新 Schema；`scripts/verify_g8_final_revalidation_plan.py` 注册专用 apply artifact 的严格校验；README、本交接记录更新当前边界。
+精确语义：A09=`visible_ms=999/max_visible_ratio=0.8/is_valid_exposure=false`；A10=`1000/0.49/false`；A07 先记录 `1500/0.8/true`，再追加 `NOT_INTERESTED/ALREADY_READ`，只能创建 `READ` 状态。四个 UUID 重放必须零增量；Worker 只 claim 新产生的一条 Outbox，第二次运行返回 0；兴趣标签和主题负偏好内容哈希保持不变。
+影响上限：总计 20 行增量，其中 impression=3、feedback=1、behavior=4、outbox=1、resource_state=1、profile_replay=1、profile_change_log=4、domain_state_transition=5，interest/negative/user_profile 行数增量均为 0。交互阶段 12 行，单条 Worker 闭环再增加 8 行。
+执行门禁：计划只允许在 clean worktree 生成；执行器要求同一 Git commit、同一 Compose/MySQL 身份、完整表计数与 baseline hash 未漂移、两项资源目标快照未漂移、四个 UUID 不存在、无 PENDING/PROCESSING Outbox、最小权限通过，并要求用户批准精确 plan_id/hash。
+验证结果：Python G0—G9 共 532 项 PASS；前端 46 项 PASS 且生产构建 PASS；文档、契约（30 份）、架构（128 文件）和安全扫描（373 文件）全部 PASS；`git diff --check` PASS。
+安全边界：本阶段未执行数据库业务写入、业务 POST、Outbox claim、Neo4j/Chroma 写入或外部 LLM 请求；未删除或覆盖任何文件、artifact、数据库对象或数据库数据。计划尚未在最终 clean commit 上生成，因此当前不存在可批准的最终 plan_id/hash。
+未解决风险：真实运行仍需先提交本实现、重新生成 G5 只读基线和计划，再等待用户精确批准；执行器跨多个事务，获批后若中途异常会保留已提交的受控追加事实并由独立只读回读审计，不执行补偿删除。
+下一步唯一动作：提交并推送当前实现；在 clean commit 上只读生成 A02、A03/A04/A08/A23、A07/A09/A10 三批新计划，向用户报告精确 plan_id/hash，批准前保持数据库零写入。
 ```
 
 ## 阶段交接模板

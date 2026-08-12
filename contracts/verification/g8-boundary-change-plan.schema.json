@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-boundary-change-plan.schema.json",
+  "title": "LibraMAS G8 A07/A09/A10 boundary ChangePlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_id", "plan_hash", "created_at", "git_commit", "classification", "mode", "case_ids", "environment", "baseline", "targets", "scenarios", "max_changes", "preconditions", "safety_assertions", "executor_status"],
+  "properties": {
+    "schema_version": {"const": "g8-boundary-change-plan-v1"},
+    "plan_id": {"type": "string", "format": "uuid"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "classification": {"const": "S2_CONTROLLED_UPDATE"},
+    "mode": {"const": "DRY_RUN"},
+    "case_ids": {"type": "array", "prefixItems": [{"const": "A07"}, {"const": "A09"}, {"const": "A10"}], "items": false, "minItems": 3, "maxItems": 3},
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["environment_id", "workspace", "database_identity", "host_fingerprint"],
+      "properties": {
+        "environment_id": {"type": "string", "minLength": 1},
+        "workspace": {"type": "string", "pattern": "^/"},
+        "database_identity": {"type": "string", "minLength": 1},
+        "host_fingerprint": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "counts_sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "counts_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 11,
+      "maxItems": 11,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["table", "operation", "expected_before_count", "expected_delta", "expected_after_count"],
+        "properties": {
+          "table": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+          "operation": {"type": "string", "enum": ["APPEND", "CREATE", "APPEND_AND_STATUS_UPDATE", "CONTROLLED_PROJECTION_UPDATE"]},
+          "expected_before_count": {"type": "integer", "minimum": 0},
+          "expected_delta": {"type": "integer", "minimum": 0},
+          "expected_after_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "scenarios": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["already_read", "duration_below_threshold", "ratio_below_threshold"],
+      "properties": {
+        "already_read": {"$ref": "#/$defs/feedbackScenario"},
+        "duration_below_threshold": {"$ref": "#/$defs/impressionScenario"},
+        "ratio_below_threshold": {"$ref": "#/$defs/impressionScenario"}
+      }
+    },
+    "max_changes": {"const": 20},
+    "preconditions": {"type": "array", "minItems": 8, "items": {"type": "string", "minLength": 1}},
+    "safety_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file_deletions", "database_physical_deletions", "artifact_overwrites", "destructive_capabilities_required", "counts_must_not_decrease", "business_writes_authorized"],
+      "properties": {
+        "file_deletions": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0},
+        "destructive_capabilities_required": {"const": false},
+        "counts_must_not_decrease": {"const": true},
+        "business_writes_authorized": {"const": false}
+      }
+    },
+    "executor_status": {"const": "READY_FOR_EXPLICIT_APPROVAL"}
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["task_id", "record_id", "item_id", "resource_id", "user_id", "target_snapshot_sha256"],
+      "properties": {
+        "task_id": {"type": "string", "format": "uuid"},
+        "record_id": {"type": "integer", "minimum": 1},
+        "item_id": {"type": "integer", "minimum": 1},
+        "resource_id": {"type": "integer", "minimum": 1},
+        "user_id": {"type": "integer", "minimum": 1},
+        "target_snapshot_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "impressionScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "impression_uuid", "rendered_at", "visible_ms", "max_visible_ratio", "expected_valid_exposure"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identity"},
+        "impression_uuid": {"type": "string", "format": "uuid"},
+        "rendered_at": {"type": "string", "format": "date-time"},
+        "visible_ms": {"type": "integer", "minimum": 0},
+        "max_visible_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+        "expected_valid_exposure": {"const": false}
+      }
+    },
+    "feedbackScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identity", "impression_uuid", "feedback_uuid", "rendered_at", "feedback_at", "visible_ms", "max_visible_ratio", "feedback_type", "reason_code", "expected_resource_state", "worker_id", "worker_limit", "formula_version"],
+      "properties": {
+        "identity": {"$ref": "#/$defs/identity"},
+        "impression_uuid": {"type": "string", "format": "uuid"},
+        "feedback_uuid": {"type": "string", "format": "uuid"},
+        "rendered_at": {"type": "string", "format": "date-time"},
+        "feedback_at": {"type": "string", "format": "date-time"},
+        "visible_ms": {"type": "integer", "minimum": 1000},
+        "max_visible_ratio": {"type": "number", "minimum": 0.5, "maximum": 1},
+        "feedback_type": {"const": "NOT_INTERESTED"},
+        "reason_code": {"const": "ALREADY_READ"},
+        "expected_resource_state": {"const": "READ"},
+        "worker_id": {"type": "string", "minLength": 3, "maxLength": 64},
+        "worker_limit": {"const": 1},
+        "formula_version": {"const": "profile-g2-v1"}
+      }
+    }
+  }
+}

@@ -155,6 +155,13 @@ G4_AGENT_AUTONOMY_RUN_ID ?=
 G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID ?=
 G8_READONLY_FAULT_MATRIX_RUN_ID ?=
 G8_READONLY_FAULT_MATRIX_PLAN ?=
+G8_BOUNDARY_PLAN_RUN_ID ?=
+G8_BOUNDARY_PLAN_BASELINE ?=
+G8_BOUNDARY_APPLY_RUN_ID ?=
+G8_BOUNDARY_APPLY_PLAN ?=
+G8_BOUNDARY_APPLY_PLAN_ID ?=
+G8_BOUNDARY_APPLY_PLAN_HASH ?=
+G8_BOUNDARY_APPLY_BASELINE ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -170,7 +177,7 @@ G8_READONLY_FAULT_MATRIX_PLAN ?=
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
-	verify-g8-release-preflight verify-g8-acceptance-coverage build-g8-final-revalidation-plan verify-g8-final-revalidation-plan \
+	verify-g8-release-preflight verify-g8-acceptance-coverage build-g8-final-revalidation-plan verify-g8-final-revalidation-plan build-g8-boundary-change-plan execute-g8-boundary-change-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -278,6 +285,19 @@ verify-g8-readonly-fault-matrix:
 	@test -n "$(G8_READONLY_FAULT_MATRIX_RUN_ID)" || { echo "G8_READONLY_FAULT_MATRIX_RUN_ID is required and must name a new evidence run"; exit 2; }
 	@test -n "$(G8_READONLY_FAULT_MATRIX_PLAN)" || { echo "G8_READONLY_FAULT_MATRIX_PLAN is required and must point to the current clean-commit plan"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_readonly_fault_matrix --run-id "$(G8_READONLY_FAULT_MATRIX_RUN_ID)" --plan "$(G8_READONLY_FAULT_MATRIX_PLAN)" --python "$(PYTHON)"
+
+build-g8-boundary-change-plan:
+	@test -n "$(G8_BOUNDARY_PLAN_RUN_ID)" || { echo "G8_BOUNDARY_PLAN_RUN_ID is required and must name a new DRY_RUN plan"; exit 2; }
+	@test -n "$(G8_BOUNDARY_PLAN_BASELINE)" || { echo "G8_BOUNDARY_PLAN_BASELINE is required and must point to a PASS G5 read-only baseline"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g8_boundary_change_plan --run-id "$(G8_BOUNDARY_PLAN_RUN_ID)" --baseline "$(G8_BOUNDARY_PLAN_BASELINE)"
+
+execute-g8-boundary-change-plan:
+	@test -n "$(G8_BOUNDARY_APPLY_RUN_ID)" || { echo "G8_BOUNDARY_APPLY_RUN_ID is required and must name a new append-only evidence directory"; exit 2; }
+	@test -n "$(G8_BOUNDARY_APPLY_PLAN)" || { echo "G8_BOUNDARY_APPLY_PLAN is required"; exit 2; }
+	@test -n "$(G8_BOUNDARY_APPLY_PLAN_ID)" || { echo "G8_BOUNDARY_APPLY_PLAN_ID is required and must match the user's explicit approval"; exit 2; }
+	@test -n "$(G8_BOUNDARY_APPLY_PLAN_HASH)" || { echo "G8_BOUNDARY_APPLY_PLAN_HASH is required and must match the user's explicit approval"; exit 2; }
+	@test -n "$(G8_BOUNDARY_APPLY_BASELINE)" || { echo "G8_BOUNDARY_APPLY_BASELINE is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g8_boundary_change_plan --apply --run-id "$(G8_BOUNDARY_APPLY_RUN_ID)" --plan "$(G8_BOUNDARY_APPLY_PLAN)" --plan-id "$(G8_BOUNDARY_APPLY_PLAN_ID)" --approved-plan-hash "$(G8_BOUNDARY_APPLY_PLAN_HASH)" --baseline "$(G8_BOUNDARY_APPLY_BASELINE)"
 
 verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 
