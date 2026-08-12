@@ -90,6 +90,29 @@ class AppSettings(BaseSettings):
         pattern=r"^[a-z0-9][a-z0-9_-]{2,47}$",
     )
 
+    # The worker process is part of the Compose skeleton, but its controlled
+    # write capability must never be enabled by merely starting the stack.
+    # ``profile_outbox`` is the only currently supported mode and is reserved
+    # for an explicit non-production opt-in run.
+    worker_enabled: bool = False
+    worker_mode: Literal["disabled", "profile_outbox"] = "disabled"
+    worker_id: str = Field(
+        default="recpro-worker",
+        min_length=3,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$",
+    )
+    worker_poll_interval_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
+    worker_batch_limit: int = Field(default=10, ge=1, le=100)
+    worker_lease_seconds: int = Field(default=60, ge=1, le=3600)
+    worker_max_attempts: int = Field(default=3, ge=1, le=10)
+    worker_formula_version: str = Field(
+        default="profile-g2-v1",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+    )
+
     # Mock remains the only default.  ``deepseek`` is a deliberately opt-in
     # adapter and cannot become valid until a local API key is supplied.
     llm_provider: Literal["mock", "deepseek"] = "mock"
@@ -221,6 +244,18 @@ class AppSettings(BaseSettings):
     def validate_llm_configuration(self) -> "AppSettings":
         if self.llm_provider == "deepseek" and self.llm_api_key is None:
             raise ValueError("llm API key is required when deepseek provider is enabled")
+        return self
+
+    @model_validator(mode="after")
+    def validate_worker_configuration(self) -> "AppSettings":
+        if self.worker_enabled and self.worker_mode != "profile_outbox":
+            raise ValueError(
+                "worker mode must be profile_outbox when the worker is enabled"
+            )
+        if not self.worker_enabled and self.worker_mode != "disabled":
+            raise ValueError("worker mode must be disabled unless the worker is enabled")
+        if self.worker_enabled and self.app_env == "production":
+            raise ValueError("profile outbox worker is not enabled for production yet")
         return self
 
 

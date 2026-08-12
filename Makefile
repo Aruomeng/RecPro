@@ -77,6 +77,7 @@ G5_FEEDBACK_APPLY_PLAN ?=
 G5_FEEDBACK_APPLY_PLAN_ID ?=
 G5_FEEDBACK_APPLY_PLAN_HASH ?=
 G5_FEEDBACK_APPLY_BASELINE ?=
+G5_WORKER_WIRING_RUN_ID ?=
 G6_RUN_ID ?=
 G6_READONLY_RUN_ID ?=
 G6_READONLY_MYSQL_ENV_FILE ?= .env.compose
@@ -143,7 +144,7 @@ HOST_ENV_SYNC_RUN_ID ?=
 	verify-prompt-bundle \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
-	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan \
+	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -268,6 +269,10 @@ execute-g5-feedback-worker-plan:
 	@test -n "$(G5_FEEDBACK_APPLY_PLAN_HASH)" || { echo "G5_FEEDBACK_APPLY_PLAN_HASH is required and must be the exact approved plan_hash"; exit 2; }
 	@test -n "$(G5_FEEDBACK_APPLY_BASELINE)" || { echo "G5_FEEDBACK_APPLY_BASELINE is required and must point to the matching PASS read-only baseline"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g5_feedback_worker_plan --apply --plan "$(G5_FEEDBACK_APPLY_PLAN)" --plan-id "$(G5_FEEDBACK_APPLY_PLAN_ID)" --approved-plan-hash "$(G5_FEEDBACK_APPLY_PLAN_HASH)" --baseline "$(G5_FEEDBACK_APPLY_BASELINE)" --run-id "$(G5_FEEDBACK_APPLY_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
+
+verify-g5-worker-wiring:
+	@test -n "$(G5_WORKER_WIRING_RUN_ID)" || { echo "G5_WORKER_WIRING_RUN_ID is required and must identify a new read-only evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g5_worker_wiring --run-id "$(G5_WORKER_WIRING_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g5-worker-prepare:
 	@test -n "$(G5_WORKER_RUN_ID)" || { echo "G5_WORKER_RUN_ID is required and must identify a new evidence run"; exit 2; }

@@ -1,7 +1,7 @@
 # LibraMAS 实施状态与交接记录
 
 > 状态版本：4.0
-> 更新时间：2026-08-11
+> 更新时间：2026-08-12
 > 用途：保存长期任务主干和当前工作集，避免多阶段实施过程中目标、约束和证据漂移
 
 ---
@@ -94,6 +94,7 @@
   - 已完成只读评价输入冻结校验器：`verify_evaluation_freeze_inputs` 验证五类 Manifest 的 JSON Schema、引用文件 SHA-256、跨 Manifest dataset_version、许可覆盖、标注仲裁、Split 安全属性、配置 Commit/依赖/Bundle 哈希和输入引用一致性；同名证据目录直接失败，不连接数据库、不删除或覆盖输入。
   - 已完成数据平面只读健康门禁：`verify_data_plane_runtime` 只读取 Compose 服务状态、MySQL 表数量和 Neo4j 节点/关系数量；干净工作区证据 `data-plane-20260810-003` 为 PASS，MySQL=40 张表、Neo4j=0/0，database_writes=0、actual_delete_count=0、service_start_stop_actions=0。
   - 已完成图书数据接入前置契约：`book-record.schema.json` 固化脱离用户身份的规范化书目记录，`book-intake-manifest.schema.json` 固化来源、许可、文件 SHA-256、规范化、隐私和 MySQL/Neo4j 目标；`inspect_book_intake` 只读校验 JSONL、重复主键/ISBN/标签、许可引用和路径安全，在没有用户数据时明确阻断，不连接数据库。
+  - 已完成 G5 Worker 运行态接线：`backend.app.worker` 以配置包校验和 `RECPRO_WORKER_ENABLED`/`RECPRO_WORKER_MODE` 双闸门启动；默认 Compose worker 保持 `false/disabled` 健康等待，不创建数据库连接。显式非 production `profile_outbox` 模式才装配受控 MySQL connection factory、batch/lease/retry/poll 参数和固定画像公式；新增只读 wiring verifier 与入口/配置测试。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -103,13 +104,13 @@
   - Docker CLI 的 `/usr/local/bin/docker` 是失效链接；实际 Docker Desktop 位于 `/Applications/编程/Docker.app`，本次已用绝对路径完成隔离 MySQL 验证，未删除容器、卷或数据。
   - G4 真实端口仍读取当前 Profile 投影，尚未提供历史画像重算；超时后的跨 Agent 持久化恢复、正式 HTTP 组合根和正式 Token 部署参数仍待后续 Gate。
   - 持久化 service 的数据库重启恢复读取和 HTTP/API 正式接入仍未实现；Worker 级重试、DEAD 和 MySQL 重启后的 Outbox 恢复已在 G5 隔离运行态验证；当前组合根仅在明确调用时创建连接，默认 API 继续关闭。
-  - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根和可替换 HS256 身份适配器，外部 OIDC/JWKS、默认 Compose API、正式 Worker 运行接线和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
+  - G5 当前仍未接入默认 HTTP；本轮完成的是带显式门禁的 production HTTP 组合根、可替换 HS256 身份适配器和默认安全的 Worker 运行态接线，外部 OIDC/JWKS、默认 Compose API、正式 Worker 受控消费审批和发布凭据流程仍需 Gate 评审；状态迁移审计与历史画像重算已完成隔离运行态验证。
   - MySQL 已有隔离历史事实；本轮经用户授权后已将书目 ChangePlan 追加写入同一隔离 Compose 项目并完成幂等复验。Neo4j 图构建、实际导入和只读图召回端口均已完成；确定性向量与 Chroma collection 已完成版本化导入和独立只读核验，但图/向量召回尚未接入默认 HTTP/Worker。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是独立 Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
-- `next_step`：进入 G6 的只读检索接线评审：把 Neo4j/Chroma 作为可选端口接入 Agent 组合根，保持默认 HTTP/Worker 关闭，并先以 fake/隔离运行态验证版本过滤、超时降级和解释证据；MySQL `embedding_status` 的 READY 投影以及真实 DeepSeek 请求仍需单独评审。
+- `next_step`：Worker 代码与默认安全接线已完成；如需让隔离 Worker 实际消费 Outbox，必须先基于当前 Git/数据库只读基线生成新的 G5 Worker 专用 DRY_RUN ChangePlan，用户批准精确 plan_id/hash 后才可执行一次受控运行并独立回读，之后进入 G8 可靠性与发布候选评审。
 
 ---
 
@@ -123,9 +124,9 @@
 | G2 数据与持久化 | COMPLETED | `artifacts/verification/g2/g2-runtime-20260809-012/runtime.json`；13 项测试、manifest/质量报告、Repository/UoW、索引计划 | 全新卷首次导入与第二次幂等均 PASS；Chroma/Neo4j 仅保留版本化计划，不写外部存储 |
 | G3 MySQL-only推荐闭环 | IN_PROGRESS | `artifacts/verification/g3/g3-runtime-20260809-003/runtime.json`、`artifacts/verification/g3/g3-api-runtime-20260809-004/api-runtime.json`、`artifacts/verification/g3/g3-clarification-runtime-20260809-002/clarification-runtime.json`、`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；27 项 G3/认证测试 | CLI、opt-in API、HS256 正式身份边界、research-admin Debug、澄清状态分支、MySQL 追加持久化 PASS；外部 IdP/JWKS、前端集成和 production service deployment 待 Gate 评审 |
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
-| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；21 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算 PASS；认证运行态无数据库动作；production HTTP 仅显式组合根可构造，默认 HTTP、外部 IdP/JWKS、正式 Worker 接线和发布凭据流程待补 |
-| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实隔离检索运行态待完成；DeepSeek 外部调用仍为 0 |
-| G7 前端与论文演示 | NOT_STARTED | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据已存在 | 推荐请求/澄清/解释/反馈/画像/调试交互页面、真实 API 接线和论文演示流程尚未完成；依赖 G6 |
+| G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；24 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算和默认安全 Worker 接线 PASS；认证运行态无数据库动作；production HTTP、外部 IdP/JWKS、正式 Worker 受控消费审批和发布凭据流程待补 |
+| G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
+| G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json` | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；feedback/behavior 页面、正式部署接线和论文演示冻结流程仍待完成 |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
@@ -136,7 +137,7 @@
 
 ## Working Set
 
-- `current_subtask`：双库书目事实、确定性向量离线产物和 Chroma collection 已完成版本化导入与独立只读验证；Prompt Bundle、显式 LLM Intent Agent、DeepSeek 本机密钥配置以及图/向量显式组合根融合 fake 验证已完成，下一步是只读真实隔离运行态验证和 G7 推荐前端设计，保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
+- `current_subtask`：G5 Profile Outbox Worker 的运行态接线、配置双闸门和默认 Compose 安全边界已完成；当前只读 wiring verifier PASS，默认 worker 不创建数据库连接。下一步是为一次真实消费单独生成并审批 Worker ChangePlan，或转入 G8 发布候选评审；继续保持默认 API/Worker 与外部 LLM 请求关闭，不改变 MySQL `embedding_status=PENDING`。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -156,9 +157,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已接入显式组合根但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐前端仍未完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+  - `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已完成显式组合根的真实只读融合但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek 本机密钥虽已配置但尚未联网调用；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐工作台与浏览器幂等闭环已完成，feedback/behavior 页面和论文演示冻结仍待完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：先在独立 RecPro Neo4j/Chroma 目标上执行只读真实融合验证（固定 `graph_version`、`embedding_version`、`index_version`，只读计数和候选证据），再开始 G7 推荐前端的 API DTO、澄清、解释和反馈页面；继续保持默认 HTTP/Worker、MySQL `embedding_status` 和外部 LLM 请求关闭。
+- `next_action`：若执行真实 Worker 消费，先生成新的 G5 Worker 专用 DRY_RUN ChangePlan 并等待用户批准精确 hash；在批准前只运行源码/Compose/配置门禁，不连接数据库、不 claim Outbox、不启用 DeepSeek。批准后的消费必须独立回读 Outbox、画像投影、审计和全库计数。
 
 ---
 
@@ -1538,6 +1539,21 @@ Gate：G5 反馈事实、行为事实、画像 Outbox Worker 与幂等回读
 安全边界：数据库写入按计划计数=`26`，Outbox claim=`2`；business_posts=`0`、external_llm_requests=`0`、Neo4j writes=`0`、Chroma writes=`0`、文件删除=`0`、数据库物理删除=`0`。执行期间首次 Worker 连接因本地虚拟环境缺少 `cryptography` 被阻断；首写和幂等重放已完成且未回滚或补偿删除，补齐本地依赖后仅从两条已批准 PENDING Outbox 继续，最终闭环通过。
 配置/版本：画像公式=`profile-g2-v1`；Worker=`g5-g5-feedback-worker-plan-20260812-001`；默认业务 API 与 DeepSeek 外部调用仍保持原有 fail-closed 边界。
 下一步唯一动作：进入 G5 运行态可复用 executor/部署接线评审；任何新的业务追加必须重新生成并批准新的 plan_id/hash。
+```
+
+## G5 Worker 运行态接线与默认安全门禁记录
+
+```text
+交接ID：G5-WORKER-WIRING-20260812-001
+Gate：G5 Profile Outbox Worker 运行态接线、配置校验与 Compose 默认安全边界
+状态：CODE_COMPLETE / STATIC_GATE_PASS / READONLY_RUNTIME_WIRING_PASS
+时间：2026-08-12（Asia/Shanghai）
+安全边界：本阶段只修改 Worker 入口、配置契约、Compose 环境映射、验证脚本和测试；未连接 MySQL、未 claim Outbox、未执行 INSERT/UPDATE/DELETE/DDL/迁移、未访问 Neo4j/Chroma、未调用 DeepSeek，文件删除数=0、数据库物理删除数=0。
+实现内容：`backend.app.worker` 现在先校验配置包，再按 `RECPRO_WORKER_ENABLED` 与 `RECPRO_WORKER_MODE=profile_outbox` 双闸门选择能力；默认 `false/disabled` 仅保持健康等待，不创建连接。显式非 production profile_outbox 模式才构造受控 MySQL 连接和 `ProfileOutboxWorker`，使用可配置 worker_id、batch_limit、lease、max_attempts、poll interval 与 `profile-g2-v1` 公式；连接/轮询失败直接抛出，交由容器重启策略处理，不吞错或降级写入。
+配置契约：Compose 与 `.env.*.example` 已加入 Worker 参数；`AppSettings` 与 `validate_runtime_env` 均拒绝“启用但模式不匹配”“禁用但选择 profile_outbox”“production 启用”以及越界/不安全 ID。默认 backend/worker/DeepSeek/业务 HTTP 仍保持原有 fail-closed 边界。
+只读证据：`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`，Compose 标记=5，database_connections=`0`、database_writes=`0`、outbox_claims=`0`、external_requests=`0`、actual_delete_count=`0`、files_deleted=`0`；默认 worker=`enabled:false/mode:disabled`。
+测试与版本：新增 Worker 配置/入口测试；本阶段需通过 G1/G5、架构、安全、契约、文档及 Compose 门禁后再提交。任何显式启用 Worker 或新的业务事实追加，仍须另行生成并批准精确 plan_id/hash，不得把本只读接线证据当作写入授权。
+下一步唯一动作：完成本提交的全量门禁并推送；随后若要验证运行态消费，先生成新的 Worker 专用 DRY_RUN/ChangePlan，批准后才可在明确范围内运行一次。
 ```
 
 ## 阶段交接模板

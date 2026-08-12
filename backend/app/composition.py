@@ -519,6 +519,8 @@ def build_profile_outbox_worker(
     connection_factory: ConnectionFactory,
     worker_id: str,
     formula_version: str = "profile-g2-v1",
+    lease_seconds: int = 60,
+    max_attempts: int = 3,
 ) -> ProfileOutboxWorker:
     """Build a worker with an explicitly supplied, controlled-write connection."""
 
@@ -531,6 +533,8 @@ def build_profile_outbox_worker(
         ),
         worker_id=worker_id,
         formula_version=formula_version,
+        lease_seconds=lease_seconds,
+        max_attempts=max_attempts,
     )
 
 

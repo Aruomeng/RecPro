@@ -16,6 +16,8 @@ MYSQL_USER_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,31}$")
 LOCAL_SECRET_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{16,128}$")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 LLM_KEY_PATTERN = re.compile(r"^\S{16,256}$")
+WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
+WORKER_FORMULA_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 DEFAULT_PROMPT_BUNDLE_PATH = "contracts/prompts/rec-prompts-v1.0.0.json"
 DEFAULT_PROMPT_BUNDLE_SHA256 = (
     "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a"
@@ -104,9 +106,59 @@ def validate_llm(values: Mapping[str, str]) -> tuple[str, ...]:
     return tuple(issues)
 
 
+def validate_worker(values: Mapping[str, str]) -> tuple[str, ...]:
+    """Validate the worker deployment boundary without connecting to MySQL."""
+
+    issues: list[str] = []
+    enabled = values.get("RECPRO_WORKER_ENABLED", "false").strip().lower()
+    if enabled not in {"true", "false"}:
+        issues.append("RECPRO_WORKER_ENABLED must be true or false")
+    mode = values.get("RECPRO_WORKER_MODE", "disabled").strip()
+    if mode not in {"disabled", "profile_outbox"}:
+        issues.append("RECPRO_WORKER_MODE must be disabled or profile_outbox")
+    if enabled == "true" and mode != "profile_outbox":
+        issues.append("RECPRO_WORKER_MODE must be profile_outbox when the worker is enabled")
+    if enabled == "false" and mode != "disabled":
+        issues.append("RECPRO_WORKER_MODE must be disabled when the worker is disabled")
+    if enabled == "true" and values.get("RECPRO_APP_ENV", "development") == "production":
+        issues.append("the Profile Outbox worker is not enabled for production yet")
+
+    worker_id = values.get("RECPRO_WORKER_ID", "recpro-worker").strip()
+    if not WORKER_ID_PATTERN.fullmatch(worker_id):
+        issues.append("RECPRO_WORKER_ID has an unsafe format")
+    formula_version = values.get("RECPRO_WORKER_FORMULA_VERSION", "profile-g2-v1").strip()
+    if not WORKER_FORMULA_PATTERN.fullmatch(formula_version):
+        issues.append("RECPRO_WORKER_FORMULA_VERSION has an unsafe format")
+
+    numeric_limits = {
+        "RECPRO_WORKER_POLL_INTERVAL_SECONDS": (float, 0.0, 60.0),
+        "RECPRO_WORKER_BATCH_LIMIT": (int, 1, 100),
+        "RECPRO_WORKER_LEASE_SECONDS": (int, 1, 3600),
+        "RECPRO_WORKER_MAX_ATTEMPTS": (int, 1, 10),
+    }
+    for key, (converter, lower, upper) in numeric_limits.items():
+        raw_value = values.get(key, "")
+        if not raw_value:
+            continue
+        try:
+            number = converter(raw_value)
+        except (TypeError, ValueError):
+            issues.append(f"{key} has an invalid numeric value")
+            continue
+        in_range = (
+            lower < number <= upper
+            if converter is float
+            else lower <= number <= upper
+        )
+        if not in_range:
+            issues.append(f"{key} is outside its safe range")
+    return tuple(issues)
+
+
 def validate_common(values: Mapping[str, str]) -> tuple[str, ...]:
     issues: list[str] = []
     issues.extend(validate_llm(values))
+    issues.extend(validate_worker(values))
     required = {
         "RECPRO_CONFIG_BUNDLE_VERSION",
         "RECPRO_CONFIG_BUNDLE_PATH",

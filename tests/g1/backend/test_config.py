@@ -87,6 +87,48 @@ class ConfigurationTest(unittest.TestCase):
                 recommendation_pipeline_enabled=True,
             )
 
+    def test_worker_is_disabled_by_default_and_requires_a_matching_mode(self) -> None:
+        settings = AppSettings(mysql_password="isolated-test-password", app_env="test")
+        self.assertFalse(settings.worker_enabled)
+        self.assertEqual("disabled", settings.worker_mode)
+
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                app_env="test",
+                worker_enabled=True,
+            )
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                app_env="test",
+                worker_mode="profile_outbox",
+            )
+
+    def test_worker_configuration_accepts_explicit_non_production_profile_mode(self) -> None:
+        settings = AppSettings(
+            mysql_password="isolated-test-password",
+            app_env="test",
+            worker_enabled=True,
+            worker_mode="profile_outbox",
+            worker_id="test-profile-worker",
+            worker_batch_limit=4,
+            worker_lease_seconds=90,
+            worker_max_attempts=4,
+        )
+        self.assertTrue(settings.worker_enabled)
+        self.assertEqual("profile_outbox", settings.worker_mode)
+        self.assertEqual(4, settings.worker_batch_limit)
+
+    def test_worker_configuration_rejects_production_write_mode(self) -> None:
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                app_env="production",
+                worker_enabled=True,
+                worker_mode="profile_outbox",
+            )
+
     def test_deepseek_is_opt_in_and_requires_a_local_key(self) -> None:
         with self.assertRaises(ValueError):
             AppSettings(

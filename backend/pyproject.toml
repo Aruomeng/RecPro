@@ -9,6 +9,7 @@ description = "LibraMAS smart-library multi-agent recommendation prototype"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "asyncmy==0.2.11",
+    "cryptography==47.0.0",
     "fastapi==0.141.1",
     "jsonschema==4.26.0",
     "pydantic-settings==2.14.2",
