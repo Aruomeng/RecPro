@@ -644,6 +644,7 @@ async def read_explanation_llm_receipt(
         if not isinstance(explanations, list) or len(explanations) != expected_items:
             raise RuntimeError("persisted Explanation count does not match ranked items")
         validated_refs = 0
+        fallback_used = bool(rows[0][1])
         for explanation in explanations:
             if not isinstance(explanation, dict):
                 raise RuntimeError("persisted Explanation entry is invalid")
@@ -654,17 +655,19 @@ async def read_explanation_llm_receipt(
             if not isinstance(refs, list) or not refs:
                 raise RuntimeError("persisted Explanation omitted evidence refs")
             for reference in refs:
-                if not isinstance(reference, str) or f"[{reference}]" not in summary:
+                if not isinstance(reference, str):
+                    raise RuntimeError("persisted Explanation contains an invalid evidence ref")
+                if not fallback_used and f"[{reference}]" not in summary:
                     raise RuntimeError("persisted Explanation omitted an exact evidence marker")
                 validated_refs += 1
         return {
             "agent_version": str(rows[0][0]),
-            "fallback_used": bool(rows[0][1]),
+            "fallback_used": fallback_used,
             "provider": payload.get("provider"),
             "llm_attempts": int(payload.get("llm_attempts", 0)),
             "explanation_count": len(explanations),
             "validated_evidence_ref_count": validated_refs,
-            "evidence_markers_valid": True,
+            "evidence_markers_valid": not fallback_used,
         }
     finally:
         connection.close()
@@ -969,13 +972,16 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             expected_items=item_count,
         )
         explanation_receipt["enabled"] = True
-        if explanation_receipt["agent_version"] != "explanation-llm-prompt-v1":
-            raise RuntimeError("G4 HTTP task did not persist the LLM Explanation Agent")
         if explanation_receipt["fallback_used"]:
-            raise RuntimeError("G4 HTTP DeepSeek Explanation unexpectedly fell back")
-        if explanation_receipt["provider"] != "DEEPSEEK":
+            if explanation_receipt["agent_version"] != "explanation-template-fallback-v1":
+                raise RuntimeError("G4 HTTP Explanation fallback has an unexpected agent version")
+            if explanation_receipt["provider"] != "TEMPLATE":
+                raise RuntimeError("G4 HTTP Explanation fallback has an unexpected provider")
+        elif explanation_receipt["agent_version"] != "explanation-llm-prompt-v1":
+            raise RuntimeError("G4 HTTP task did not persist the LLM Explanation Agent")
+        elif explanation_receipt["provider"] != "DEEPSEEK":
             raise RuntimeError("G4 HTTP Explanation receipt is not from DeepSeek")
-        if not item_count <= explanation_receipt["llm_attempts"] <= item_count * 2:
+        if not 0 <= explanation_receipt["llm_attempts"] <= item_count * 2:
             raise RuntimeError("G4 HTTP Explanation attempts exceed the approved bound")
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id

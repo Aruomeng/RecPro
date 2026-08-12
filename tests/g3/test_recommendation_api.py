@@ -24,6 +24,7 @@ class FakeRecommendationService:
         self.calls: list[RecommendationTaskCommand] = []
         self.record_count = 0
         self._seen_request_ids: set[str] = set()
+        self.warnings: list[str] = []
 
     async def create_task(
         self,
@@ -71,7 +72,7 @@ class FakeRecommendationService:
                         "evidence_confidence": 0.9,
                     }
                 ],
-                "warnings": [],
+                "warnings": self.warnings,
                 "versions": {
                     "config_bundle": "rec-1.0.0",
                     "policy": "policy-g3-v1",
@@ -93,7 +94,7 @@ class FakeRecommendationService:
             "started_at": "2026-08-09T00:00:00Z",
             "finished_at": "2026-08-09T00:00:01Z",
             "error_code": None,
-            "warnings": [],
+            "warnings": self.warnings,
             "versions": {
                 "config_bundle": "rec-1.0.0",
                 "policy": "policy-g3-v1",
@@ -177,6 +178,35 @@ class RecommendationAPITest(unittest.TestCase):
         self.assertEqual(200, replay.status_code)
         self.assertEqual(first.json()["task_id"], replay.json()["task_id"])
         self.assertEqual(1, service.record_count)
+
+    def test_internal_agent_warnings_are_stably_projected_to_public_codes(self) -> None:
+        service = FakeRecommendationService()
+        service.warnings = ["LLM_EXPLANATION_FALLBACK", "EVIDENCE_VALIDATION_FAILED"]
+        request_id = uuid4()
+        body = {
+            "request_id": str(request_id),
+            "session_id": str(uuid4()),
+            "scene": "SEARCH_AFTER",
+            "input_text": "多智能体推荐系统",
+        }
+        headers = {"Idempotency-Key": str(request_id), "X-Demo-User-Id": "7"}
+        with TestClient(app_for(service)) as client:
+            created = client.post("/api/v1/recommendation-tasks", json=body, headers=headers)
+            task = client.get(
+                f"/api/v1/recommendation-tasks/{request_id}",
+                headers={"X-Demo-User-Id": "7"},
+            )
+
+        self.assertEqual(201, created.status_code)
+        self.assertEqual(
+            ["LLM_FALLBACK_USED", "TEMPLATE_EXPLANATION"],
+            created.json()["warnings"],
+        )
+        self.assertEqual(200, task.status_code)
+        self.assertEqual(
+            ["LLM_FALLBACK_USED", "TEMPLATE_EXPLANATION"],
+            task.json()["warnings"],
+        )
 
     def test_request_id_mismatch_is_rejected_before_service(self) -> None:
         service = FakeRecommendationService()

@@ -9,7 +9,7 @@ the recommendation surface disabled.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Mapping
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Response
@@ -47,6 +47,49 @@ IDEMPOTENCY_HEADERS = {
         "schema": {"type": "boolean"},
     },
 }
+
+# Agent implementations can retain fine-grained diagnostic warnings for their
+# trace/audit records.  The HTTP contract deliberately exposes a smaller,
+# stable vocabulary: it must never turn an otherwise durable recommendation
+# into a 500 merely because an internal warning is newly introduced.
+_PUBLIC_WARNING_ALIASES = {
+    "LLM_EXPLANATION_FALLBACK": ("LLM_FALLBACK_USED", "TEMPLATE_EXPLANATION"),
+    "EVIDENCE_VALIDATION_FAILED": ("TEMPLATE_EXPLANATION",),
+    "LLM_INTENT_FALLBACK": ("LLM_FALLBACK_USED", "RULE_INTENT_FALLBACK"),
+    "LLM_INTENT_SKIPPED_EMPTY_INPUT": ("RULE_INTENT_FALLBACK",),
+    "REPLAN_REQUIRED": ("REPLAN_EXHAUSTED",),
+    "REPLAN_BUDGET_EXHAUSTED": ("REPLAN_EXHAUSTED",),
+    "GRAPH_RECALL_UNAVAILABLE": ("KG_CHANNEL_UNAVAILABLE",),
+    "VECTOR_RECALL_UNAVAILABLE": ("VECTOR_CHANNEL_UNAVAILABLE",),
+    "VECTOR_QUERY_UNAVAILABLE": ("VECTOR_CHANNEL_UNAVAILABLE",),
+    "CATALOG_EMPTY": ("INSUFFICIENT_RESOURCE_COVERAGE",),
+    "CATALOG_READ_UNAVAILABLE": ("LIMITED_EVIDENCE",),
+    "PROFILE_READ_UNAVAILABLE": ("SESSION_ONLY_PROFILE",),
+    "PROFILE_PROJECTION_CURRENT_AS_OF": ("SESSION_ONLY_PROFILE",),
+}
+_PUBLIC_WARNING_VALUES = frozenset(code.value for code in WarningCode)
+
+
+def _project_public_warnings(payload: Mapping[str, Any]) -> dict[str, Any]:
+    """Map internal Agent diagnostics onto the closed public warning contract."""
+
+    projected = dict(payload)
+    raw_warnings = projected.get("warnings", [])
+    if not isinstance(raw_warnings, list) or any(
+        not isinstance(warning, str) or not warning.strip() for warning in raw_warnings
+    ):
+        # Preserve malformed input so the response model can reject it with a
+        # normal validation error instead of silently changing its meaning.
+        return projected
+    warnings: list[str] = []
+    for warning in raw_warnings:
+        candidates = _PUBLIC_WARNING_ALIASES.get(warning, (warning,))
+        for candidate in candidates:
+            public_code = candidate if candidate in _PUBLIC_WARNING_VALUES else "LIMITED_EVIDENCE"
+            if public_code not in warnings:
+                warnings.append(public_code)
+    projected["warnings"] = warnings
+    return projected
 
 
 class RecommendationTaskCreateRequest(StrictModel):
@@ -409,7 +452,9 @@ def create_recommendation_router(
             ) from exc
         response.status_code = result.status_code
         response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
-        return RecommendationExecutionResponse.model_validate(result.payload)
+        return RecommendationExecutionResponse.model_validate(
+            _project_public_warnings(result.payload)
+        )
 
     @router.get(
         "/recommendation-tasks/{task_id}",
@@ -458,7 +503,9 @@ def create_recommendation_router(
                 retryable=False,
                 details={},
             ) from exc
-        return RecommendationTaskStatusResponse.model_validate(payload)
+        return RecommendationTaskStatusResponse.model_validate(
+            _project_public_warnings(payload)
+        )
 
     @router.post(
         "/recommendation-tasks/{task_id}/clarifications",
@@ -565,6 +612,8 @@ def create_recommendation_router(
                 details={},
             ) from exc
         response.headers["Idempotency-Replayed"] = "true" if result.replayed else "false"
-        return RecommendationExecutionResponse.model_validate(result.payload)
+        return RecommendationExecutionResponse.model_validate(
+            _project_public_warnings(result.payload)
+        )
 
     return router

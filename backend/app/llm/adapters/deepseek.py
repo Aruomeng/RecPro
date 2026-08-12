@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import json
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -135,7 +135,28 @@ class DeepSeekLLMProvider:
         payload, request_id, attempts = await self._run_task(
             "explanation.render",
             {"evidence_json": json.dumps(safe_evidence, ensure_ascii=False, sort_keys=True)},
+            validate_payload=lambda candidate: self._validate_explanation_payload(
+                candidate, evidence_refs
+            ),
         )
+        text, output_refs = self._validate_explanation_payload(payload, evidence_refs)
+        return self._result(
+            "explanation.render",
+            {
+                "text": text.strip(),
+                "evidence_refs": list(output_refs),
+                "evidence_limited": not bool(output_refs),
+            },
+            request_id,
+            attempts,
+        )
+
+    @staticmethod
+    def _validate_explanation_payload(
+        payload: Mapping[str, Any], evidence_refs: list[str]
+    ) -> tuple[str, list[str]]:
+        """Validate semantic evidence bounds in the same retry budget as JSON shape."""
+
         text = payload.get("text")
         if not isinstance(text, str) or not text.strip():
             raise ValueError("DeepSeek returned an empty explanation")
@@ -148,16 +169,7 @@ class DeepSeekLLMProvider:
             raise ValueError("DeepSeek omitted required evidence references")
         if any(f"[{reference}]" not in text for reference in output_refs):
             raise ValueError("DeepSeek explanation omitted an evidence marker")
-        return self._result(
-            "explanation.render",
-            {
-                "text": text.strip(),
-                "evidence_refs": list(output_refs),
-                "evidence_limited": not bool(output_refs),
-            },
-            request_id,
-            attempts,
-        )
+        return text.strip(), list(output_refs)
 
     async def render_group_summary(self, topic_name: str) -> LLMResult:
         payload, request_id, attempts = await self._run_task(
@@ -172,6 +184,7 @@ class DeepSeekLLMProvider:
         self,
         prompt_id: str,
         variables: Mapping[str, Any],
+        validate_payload: Callable[[Mapping[str, Any]], object] | None = None,
     ) -> tuple[dict[str, Any], str, int]:
         request_id = str(uuid4())
         task = self.prompt_bundle.task(prompt_id)  # type: ignore[union-attr]
@@ -182,6 +195,8 @@ class DeepSeekLLMProvider:
                 if not isinstance(payload, Mapping):
                     raise DeepSeekPayloadError("DeepSeek response must be a JSON object")
                 task.validate_output(payload)
+                if validate_payload is not None:
+                    validate_payload(payload)
                 return dict(payload), request_id, attempt
             except asyncio.CancelledError:
                 raise

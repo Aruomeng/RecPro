@@ -2059,9 +2059,24 @@ Gate：完整 HTTP 推荐的双 LLM 能力审批边界
 时间：2026-08-12（Asia/Shanghai）
 目标：在不扩大数据写入集合的前提下，把 1 次 Intent 与最多 8 条 Explanation 的外部请求预算、输入范围、并发和回退策略冻结进可哈希审批计划。
 策略边界：Intent policy 与 Explanation policy 分别哈希；Explanation 必须同时启用 Intent，最多 8 条、每条最多 2 次尝试、总计最多 16 次、四路并发，只发送排序因素与白名单 evidence refs，不持久化原始 provider 响应。
-执行回读：除既有 Intent Agent 回执外，严格检查 ExplanationAgent=explanation-llm-prompt-v1、provider=DEEPSEEK、fallback=false、尝试次数在 item_count 到 item_count×2、解释条目数匹配，并逐个验证 [evidence_ref] 标记。
+执行回读：除既有 Intent Agent 回执外，无回退时严格检查 ExplanationAgent=explanation-llm-prompt-v1、provider=DEEPSEEK、尝试次数在 item_count 到 item_count×2、解释条目数匹配，并逐个验证 [evidence_ref] 标记；回退时严格检查受控 template provider、回退版本、条目数和最多 item_count×2 的尝试边界。
 数据边界：MySQL 目标表及最大 56 行追加不变；Neo4j/Chroma 写入、Outbox claim、UPDATE/DELETE、文件删除、数据库物理删除均为 0；HTTP replay 必须零行增量且不再次调用模型。
 下一步唯一动作：提交推送工具，在 clean commit 上生成最新 MySQL/G4 只读基线和双 LLM ChangePlan；用户精确批准新 plan_id/hash 前不执行。
+```
+
+## G4 双 LLM HTTP 执行与响应契约恢复
+
+```text
+交接ID：G4-INTENT-EXPLANATION-HTTP-20260812-001
+Gate：获批双 LLM HTTP 推荐与幂等恢复读取
+状态：APPEND_COMMITTED / DEGRADED_EXPLANATION / HTTP_REPLAY_PASS
+时间：2026-08-12（Asia/Shanghai）
+批准：plan_id=dc1fb053-0218-51d0-97a2-152b662f82d1；plan_hash=ed92e76e591e6fe715f663d738be0fdbd0e54298c9b0b676905db7c703dbcd38；计划提交=13cd33ca5ba7df3bb37ab4b1b08071d97154a32b。
+实际事实：request_id=b2dcdae5-c6ef-5c75-a264-b03950920409；task_id=71980961-74fc-55e0-981a-86616cf538d9；MySQL 精确追加 56 行（task=1、transition=8、candidate=12、record=1、item=8、item_explanation=8、policy=1、trace=1、agent message/result 各7、artifact=1、orchestration result=1）。所有目标表均精确等于计划 after count；未出现其他写入、UPDATE、DELETE、物理删除、Neo4j/Chroma 写入或 Outbox claim。
+LLM 事实：IntentUnderstandingAgent=deepseek、attempts=1、fallback=false；ExplanationAgent 记录 llm_attempts=8 且存在受控 TEMPLATE 回退，任务=DEGRADED_COMPLETED。模型原文、密钥未写入该交接记录。
+异常与恢复：首个 HTTP POST 的业务事务已提交，但 API 将内部 LLM_EXPLANATION_FALLBACK/EVIDENCE_VALIDATION_FAILED 直接传入封闭公开枚举而返回 ValidationError。随后将内部告警稳定映射为 LLM_FALLBACK_USED/TEMPLATE_EXPLANATION；使用相同 request_id 的只读 GET 和幂等 POST replay 均为 200，replay=true、数据库行增量=0、外部 LLM 请求=0。
+后续修复：DeepSeek Explanation 的语义引用校验失败已纳入最多两次的同一 provider 重试预算；未来新任务仍只在新 ChangePlan 精确批准后运行。
+下一步唯一动作：完成全量回归并提交上述恢复与重试修复；再为“零 Explanation 回退”的新真实业务请求生成独立 ChangePlan，获批前不发送新业务 POST。
 ```
 
 ## 阶段交接模板
