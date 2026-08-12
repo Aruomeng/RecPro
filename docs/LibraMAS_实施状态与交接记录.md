@@ -2079,6 +2079,25 @@ LLM 事实：IntentUnderstandingAgent=deepseek、attempts=1、fallback=false；E
 下一步唯一动作：完成全量回归并提交上述恢复与重试修复；再为“零 Explanation 回退”的新真实业务请求生成独立 ChangePlan，获批前不发送新业务 POST。
 ```
 
+## G4 双 LLM 全成功执行、G5 画像闭环与真实组合根
+
+```text
+交接ID：G4-G5-REAL-CLOSURE-20260812-002
+Gate：真实 DeepSeek 推荐、反馈学习和画像刷新闭环
+状态：COMPLETED / INDEPENDENT_RECONCILIATION_PASS
+时间：2026-08-12（Asia/Shanghai）
+G4 批准：plan_id=37d2326a-4c7e-525b-825b-b776a8cda289；plan_hash=6867753b8891366d235594b8034e6eae0983df93abd37ca27d90a032a0e52f8a。
+G4 结果：task_id=228c1064-7267-54f1-a68b-6584c11dae51；首次 HTTP POST=201/COMPLETED，幂等重放=200/true 且零新增。IntentUnderstandingAgent 使用 DeepSeek deepseek-v4-flash 1 次、无回退；ExplanationAgent 对 8 条结果共 9 次受限尝试，全部为 DEEPSEEK、白名单 evidence marker 全部有效、无模板回退。外部请求合计=10。
+G4 数据边界：MySQL 精确追加 56 条计划内审计事实（task=1、transition=8、candidate=12、record=1、item=8、item_explanation=8、policy=1、trace=1、Agent message/result 各7、artifact=1、orchestration result=1）；Neo4j/Chroma 写入=0，Outbox claim=0，文件删除=0，数据库物理删除=0。执行=`g4-deepseek-intent-explanation-http-apply-20260812-002`，只读对账=`g4-deepseek-intent-explanation-http-reconcile-20260812-002`，均 PASS。
+G5 批准：plan_id=48630d16-960a-50cc-843d-677679dc67f6；plan_hash=a39cb644dc985e433bb314ef80674fd693f62dee968d81659d943cc58e6b3460。
+G5 结果：对 item=160/resource=6322 追加一条有效曝光、一条 NOT_INTERESTED/TOPIC_NOT_INTERESTED 反馈和一条 CLICK_RECOMMENDATION 行为；Outbox=43/44 均以 attempts=1 进入 DONE，第二次 Worker run_once 返回 0。画像重放 id=34/35，版本=31/32；反馈源事件将该资源置为 HIDDEN/state_version=1。
+G5 数据边界：逐表对账精确匹配计划的 26 项逻辑变更；只允许 Outbox 与当前画像投影的白名单受控更新，资源/书目/声明画像事实未变；Neo4j/Chroma/LLM/network=0，文件删除=0，数据库物理删除=0。执行=`g5-feedback-worker-apply-20260812-002`，只读对账=`g5-feedback-worker-reconcile-20260812-005`，均 PASS。
+组合根：以忽略的本地环境文件和显式 Demo 双闸门启动 backend.app.g4_feedback_demo_main:app；health/ready=READY、can_recommend=true，MySQL/Neo4j/Chroma/推荐链路均为 UP，LLM provider=deepseek、model=deepseek-v4-flash。本次只读取健康状态，不发送模型请求或业务 POST；默认 Compose backend/Worker 仍 fail-closed。
+前端安全复核：浏览器本地演示可显示 3 条明确标注的静态资源；交互开关关闭时点击“记录曝光”只返回审批提示、没有生成曝光 UUID。前后 MySQL 的 impression=13、feedback=10、behavior=45、Outbox=32 均不变。
+未解决风险：真实浏览器业务写入、默认 Compose 的显式 opt-in 编排、正式 OIDC/JWKS、G8 剩余边界用例与 G9 论文实验冻结仍需单独计划或正式配置；不得将临时 Demo 组合根等同于默认生产发布。
+下一步唯一动作：在不产生业务写入的前提下复核 G8 最终验收计划与当前提交的证据覆盖；需要浏览器真实 POST 或剩余边界事实时，重新生成并精确批准对应 ChangePlan。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
