@@ -256,7 +256,7 @@ CASE_COVERAGE: Mapping[str, dict[str, Any]] = {
     "A19": {
         "offline_assessment": "DIRECT",
         "assessment_reason": "A fault-injecting explanation provider returns an invented evidence reference; LLMExplanationAgent rejects it and returns a bounded template explanation with explicit fallback warnings.",
-        "test_refs": ["tests/g6/test_evidence_bounded_explanation.py::EvidenceBoundedExplanationTests.test_invented_evidence_fails_validation_and_returns_template"],
+        "test_refs": ["tests/g6/test_evidence_bounded_explanation.py::test_invented_evidence_fails_validation_and_returns_template"],
         "source_refs": ["backend/app/recommendation/agents/llm_agents.py", "backend/app/recommendation/application/orchestration.py"],
         "tool_refs": [],
         "artifact_globs": ["artifacts/verification/g4/g4-projection-apply-*/g4-recommendation-projection-apply.json"],
@@ -288,7 +288,7 @@ CASE_COVERAGE: Mapping[str, dict[str, Any]] = {
     "A23": {
         "offline_assessment": "DIRECT",
         "assessment_reason": "An in-memory end-to-end fixture appends impression and feedback facts, creates an Outbox item, runs the worker, and asserts profile_version growth, DONE status, and one change-log entry.",
-        "test_refs": ["tests/g5/test_feedback_profile_version_change_log.py::FeedbackProfileVersionTests.test_feedback_to_worker_increments_profile_and_appends_change_log"],
+        "test_refs": ["tests/g5/test_feedback_profile_version_change_log.py::test_feedback_to_worker_increments_profile_and_appends_change_log"],
         "source_refs": ["backend/app/feedback/application/service.py", "backend/app/profile/application/refresh.py"],
         "tool_refs": ["scripts/verify_g5_feedback_runtime.py", "scripts/verify_g5_worker_recovery_runtime.py"],
         "artifact_globs": ["artifacts/verification/g5/g5-feedback-*/g5-runtime.json", "artifacts/verification/g5/g5-worker-recovery-*/runtime.json"],
@@ -304,7 +304,7 @@ CASE_COVERAGE: Mapping[str, dict[str, Any]] = {
     "A25": {
         "offline_assessment": "DIRECT",
         "assessment_reason": "A storage-independent historical replay selector filters resources, behaviors, states, and popularity by evaluation_at; adding future facts leaves the selected snapshot and content hash unchanged, while shuffled frozen facts remain hash-stable.",
-        "test_refs": ["tests/g9/test_historical_replay_boundary.py::HistoricalReplayBoundaryTests.test_future_resource_behavior_state_and_hotness_do_not_change_snapshot", "tests/g9/test_historical_replay_boundary.py::HistoricalReplayBoundaryTests.test_snapshot_hash_is_order_independent_for_frozen_facts"],
+        "test_refs": ["tests/g9/test_historical_replay_boundary.py::test_future_resource_behavior_state_and_hotness_do_not_change_snapshot", "tests/g9/test_historical_replay_boundary.py::test_snapshot_hash_is_order_independent_for_frozen_facts"],
         "source_refs": ["backend/app/evaluation/domain/historical_replay.py", "backend/app/profile/replay.py"],
         "tool_refs": ["scripts/verify_g5_audit_replay_runtime.py", "scripts/verify_evaluation_freeze_inputs.py"],
         "artifact_globs": ["artifacts/verification/g5/g5-audit-replay-*/runtime.json", "artifacts/verification/experiment-inputs/*/input-freeze-report.json"],
