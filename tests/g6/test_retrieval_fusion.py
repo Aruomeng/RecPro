@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 import unittest
 from uuid import uuid4
@@ -14,6 +15,7 @@ from backend.app.catalog.domain.models import (
 )
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.real_agents import CatalogCandidateRecallAgent
+from backend.app.recommendation.agents.rule_agents import RuleExplanationAgent
 from backend.app.shared_kernel.contracts.agent import AgentMessage
 from backend.app.shared_kernel.contracts.enums import AgentResultStatus, MessageType
 from scripts.build_vector_index_plan import embedding_vector
@@ -73,6 +75,15 @@ class FakeGraph:
                 graph_version=graph_version,
             ),
         )
+
+
+class FakeGraphTimeout:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def recall(self, *, terms, graph_version, limit):
+        self.calls += 1
+        raise TimeoutError("graph fixture timed out")
 
 
 class FakeVector:
@@ -152,6 +163,12 @@ class RetrievalFusionTests(unittest.TestCase):
                 for candidate in result.payload["candidates"]
             )
         )
+        self.assertTrue(
+            any(candidate["kg_score"] is not None for candidate in result.payload["candidates"])
+        )
+        self.assertTrue(
+            any(candidate["semantic_score"] is not None for candidate in result.payload["candidates"])
+        )
         self.assertEqual(
             {"dimension": 384, "embedding_version": EMBEDDING_VERSION, "index_version": INDEX_VERSION, "limit": 2},
             vector.calls[0],
@@ -174,6 +191,48 @@ class RetrievalFusionTests(unittest.TestCase):
         self.assertEqual("UNAVAILABLE", result.payload["dependency_status"]["VECTOR"])
         self.assertEqual(2, len(vector.calls))
         self.assertTrue(all("VECTOR" not in item["channel"] for item in result.payload["candidates"]))
+        self.assertTrue(all(item["semantic_score"] is None for item in result.payload["candidates"]))
+
+    def test_graph_timeout_is_null_and_explanation_cannot_invent_graph_path(self) -> None:
+        graph = FakeGraphTimeout()
+        agent = CatalogCandidateRecallAgent(
+            FakeCatalog(),
+            graph=graph,
+            graph_version="lib-books-v1-20260810",
+            retry_policy=RetryPolicy(max_attempts=2),
+        )
+        result = asyncio.run(agent.handle(recall_message()))
+        self.assertEqual(AgentResultStatus.PARTIAL, result.status)
+        self.assertIn("GRAPH_RECALL_UNAVAILABLE", result.warnings)
+        self.assertEqual("UNAVAILABLE", result.payload["dependency_status"]["GRAPH"])
+        self.assertEqual(2, graph.calls)
+        self.assertEqual(
+            {
+                "operation": "catalog.graph_recall",
+                "attempts": 2,
+                "outcome": "TIMEOUT",
+            },
+            result.tool_calls[-1],
+        )
+        candidates = list(result.payload["candidates"])
+        self.assertTrue(candidates)
+        self.assertTrue(all(candidate["kg_score"] is None for candidate in candidates))
+        self.assertTrue(all(":graph:" not in candidate["evidence_ref"] for candidate in candidates))
+
+        ranked_items = [
+            {**candidate, "rank_no": rank}
+            for rank, candidate in enumerate(candidates, start=1)
+        ]
+        explanation_message = replace(
+            recall_message(),
+            receiver="ExplanationAgent",
+            message_type=MessageType.EXPLAIN_EXECUTE,
+            payload={"ranked_items": ranked_items},
+        )
+        explanation = asyncio.run(RuleExplanationAgent().handle(explanation_message))
+        for item in explanation.payload["explanations"]:
+            self.assertTrue(all(":graph:" not in ref for ref in item["evidence_refs"]))
+            self.assertNotIn("graph:", item["summary"].lower())
 
 
 if __name__ == "__main__":

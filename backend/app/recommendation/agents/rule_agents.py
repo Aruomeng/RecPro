@@ -10,6 +10,13 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.recommendation.agents.base import Agent
+from backend.app.recommendation.domain.output_type_stability import (
+    DEFAULT_HYSTERESIS_MARGIN,
+    DEFAULT_MIN_OUTPUT_TYPE_ROUNDS,
+    DEFAULT_TOPIC_FOCUS_INFER_THRESHOLD,
+    infer_auto_output_type,
+    stabilize_output_type,
+)
 from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.enums import AgentResultStatus
 
@@ -98,6 +105,7 @@ class RuleUserProfileAgent:
                 "profile_version": "profile-g4-rule-v1",
                 "confidence": confidence,
                 "interest_strength": 0.0 if empty else 0.68,
+                "topic_focus_strength": 0.0 if empty else 0.68,
                 "signals": [] if empty else ["TOPIC_HISTORY"],
             },
             confidence=confidence,
@@ -137,11 +145,43 @@ class RuleRecommendationPolicyAgent:
 
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
         intent = message.payload.get("intent", {})
+        profile = message.payload.get("profile", {})
         probe = message.payload.get("probe", {})
         constraints = message.payload.get("constraints", {})
         unclear = isinstance(intent, dict) and intent.get("intent_type") == "UNCLEAR"
+        constraint_map = constraints if isinstance(constraints, dict) else {}
+        intent_type = intent.get("intent_type", "GENERAL_RECOMMENDATION") if isinstance(intent, dict) else "GENERAL_RECOMMENDATION"
+        topic_focus_strength = (
+            profile.get("topic_focus_strength", profile.get("interest_strength", 0.0))
+            if isinstance(profile, dict)
+            else 0.0
+        )
+        explicit_output_type = message.payload.get("output_type")
+        proposed_output_type = infer_auto_output_type(
+            intent_type=intent_type,
+            topic_focus_strength=topic_focus_strength,
+            topic_focus_infer_threshold=constraint_map.get(
+                "topic_focus_infer_threshold", DEFAULT_TOPIC_FOCUS_INFER_THRESHOLD
+            ),
+        )
+        stability = stabilize_output_type(
+            proposed_output_type=proposed_output_type,
+            topic_focus_strength=topic_focus_strength,
+            previous_output_type=constraint_map.get("previous_output_type"),
+            previous_rounds=constraint_map.get("previous_output_type_rounds", 0),
+            explicit_output_type=explicit_output_type,
+            topic_focus_infer_threshold=constraint_map.get(
+                "topic_focus_infer_threshold", DEFAULT_TOPIC_FOCUS_INFER_THRESHOLD
+            ),
+            hysteresis_margin=constraint_map.get(
+                "hysteresis_margin", DEFAULT_HYSTERESIS_MARGIN
+            ),
+            min_output_type_rounds=constraint_map.get(
+                "min_output_type_rounds", DEFAULT_MIN_OUTPUT_TYPE_ROUNDS
+            ),
+        )
         degraded = (
-            isinstance(constraints, dict) and bool(constraints.get("force_degraded"))
+            bool(constraint_map.get("force_degraded"))
         ) or float(probe.get("metadata_coverage", 1.0) if isinstance(probe, dict) else 1.0) < 0.5
         if unclear:
             return _result(
@@ -149,13 +189,19 @@ class RuleRecommendationPolicyAgent:
                 agent_name=self.name,
                 agent_version=self.version,
                 payload={
-                    "output_type": "PERSONALIZED_FEED",
+                    "output_type": stability.output_type,
                     "delivery_strategy": "GUIDED",
                     "explanation_level": "LIMITED",
                     "adaptation_state": "NORMAL",
-                    "decision_reason_codes": ["MISSING_REQUIRED_SLOTS"],
+                    "decision_reason_codes": [
+                        stability.reason_code,
+                        "MISSING_REQUIRED_SLOTS",
+                    ],
                     "decision_reason": "当前主题和资源类型不足以形成可靠推荐。",
                     "policy_version": self.version,
+                    "output_type_rounds": stability.rounds,
+                    "output_type_changed": stability.changed,
+                    "explicit_output_type_override": stability.explicit_override,
                     "retrieval_plan": None,
                     "clarification_questions": [
                         {
@@ -180,13 +226,19 @@ class RuleRecommendationPolicyAgent:
             agent_name=self.name,
             agent_version=self.version,
             payload={
-                "output_type": str(message.payload.get("output_type") or "TOPIC_RESOURCES"),
+                "output_type": stability.output_type,
                 "delivery_strategy": delivery,
                 "explanation_level": "LIMITED" if degraded else "EVIDENCE",
                 "adaptation_state": "NORMAL",
-                "decision_reason_codes": ["MYSQL_ONLY_FALLBACK"] if degraded else ["DIRECT_PATH"],
+                "decision_reason_codes": [
+                    stability.reason_code,
+                    "MYSQL_ONLY_FALLBACK" if degraded else "DIRECT_PATH",
+                ],
                 "decision_reason": "可选检索通道不可用，使用 MySQL 可复现降级路径。" if degraded else "输入和资源覆盖满足直接推荐条件。",
                 "policy_version": self.version,
+                "output_type_rounds": stability.rounds,
+                "output_type_changed": stability.changed,
+                "explicit_output_type_override": stability.explicit_override,
                 "retrieval_plan": {
                     "plan_version": 1,
                     "min_candidates": 5,

@@ -330,6 +330,7 @@ class CatalogCandidateRecallAgent:
         graph_hits: dict[str, Any] = {}
         graph_attempts = 0
         graph_warning: tuple[str, ...] = ()
+        graph_tool_calls: tuple[dict[str, object], ...] = ()
         if self._graph is not None and self._graph_version and terms:
             try:
                 graph_results, graph_attempts = await call_with_retry(
@@ -343,11 +344,21 @@ class CatalogCandidateRecallAgent:
                     policy=self._retry_policy,
                 )
                 graph_hits = {item.external_id: item for item in graph_results}
-            except DependencyCallFailed:
+                graph_tool_calls = (
+                    {
+                        "operation": "catalog.graph_recall",
+                        "attempts": graph_attempts,
+                        "outcome": "SUCCESS",
+                    },
+                )
+            except DependencyCallFailed as error:
                 graph_warning = ("GRAPH_RECALL_UNAVAILABLE",)
+                graph_attempts = error.attempts
+                graph_tool_calls = _failure_metadata(error)
         vector_hits: dict[str, Any] = {}
         vector_attempts = 0
         vector_warning: tuple[str, ...] = ()
+        vector_tool_calls: tuple[dict[str, object], ...] = ()
         vector_configured = all(
             value is not None
             for value in (
@@ -373,14 +384,22 @@ class CatalogCandidateRecallAgent:
                     policy=self._retry_policy,
                 )
                 vector_hits = {item.external_id: item for item in vector_results}
-            except DependencyCallFailed:
+                vector_tool_calls = (
+                    {
+                        "operation": "catalog.vector_recall",
+                        "attempts": vector_attempts,
+                        "outcome": "SUCCESS",
+                    },
+                )
+            except DependencyCallFailed as error:
                 vector_warning = ("VECTOR_RECALL_UNAVAILABLE",)
+                vector_attempts = error.attempts
+                vector_tool_calls = _failure_metadata(error)
             except ValueError:
                 vector_warning = ("VECTOR_QUERY_UNAVAILABLE",)
-        optional_channel_configured = (
-            self._graph is not None or vector_configured
-        )
-        graph_channel_ready = self._graph is not None and not graph_warning and bool(terms)
+        graph_configured = self._graph is not None and bool(self._graph_version)
+        optional_channel_configured = graph_configured or vector_configured
+        graph_channel_ready = graph_configured and not graph_warning and bool(terms)
         vector_channel_ready = vector_configured and not vector_warning and bool(query_text)
         candidates: list[dict[str, object]] = []
         resources_by_id = {resource.id: resource for resource in eligible}
@@ -432,6 +451,20 @@ class CatalogCandidateRecallAgent:
                     "score": round(score, 6),
                     "evidence_ref": evidence_ref,
                     "channel_scores": channel_scores,
+                    # ``None`` means the optional channel was unavailable or
+                    # did not participate.  A successful graph query with no
+                    # hit is represented by ``0.0`` instead, so downstream
+                    # explanations cannot turn a timeout into a graph fact.
+                    "kg_score": (
+                        round(max(0.0, min(1.0, graph_score)), 6)
+                        if graph_channel_ready
+                        else None
+                    ),
+                    "semantic_score": (
+                        round(max(0.0, min(1.0, vector_score)), 6)
+                        if vector_channel_ready
+                        else None
+                    ),
                 }
             )
         channel_ranks: dict[str, dict[int, int]] = {}
@@ -511,8 +544,8 @@ class CatalogCandidateRecallAgent:
                 {"operation": "catalog.list_resources.recall", "attempts": resource_attempts, "outcome": "SUCCESS"},
                 {"operation": "catalog.list_resource_tags.recall", "attempts": tag_attempts, "outcome": "SUCCESS"},
             )
-            + (({"operation": "catalog.graph_recall", "attempts": graph_attempts, "outcome": "SUCCESS"},) if graph_hits else ())
-            + (({"operation": "catalog.vector_recall", "attempts": vector_attempts, "outcome": "SUCCESS"},) if vector_hits else ()),
+            + graph_tool_calls
+            + vector_tool_calls,
         )
 
 
