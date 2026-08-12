@@ -32,6 +32,34 @@ PLAN_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "verification" / "g8-final-reval
 MATRIX_PATH = PROJECT_ROOT / "docs" / "acceptance_matrix.md"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 
+CASE_EXECUTION_POLICY: Mapping[str, tuple[str, str, str]] = {
+    "A01": ("READ_ONLY_RUNTIME", "NONE", "Fixed as_of replay can be verified without appending business facts."),
+    "A02": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Request replay requires an isolated task append and count reconciliation."),
+    "A03": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Behavior replay requires an isolated event fact append and unique-key reconciliation."),
+    "A04": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Feedback replay changes feedback/Outbox facts and requires a separate append plan."),
+    "A05": ("READ_ONLY_RUNTIME", "NONE", "GUIDED early-stop behavior can be exercised without persistence writes."),
+    "A06": ("READ_ONLY_RUNTIME", "NONE", "Intent and candidate-channel preservation can be checked on a read-only fixture."),
+    "A07": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "ALREADY_READ changes an append-only event and a controlled resource-state projection."),
+    "A08": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Negative feedback must be appended before the post-feedback counterfactual is re-read."),
+    "A09": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Browser/API impression boundaries require isolated impression facts and count reconciliation."),
+    "A10": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Browser/API impression boundaries require isolated impression facts and count reconciliation."),
+    "A11": ("READ_ONLY_RUNTIME", "NONE", "Vector outage can be injected at the adapter boundary without storage writes."),
+    "A12": ("READ_ONLY_RUNTIME", "NONE", "Graph outage can be injected at the adapter boundary without storage writes."),
+    "A13": ("READ_ONLY_RUNTIME", "NONE", "Graph/vector simultaneous outage can be injected while retaining MySQL read candidates."),
+    "A14": ("READ_ONLY_RUNTIME", "NONE", "MySQL-unavailable fail-closed behavior is a read-only health/API check."),
+    "A15": ("READ_ONLY_RUNTIME", "NONE", "Missing-feature score bounds are a pure deterministic calculation."),
+    "A16": ("READ_ONLY_RUNTIME", "NONE", "Fixed snapshot fingerprint comparison is storage-independent."),
+    "A17": ("READ_ONLY_RUNTIME", "NONE", "Diversity constraints are verified on a fixed candidate fixture."),
+    "A18": ("READ_ONLY_RUNTIME", "NONE", "Reading-path degradation is a deterministic orchestration decision."),
+    "A19": ("READ_ONLY_RUNTIME", "NONE", "Evidence validation and template fallback use a fault-injected provider."),
+    "A20": ("READ_ONLY_RUNTIME", "NONE", "Candidate-to-item evidence references can be audited from a fixed result."),
+    "A21": ("READ_ONLY_RUNTIME", "NONE", "Replanning bound is a deterministic orchestration trace property."),
+    "A22": ("READ_ONLY_RUNTIME", "NONE", "GUIDED early stop is a deterministic orchestration trace property."),
+    "A23": ("ISOLATED_APPEND_RUNTIME", "SEPARATE_EXACT_CHANGE_PLAN", "Feedback-to-Worker verification appends Outbox/profile facts and requires a separate plan."),
+    "A24": ("READ_ONLY_RUNTIME", "NONE", "Output-type hysteresis is a deterministic policy sequence."),
+    "A25": ("READ_ONLY_RUNTIME", "NONE", "Historical replay boundary is storage-independent once frozen inputs are supplied."),
+}
+
 
 def validate_run_id(value: str) -> str:
     if RUN_ID_PATTERN.fullmatch(value) is None:
@@ -66,12 +94,16 @@ def _git(*args: str) -> str:
 
 def _case_plan(row: Mapping[str, str]) -> dict[str, Any]:
     mapping = CASE_COVERAGE[row["case_id"]]
+    execution_mode, authorization, blocking_reason = CASE_EXECUTION_POLICY[row["case_id"]]
     return {
         "case_id": row["case_id"],
         "first_gate": row["first_gate"],
         "final_gate": row["final_gate"],
         "semantics": row["semantics"],
         "evidence_type": row["evidence_type"],
+        "execution_mode": execution_mode,
+        "authorization": authorization,
+        "blocking_reason": blocking_reason,
         "offline_test_refs": list(mapping["test_refs"]),
         "runtime_verifier_refs": list(mapping["tool_refs"]),
         "runtime_artifact_globs": list(mapping["artifact_globs"]),

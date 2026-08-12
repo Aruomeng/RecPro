@@ -22,6 +22,12 @@ class FinalRevalidationPlanTest(unittest.TestCase):
         self.assertEqual("READ_ONLY", plan["mode"])
         self.assertEqual([f"A{index:02d}" for index in range(1, 26)], plan["matrix"]["case_ids"])
         self.assertEqual(25, len(plan["cases"]))
+        self.assertEqual(17, sum(item["execution_mode"] == "READ_ONLY_RUNTIME" for item in plan["cases"]))
+        self.assertEqual(8, sum(item["execution_mode"] == "ISOLATED_APPEND_RUNTIME" for item in plan["cases"]))
+        self.assertEqual(
+            {"A02", "A03", "A04", "A07", "A08", "A09", "A10", "A23"},
+            {item["case_id"] for item in plan["cases"] if item["authorization"] != "NONE"},
+        )
         self.assertEqual(6, len(plan["browser_scenarios"]))
         self.assertEqual("PENDING", {item["state"] for item in plan["browser_scenarios"]}.pop())
         self.assertTrue(

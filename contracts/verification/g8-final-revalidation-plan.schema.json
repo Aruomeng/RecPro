@@ -62,6 +62,9 @@
           "final_gate",
           "semantics",
           "evidence_type",
+          "execution_mode",
+          "authorization",
+          "blocking_reason",
           "offline_test_refs",
           "runtime_verifier_refs",
           "runtime_artifact_globs",
@@ -73,6 +76,15 @@
           "final_gate": {"type": "string", "minLength": 1},
           "semantics": {"type": "string", "minLength": 1},
           "evidence_type": {"type": "string", "minLength": 1},
+          "execution_mode": {
+            "type": "string",
+            "enum": ["READ_ONLY_RUNTIME", "ISOLATED_APPEND_RUNTIME"]
+          },
+          "authorization": {
+            "type": "string",
+            "enum": ["NONE", "SEPARATE_EXACT_CHANGE_PLAN"]
+          },
+          "blocking_reason": {"type": "string", "minLength": 1},
           "offline_test_refs": {
             "type": "array",
             "minItems": 1,

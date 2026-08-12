@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-final-runtime-evidence.schema.json",
+  "title": "LibraMAS G8 final runtime evidence",
+  "description": "Evidence envelope for one isolated final revalidation run. It is validated separately from the read-only plan and never authorizes a write.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_run_id", "plan_hash", "git_commit", "status", "safety", "cases"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "g8-final-runtime-evidence-v1"},
+    "plan_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "status": {"type": "string", "enum": ["PASS", "FAIL", "PENDING"]},
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database_reads",
+        "database_writes",
+        "neo4j_reads",
+        "neo4j_writes",
+        "chroma_reads",
+        "chroma_writes",
+        "outbox_claims",
+        "external_llm_requests",
+        "files_deleted",
+        "database_physical_deletions",
+        "artifact_overwrites"
+      ],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 0},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "neo4j_reads": {"type": "integer", "minimum": 0},
+        "neo4j_writes": {"type": "integer", "minimum": 0},
+        "chroma_reads": {"type": "integer", "minimum": 0},
+        "chroma_writes": {"type": "integer", "minimum": 0},
+        "outbox_claims": {"type": "integer", "minimum": 0},
+        "external_llm_requests": {"type": "integer", "minimum": 0},
+        "files_deleted": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "status", "artifacts", "observations", "change_plan"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^A(0[1-9]|1[0-9]|2[0-5])$"},
+          "status": {"type": "string", "enum": ["PASS", "FAIL", "PENDING"]},
+          "artifacts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "schema_version", "sha256"],
+              "properties": {
+                "path": {"type": "string", "minLength": 1},
+                "schema_version": {"type": "string", "minLength": 1},
+                "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+              }
+            }
+          },
+          "observations": {"type": "object"},
+          "change_plan": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": ["plan_id", "plan_hash", "classification"],
+            "properties": {
+              "plan_id": {"type": "string", "format": "uuid"},
+              "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "classification": {"type": "string", "enum": ["S1_APPEND", "S2_CONTROLLED_UPDATE"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

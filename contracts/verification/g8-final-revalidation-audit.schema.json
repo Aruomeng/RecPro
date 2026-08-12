@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-final-revalidation-audit.schema.json",
+  "title": "LibraMAS G8 final revalidation audit",
+  "description": "Append-only audit of plan readiness and final runtime evidence inventory. It does not itself execute a runtime check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "run_id", "audited_at", "git", "plan", "coverage_counts", "cases", "browser_scenarios", "blockers", "safety"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "g8-final-revalidation-audit-v1"},
+    "status": {"type": "string", "enum": ["READY_FOR_RUNTIME", "PASS_WITH_BLOCKERS", "PASS", "FAIL"]},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "audited_at": {"type": "string", "format": "date-time", "pattern": "(?:[zZ]|[+-][0-9]{2}:[0-9]{2})$"},
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["current_commit", "status_before_report"],
+      "properties": {
+        "current_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "status_before_report": {"type": "string"}
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "plan_hash", "plan_git_commit", "plan_git_matches_current", "validation_status"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "plan_git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "plan_git_matches_current": {"type": "boolean"},
+        "validation_status": {"type": "string", "enum": ["PASS", "FAIL"]}
+      }
+    },
+    "coverage_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "plan_valid", "read_only_ready", "requires_change_plan", "final_pass", "final_fail", "final_pending", "historical_artifact_cases"],
+      "properties": {
+        "total": {"type": "integer", "minimum": 0},
+        "plan_valid": {"type": "integer", "minimum": 0},
+        "read_only_ready": {"type": "integer", "minimum": 0},
+        "requires_change_plan": {"type": "integer", "minimum": 0},
+        "final_pass": {"type": "integer", "minimum": 0},
+        "final_fail": {"type": "integer", "minimum": 0},
+        "final_pending": {"type": "integer", "minimum": 0},
+        "historical_artifact_cases": {"type": "integer", "minimum": 0}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "execution_mode", "authorization", "offline_refs_valid", "runtime_refs_valid", "historical_artifact_count", "final_revalidation", "final_evidence_paths", "blockers"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^A(0[1-9]|1[0-9]|2[0-5])$"},
+          "execution_mode": {"type": "string", "enum": ["READ_ONLY_RUNTIME", "ISOLATED_APPEND_RUNTIME"]},
+          "authorization": {"type": "string", "enum": ["NONE", "SEPARATE_EXACT_CHANGE_PLAN"]},
+          "offline_refs_valid": {"type": "boolean"},
+          "runtime_refs_valid": {"type": "boolean"},
+          "historical_artifact_count": {"type": "integer", "minimum": 0},
+          "final_revalidation": {"type": "string", "enum": ["PASS", "FAIL", "PENDING"]},
+          "final_evidence_paths": {"type": "array", "items": {"type": "string", "minLength": 1}},
+          "blockers": {"type": "array", "items": {"type": "string", "minLength": 1}}
+        }
+      }
+    },
+    "browser_scenarios": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario_id", "fixture_user", "state", "write_policy"],
+        "properties": {
+          "scenario_id": {"type": "string", "minLength": 1},
+          "fixture_user": {"type": "string", "minLength": 1},
+          "state": {"type": "string", "enum": ["PENDING", "PASS", "FAIL", "BLOCKED_NO_CHANGE_PLAN"]},
+          "write_policy": {"type": "string", "enum": ["REQUIRES_SEPARATE_CHANGE_PLAN"]}
+        }
+      }
+    },
+    "blockers": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database_reads", "database_writes", "neo4j_reads", "neo4j_writes", "chroma_reads", "chroma_writes", "outbox_claims", "external_llm_requests", "files_deleted", "database_physical_deletions", "artifact_overwrites"],
+      "properties": {
+        "database_reads": {"const": 0},
+        "database_writes": {"const": 0},
+        "neo4j_reads": {"const": 0},
+        "neo4j_writes": {"const": 0},
+        "chroma_reads": {"const": 0},
+        "chroma_writes": {"const": 0},
+        "outbox_claims": {"const": 0},
+        "external_llm_requests": {"const": 0},
+        "files_deleted": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0}
+      }
+    }
+  }
+}
