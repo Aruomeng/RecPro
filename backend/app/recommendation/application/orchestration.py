@@ -17,7 +17,10 @@ from backend.app.recommendation.agents.real_agents import (
     MySQLProfileAgent,
 )
 from backend.app.recommendation.agents.base import RetryPolicy
-from backend.app.recommendation.agents.llm_agents import LLMIntentUnderstandingAgent
+from backend.app.recommendation.agents.llm_agents import (
+    LLMExplanationAgent,
+    LLMIntentUnderstandingAgent,
+)
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
 from backend.app.catalog.ports.public import (
     CatalogRepository,
@@ -38,6 +41,7 @@ def build_rule_orchestrator(
     agents = {agent.name: agent for agent in DEFAULT_RULE_AGENTS}
     if llm_provider is not None:
         agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_provider)
+        agents["ExplanationAgent"] = LLMExplanationAgent(llm_provider)
     return RecommendationOrchestrator(AgentRegistry(agents))
 
 
@@ -84,6 +88,7 @@ def build_port_orchestrator(
     )
     if llm_provider is not None:
         agents["IntentUnderstandingAgent"] = LLMIntentUnderstandingAgent(llm_provider)
+        agents["ExplanationAgent"] = LLMExplanationAgent(llm_provider)
     return RecommendationOrchestrator(AgentRegistry(agents))
 
 
