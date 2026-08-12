@@ -135,6 +135,7 @@ G8_RELEASE_RUN_ID ?=
 G8_FRONTEND_RUN_ID ?=
 G8_BACKEND_IMAGE ?=
 G8_DOCKER_CLI ?= $(DOCKER_CLI)
+G8_ACCEPTANCE_COVERAGE_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -150,7 +151,7 @@ G8_DOCKER_CLI ?= $(DOCKER_CLI)
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
-	verify-g8-release-preflight \
+	verify-g8-release-preflight verify-g8-acceptance-coverage \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -240,6 +241,10 @@ verify-g8-release-preflight:
 	@test -n "$(G8_RELEASE_RUN_ID)" || { echo "G8_RELEASE_RUN_ID is required and must name a new evidence run"; exit 2; }
 	@test -n "$(G8_FRONTEND_RUN_ID)" || { echo "G8_FRONTEND_RUN_ID is required and must name a new frontend build"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_release_preflight --run-id "$(G8_RELEASE_RUN_ID)" --frontend-run-id "$(G8_FRONTEND_RUN_ID)" --python "$(PYTHON)" --npm "$(NPM)" --docker-cli "$(G8_DOCKER_CLI)" $(if $(G8_BACKEND_IMAGE),--backend-image "$(G8_BACKEND_IMAGE)",)
+
+verify-g8-acceptance-coverage:
+	@test -n "$(G8_ACCEPTANCE_COVERAGE_RUN_ID)" || { echo "G8_ACCEPTANCE_COVERAGE_RUN_ID is required and must name a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_acceptance_coverage --run-id "$(G8_ACCEPTANCE_COVERAGE_RUN_ID)"
 
 verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 
