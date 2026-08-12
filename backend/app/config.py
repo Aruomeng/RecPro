@@ -21,7 +21,7 @@ CONFIG_BUNDLE_SCHEMA_SHA256 = (
     "2783a75736fe21d39f2ef3101fa9f9849f1ac3757d0a05c50d656b5169ab6bd1"
 )
 DEFAULT_PROMPT_BUNDLE_SHA256 = (
-    "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a"
+    "1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a"
 )
 LOCAL_SECRET_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{16,128}$")
 
@@ -60,7 +60,7 @@ class AppSettings(BaseSettings):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]*$",
     )
     prompt_bundle_path: Path = Path(
-        "contracts/prompts/rec-prompts-v1.0.0.json"
+        "contracts/prompts/rec-prompts-v1.0.1.json"
     )
     prompt_bundle_sha256: str = Field(
         default=DEFAULT_PROMPT_BUNDLE_SHA256,

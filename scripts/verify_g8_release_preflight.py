@@ -45,7 +45,7 @@ REQUIRED_FILES = (
     "frontend/src/App.vue",
     "frontend/src/api/interactionClient.ts",
     "contracts/config/examples/rec-1.0.0.json",
-    "contracts/prompts/rec-prompts-v1.0.0.json",
+    "contracts/prompts/rec-prompts-v1.0.1.json",
 )
 
 EXPECTED_BACKEND_COMMAND = (

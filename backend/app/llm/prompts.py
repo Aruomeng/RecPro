@@ -31,7 +31,7 @@ from backend.app.shared_kernel.config_bundle import load_strict_json
 
 PROJECT_ROOT = Path(__file__).resolve().parents[3]
 PROMPT_SCHEMA_PATH = PROJECT_ROOT / "contracts/prompts/prompt-bundle.schema.json"
-DEFAULT_PROMPT_BUNDLE_PATH = PROJECT_ROOT / "contracts/prompts/rec-prompts-v1.0.0.json"
+DEFAULT_PROMPT_BUNDLE_PATH = PROJECT_ROOT / "contracts/prompts/rec-prompts-v1.0.1.json"
 _PLACEHOLDER = re.compile(r"\{\{([a-z][a-z0-9_]*)\}\}")
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 

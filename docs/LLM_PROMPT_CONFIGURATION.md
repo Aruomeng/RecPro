@@ -9,8 +9,8 @@
 ```dotenv
 RECPRO_LLM_PROVIDER=mock
 RECPRO_PROMPT_BUNDLE_VERSION=prompt-v1
-RECPRO_PROMPT_BUNDLE_PATH=contracts/prompts/rec-prompts-v1.0.0.json
-RECPRO_PROMPT_BUNDLE_SHA256=bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a
+RECPRO_PROMPT_BUNDLE_PATH=contracts/prompts/rec-prompts-v1.0.1.json
+RECPRO_PROMPT_BUNDLE_SHA256=1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a
 ```
 
 DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROVIDER=deepseek` 和 `RECPRO_LLM_API_KEY` 后才允许构造。密钥不能写入仓库、Prompt Bundle、Agent 消息、日志、实验 Manifest 或验证 artifact；仓库不保存真实密钥。
@@ -40,7 +40,7 @@ RECPRO_LLM_PROVIDER=deepseek
 
 ## 2. Prompt Bundle 契约
 
-主文件为 [`contracts/prompts/rec-prompts-v1.0.0.json`](../contracts/prompts/rec-prompts-v1.0.0.json)，Schema 为 [`contracts/prompts/prompt-bundle.schema.json`](../contracts/prompts/prompt-bundle.schema.json)。加载器 [`backend/app/llm/prompts.py`](../backend/app/llm/prompts.py) 会执行以下门禁：
+当前主文件为 [`contracts/prompts/rec-prompts-v1.0.1.json`](../contracts/prompts/rec-prompts-v1.0.1.json)，Schema 为 [`contracts/prompts/prompt-bundle.schema.json`](../contracts/prompts/prompt-bundle.schema.json)。`v1.0.0` 作为不可变历史版本保留；`v1.0.1` 使 Explanation 的 `evidence_refs` Schema 与运行时证据约束一致。加载器 [`backend/app/llm/prompts.py`](../backend/app/llm/prompts.py) 会执行以下门禁：
 
 - 文件必须位于仓库根目录以内，并通过 strict JSON 和 Draft 2020-12 Schema；
 - `prompt_id`、能力、Agent、版本必须唯一且可追溯；
@@ -98,17 +98,18 @@ PYTHONPATH=. .venv-g1-final-py311/bin/python scripts/validate_runtime_env.py \
 
 验证失败时不得修改旧 artifact 或旧 Prompt Bundle；应新建版本文件和新的验证记录。任何真实 DeepSeek 调用都必须先记录数据脱敏、学校/论文伦理要求、费用上限、超时、回退和审计方案，再由用户明确授权。
 
-获批后的首个真实调用只允许使用固定非敏感 fixture，并且必须显式提供确认字符串；该命令只调用 `intent.classify`，不连接任何数据库：
+获批后的真实能力探针只允许使用固定非敏感 fixture，并且必须显式提供确认字符串；`LLM_FIXTURE_CALL_CAPABILITY` 仅可取 `intent` 或 `explanation`，不连接任何数据库：
 
 ```bash
 make PYTHON=.venv-g1-final-py311/bin/python \
   LLM_REAL_CALL_ENV_FILE=.env.host \
   LLM_FIXTURE_CALL_RUN_ID=llm-fixture-call-<unique-id> \
   LLM_FIXTURE_CALL_CONFIRM=YES_REAL_EXTERNAL_LLM \
+  LLM_FIXTURE_CALL_CAPABILITY=intent \
   execute-llm-fixture-call
 ```
 
-命令不会保存原始响应或密钥，只保存校验后的意图枚举、Prompt/请求审计字段、延迟和安全计数；运行前后不执行 MySQL/Neo4j/Chroma 操作、不 claim Outbox。
+命令不会保存原始响应或密钥。Intent 只保存校验后的意图枚举；Explanation 只保存文本长度、白名单证据引用和引用标记校验结果。两者均保存 Prompt/请求审计字段、延迟和安全计数；运行前后不执行 MySQL/Neo4j/Chroma 操作、不 claim Outbox。
 
 ## 6. 首次真实调用结果
 
@@ -139,4 +140,4 @@ make PYTHON=.venv-g1-final-py311/bin/python \
 
 获批计划 `28d050ce-a922-5480-b326-38fdf8984fdf` 已通过真实 HTTP 执行和独立对账：首次 POST=`201`，DeepSeek Intent 调用 1 次、无 fallback，任务 `COMPLETED` 并返回 8 项；相同请求重放=`200`、零新增且未再次调用模型。MySQL 精确追加 56 行，Neo4j/Chroma 零写入，删除为 0。证据位于 `artifacts/verification/g4/g4-deepseek-http-apply-20260812-001/` 与 `g4-deepseek-http-reconcile-20260812-001/`。
 
-下一 LLM Gate 是 `explanation.render`：代码和独立配置开关已接好，但在批准最大外部调用次数、输入 Evidence Bundle 和回退策略的新计划之前，不把它宣称为真实运行 PASS。画像、语义探测、召回、策略和排序 Agent 使用真实数据库/图/向量/确定性算法完成各自职责，不属于 Mock LLM，也不应为了“全 LLM”而把事实计算交给生成模型。
+`explanation.render` 的固定非敏感真实探针已完成。`llm-explanation-fixture-20260812-001` 因旧 Bundle 的输出 Schema 未要求 `evidence_refs` 而安全失败，数据库与删除均为 0；失败 artifact 保留。新建而非覆盖的 `rec-prompts-v1.0.1.json` 同时要求 `text`/`evidence_refs`，并明确每个引用必须以英文方括号嵌入文本；`llm-explanation-fixture-20260812-002` 随后以 1 次 DeepSeek 请求 PASS，约 `3153ms`，引用白名单与标记校验通过，模型原文未落盘。Explanation Agent 现以最多 4 路有界并发处理排序项并保持原排序；完整 HTTP 持久化仍需新的 ChangePlan 限定 8 条解释、最多 16 次模型尝试和数据库增量。画像、语义探测、召回、策略和排序 Agent 使用真实数据库/图/向量/确定性算法完成各自职责，不属于 Mock LLM，也不应为了“全 LLM”而把事实计算交给生成模型。

@@ -213,31 +213,34 @@ class LLMExplanationAgent:
     name = "ExplanationAgent"
     version = "explanation-llm-prompt-v1"
 
-    def __init__(self, provider: TextCapabilityProvider) -> None:
+    def __init__(self, provider: TextCapabilityProvider, *, max_concurrency: int = 4) -> None:
+        if isinstance(max_concurrency, bool) or not 1 <= max_concurrency <= 8:
+            raise ValueError("max_concurrency must be between 1 and 8")
         self._provider = provider
+        self._max_concurrency = max_concurrency
 
-    async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
-        raw_items = message.payload.get("ranked_items", [])
-        if not isinstance(raw_items, list):
-            raw_items = []
-        explanations: list[dict[str, object]] = []
-        fallback_used = False
-        warnings: list[str] = []
-        attempts = 0
-        for raw_item in raw_items:
-            item = dict(raw_item) if isinstance(raw_item, dict) else {}
-            resource_id = int(item.get("resource_id", 0))
-            rank_no = int(item.get("rank_no", len(explanations) + 1))
-            allowed_refs = [
-                str(item.get("evidence_ref", "")).strip()
-            ] if str(item.get("evidence_ref", "")).strip() else []
-            fallback_text, fallback_refs = _template_explanation(item)
-            try:
+    async def _render_item(
+        self,
+        raw_item: object,
+        *,
+        fallback_rank_no: int,
+        deadline_at: datetime | None,
+        semaphore: asyncio.Semaphore,
+    ) -> tuple[dict[str, object], bool, tuple[str, ...], int]:
+        item = dict(raw_item) if isinstance(raw_item, dict) else {}
+        resource_id = int(item.get("resource_id", 0))
+        rank_no = int(item.get("rank_no", fallback_rank_no))
+        allowed_refs = [
+            str(item.get("evidence_ref", "")).strip()
+        ] if str(item.get("evidence_ref", "")).strip() else []
+        fallback_text, fallback_refs = _template_explanation(item)
+        try:
+            async with semaphore:
                 timeout = 5.0
-                if message.deadline_at is not None:
+                if deadline_at is not None:
                     timeout = max(
                         0.001,
-                        (message.deadline_at - datetime.now(UTC)).total_seconds(),
+                        (deadline_at - datetime.now(UTC)).total_seconds(),
                     )
                 llm_result = await asyncio.wait_for(
                     self._provider.render_explanation(
@@ -251,52 +254,80 @@ class LLMExplanationAgent:
                     ),
                     timeout=timeout,
                 )
-                attempts += max(1, int(llm_result.attempts))
-                payload = llm_result.payload
-                text = payload.get("text")
-                refs = payload.get("evidence_refs")
-                if (
-                    not isinstance(text, str)
-                    or not text.strip()
-                    or len(text.strip()) > 240
-                    or not isinstance(refs, list)
-                    or not refs
-                    or any(
-                        not isinstance(ref, str)
-                        or ref not in allowed_refs
-                        or f"[{ref}]" not in text
-                        for ref in refs
-                    )
-                ):
-                    raise ValueError("LLM explanation failed evidence validation")
-                explanations.append(
-                    {
-                        "resource_id": resource_id,
-                        "rank_no": rank_no,
-                        "summary": text.strip(),
-                        "evidence_refs": list(refs),
-                    }
+            attempts = max(1, int(llm_result.attempts))
+            payload = llm_result.payload
+            text = payload.get("text")
+            refs = payload.get("evidence_refs")
+            if (
+                not isinstance(text, str)
+                or not text.strip()
+                or len(text.strip()) > 240
+                or not isinstance(refs, list)
+                or not refs
+                or any(
+                    not isinstance(ref, str)
+                    or ref not in allowed_refs
+                    or f"[{ref}]" not in text
+                    for ref in refs
                 )
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                fallback_used = True
-                warnings.append("LLM_EXPLANATION_FALLBACK")
-                warnings.append("EVIDENCE_VALIDATION_FAILED")
-                explanations.append(
-                    {
-                        "resource_id": resource_id,
-                        "rank_no": rank_no,
-                        "summary": fallback_text,
-                        "evidence_refs": fallback_refs,
-                    }
+            ):
+                raise ValueError("LLM explanation failed evidence validation")
+            return (
+                {
+                    "resource_id": resource_id,
+                    "rank_no": rank_no,
+                    "summary": text.strip(),
+                    "evidence_refs": list(refs),
+                },
+                False,
+                (),
+                attempts,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return (
+                {
+                    "resource_id": resource_id,
+                    "rank_no": rank_no,
+                    "summary": fallback_text,
+                    "evidence_refs": fallback_refs,
+                },
+                True,
+                ("LLM_EXPLANATION_FALLBACK", "EVIDENCE_VALIDATION_FAILED"),
+                0,
+            )
+
+    async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
+        raw_items = message.payload.get("ranked_items", [])
+        if not isinstance(raw_items, list):
+            raw_items = []
+        semaphore = asyncio.Semaphore(self._max_concurrency)
+        rendered = await asyncio.gather(
+            *(
+                self._render_item(
+                    raw_item,
+                    fallback_rank_no=index,
+                    deadline_at=message.deadline_at,
+                    semaphore=semaphore,
                 )
+                for index, raw_item in enumerate(raw_items, start=1)
+            )
+        )
+        explanations = [item[0] for item in rendered]
+        fallback_used = any(item[1] for item in rendered)
+        warnings = [warning for item in rendered for warning in item[2]]
+        attempts = sum(item[3] for item in rendered)
         unique_warnings = tuple(dict.fromkeys(warnings))
         return _result(
             message,
             agent_name=self.name,
             version=self.version if not fallback_used else "explanation-template-fallback-v1",
-            payload={"explanations": explanations, "provider": "DEEPSEEK" if not fallback_used else "TEMPLATE"},
+            payload={
+                "explanations": explanations,
+                "provider": "DEEPSEEK" if not fallback_used else "TEMPLATE",
+                "llm_attempts": attempts,
+            },
             confidence=0.78 if explanations and not fallback_used else 0.55,
             evidence_ref="rule:explanation-template-fallback-v1" if fallback_used else "llm:explanation.render",
             warnings=unique_warnings,

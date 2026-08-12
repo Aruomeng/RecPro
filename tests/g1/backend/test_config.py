@@ -27,7 +27,7 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual(
             DEFAULT_PROMPT_BUNDLE_SHA256,
             hashlib.sha256(
-                (PROJECT_ROOT / "contracts/prompts/rec-prompts-v1.0.0.json").read_bytes()
+                (PROJECT_ROOT / "contracts/prompts/rec-prompts-v1.0.1.json").read_bytes()
             ).hexdigest(),
         )
 

@@ -66,6 +66,7 @@ REQUIRED_DOCUMENTS = {
     "contracts/config/examples/rec-1.0.0.json",
     "contracts/prompts/prompt-bundle.schema.json",
     "contracts/prompts/rec-prompts-v1.0.0.json",
+    "contracts/prompts/rec-prompts-v1.0.1.json",
     "contracts/openapi/openapi-v1.json",
     "contracts/verification/g8-readonly-fault-matrix.schema.json",
     "contracts/verification/g8-boundary-change-plan.schema.json",
@@ -667,7 +668,7 @@ def validate_prompt_bundle_contract(
 ) -> list[ContractIssue]:
     """Validate the committed prompt instance beyond JSON Schema syntax."""
 
-    path = "contracts/prompts/rec-prompts-v1.0.0.json"
+    path = "contracts/prompts/rec-prompts-v1.0.1.json"
     document = documents.get(path)
     if document is None:
         return []

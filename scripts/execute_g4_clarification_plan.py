@@ -201,11 +201,11 @@ def build_settings(values: Mapping[str, str]):
         config_bundle_sha256=values["RECPRO_CONFIG_BUNDLE_SHA256"],
         config_bundle_version=values["RECPRO_CONFIG_BUNDLE_VERSION"],
         prompt_bundle_path=values.get(
-            "RECPRO_PROMPT_BUNDLE_PATH", "contracts/prompts/rec-prompts-v1.0.0.json"
+            "RECPRO_PROMPT_BUNDLE_PATH", "contracts/prompts/rec-prompts-v1.0.1.json"
         ),
         prompt_bundle_sha256=values.get(
             "RECPRO_PROMPT_BUNDLE_SHA256",
-            "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a",
+            "1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a",
         ),
         prompt_bundle_version=values.get("RECPRO_PROMPT_BUNDLE_VERSION", "prompt-v1"),
         mysql_host="127.0.0.1",

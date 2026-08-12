@@ -27,7 +27,7 @@ class HostEnvSyncTests(unittest.TestCase):
             "RECPRO_LLM_TIMEOUT_SECONDS": "20",
             "RECPRO_LLM_MAX_OUTPUT_TOKENS": "512",
             "RECPRO_PROMPT_BUNDLE_VERSION": "prompt-v1",
-            "RECPRO_PROMPT_BUNDLE_PATH": "contracts/prompts/rec-prompts-v1.0.0.json",
+            "RECPRO_PROMPT_BUNDLE_PATH": "contracts/prompts/rec-prompts-v1.0.1.json",
             "RECPRO_PROMPT_BUNDLE_SHA256": "a" * 64,
         }
 

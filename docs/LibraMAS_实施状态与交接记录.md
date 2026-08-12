@@ -2034,6 +2034,22 @@ A02 执行边界修复：旧 G7 执行器只完成首写和 GET，不能证明�
 后续代码：Readiness 改为对 G4 Neo4j/Chroma 做只读能力探测并报告实际 LLM provider；新增 RECPRO_G4_LLM_EXPLANATION_ENABLED 独立闸门，Intent/Explanation 可分别注入 DeepSeek。Explanation 尚未做真实外部运行，必须先冻结 Evidence Bundle 与最大调用次数。
 ```
 
+## G4 Explanation 真实能力与有界并发
+
+```text
+交接ID：G4-EXPLANATION-REAL-20260812-001
+Gate：DeepSeek explanation.render 固定探针与多条解释稳定性
+状态：REAL_FIXTURE_PASS / HTTP_CHANGE_PLAN_PENDING
+时间：2026-08-12（Asia/Shanghai）
+目标：证明 Explanation 真实模型输出经过白名单证据引用验证，并避免 8 个推荐项串行等待。
+Prompt 版本：旧 rec-prompts-v1.0.0.json 完整保留；新增 rec-prompts-v1.0.1.json，SHA-256=1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a，bundle_version=prompt-v1。
+真实结果：首次 llm-explanation-fixture-20260812-001 因旧 Schema 与运行时 evidence_refs 要求不一致安全失败；修订后 llm-explanation-fixture-20260812-002=PASS，DeepSeek deepseek-v4-flash、attempts=1、latency≈3153ms、白名单引用和文本方括号标记全部通过。
+代码结果：fixture 支持 intent/explanation capability；Explanation Agent 最多 4 路有界并发，保持 rank 顺序，单项失败只回退该项模板；输出审计 llm_attempts。
+安全计数：两次探针均 database/Neo4j/Chroma reads+writes=0、Outbox claims=0、files_deleted=0、database_physical_deletions=0、artifact_overwrites=0；不保存模型原文或密钥。
+未解决风险：完整 HTTP 推荐尚未同时启用 Intent 与 8 条 Explanation；执行可能产生最多 16 次外部尝试和新的 MySQL 追加事实，必须在当前 clean commit 上生成并批准新 ChangePlan。
+下一步唯一动作：完成全量离线回归、提交推送；生成绑定新提交与新 Prompt hash 的 Intent+Explanation HTTP ChangePlan，批准前不发业务 POST。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

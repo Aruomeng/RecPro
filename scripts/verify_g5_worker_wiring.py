@@ -40,7 +40,7 @@ def _read_worker_settings(values: Mapping[str, str]) -> AppSettings:
         config_bundle_sha256=values.get("RECPRO_CONFIG_BUNDLE_SHA256", ""),
         prompt_bundle_version=values.get("RECPRO_PROMPT_BUNDLE_VERSION", "prompt-v1"),
         prompt_bundle_path=values.get(
-            "RECPRO_PROMPT_BUNDLE_PATH", "contracts/prompts/rec-prompts-v1.0.0.json"
+            "RECPRO_PROMPT_BUNDLE_PATH", "contracts/prompts/rec-prompts-v1.0.1.json"
         ),
         prompt_bundle_sha256=values.get("RECPRO_PROMPT_BUNDLE_SHA256", ""),
         mysql_host=values.get("RECPRO_MYSQL_HOST", "mysql"),

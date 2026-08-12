@@ -18,9 +18,9 @@ SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 LLM_KEY_PATTERN = re.compile(r"^\S{16,256}$")
 WORKER_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 WORKER_FORMULA_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
-DEFAULT_PROMPT_BUNDLE_PATH = "contracts/prompts/rec-prompts-v1.0.0.json"
+DEFAULT_PROMPT_BUNDLE_PATH = "contracts/prompts/rec-prompts-v1.0.1.json"
 DEFAULT_PROMPT_BUNDLE_SHA256 = (
-    "bad547702e4c3b42395280ea44781e60992a85f981605afbcd29aa13d33db94a"
+    "1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a"
 )
 EXAMPLE_PROJECT_NAME = "libramas-g1-researcher01-local01"
 PORT_KEYS = (

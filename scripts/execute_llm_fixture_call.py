@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Make one explicitly confirmed, non-sensitive DeepSeek fixture call.
 
-The command is intentionally narrow: it exercises only ``intent.classify``
+The command is intentionally narrow: it exercises one selected capability
 with a fixed research fixture.  It never connects to a database, starts an
 application, claims Outbox rows, sends user history, or stores the raw model
 response.  A new run id is required so evidence is append-only.
@@ -27,8 +27,13 @@ from scripts.verify_llm_real_call_readiness import resolve_env_file
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
-FIXTURE_ID = "intent-classify-research-fixture-v1"
-FIXTURE_TEXT = "请推荐与多智能体系统和智慧图书馆相关的图书"
+INTENT_FIXTURE_ID = "intent-classify-research-fixture-v1"
+INTENT_FIXTURE_TEXT = "请推荐与多智能体系统和智慧图书馆相关的图书"
+EXPLANATION_FIXTURE_ID = "explanation-render-evidence-fixture-v1"
+EXPLANATION_FIXTURE = {
+    "factors": ["召回通道：MYSQL+VECTOR", "排序位置：1"],
+    "evidence_refs": ["resource:book:6452"],
+}
 ALLOWED_INTENTS = {
     "BOOK_RECOMMENDATION",
     "PAPER_RECOMMENDATION",
@@ -52,10 +57,31 @@ def _write_report(run_id: str, report: dict[str, Any]) -> Path:
     return output_path
 
 
-async def execute(*, env_file: Path, run_id: str, confirmation: str) -> dict[str, Any]:
+def _fixture_metadata(capability: str) -> dict[str, Any]:
+    if capability == "intent":
+        serialized = INTENT_FIXTURE_TEXT
+        fixture_id = INTENT_FIXTURE_ID
+    elif capability == "explanation":
+        serialized = json.dumps(EXPLANATION_FIXTURE, ensure_ascii=False, sort_keys=True)
+        fixture_id = EXPLANATION_FIXTURE_ID
+    else:
+        raise ValueError("capability must be intent or explanation")
+    return {
+        "fixture_id": fixture_id,
+        "capability": capability,
+        "input_sha256": hashlib.sha256(serialized.encode("utf-8")).hexdigest(),
+        "input_chars": len(serialized),
+        "sensitive_user_data": False,
+    }
+
+
+async def execute(
+    *, env_file: Path, run_id: str, confirmation: str, capability: str = "intent"
+) -> dict[str, Any]:
     if confirmation != "YES_REAL_EXTERNAL_LLM":
         raise ValueError("an exact confirmation is required for the external call")
     run_id = validate_run_id(run_id)
+    fixture_metadata = _fixture_metadata(capability)
     env_file = resolve_env_file(env_file)
     settings = AppSettings(_env_file=str(env_file))
     if settings.app_env == "production":
@@ -71,23 +97,45 @@ async def execute(*, env_file: Path, run_id: str, confirmation: str) -> dict[str
 
     started = time.monotonic()
     try:
-        result = await provider.classify_intent(FIXTURE_TEXT)
+        if capability == "intent":
+            result = await provider.classify_intent(INTENT_FIXTURE_TEXT)
+            intent = result.payload.get("intent")
+            if intent not in ALLOWED_INTENTS:
+                raise ValueError("provider returned an unsupported intent")
+            validated_result: dict[str, Any] = {"intent": intent}
+        else:
+            result = await provider.render_explanation(EXPLANATION_FIXTURE)
+            rendered_text = result.payload.get("text")
+            evidence_refs = result.payload.get("evidence_refs")
+            allowed_refs = EXPLANATION_FIXTURE["evidence_refs"]
+            if (
+                not isinstance(rendered_text, str)
+                or not rendered_text.strip()
+                or len(rendered_text.strip()) > 240
+                or not isinstance(evidence_refs, list)
+                or not evidence_refs
+                or any(
+                    not isinstance(reference, str)
+                    or reference not in allowed_refs
+                    or f"[{reference}]" not in rendered_text
+                    for reference in evidence_refs
+                )
+            ):
+                raise ValueError("provider returned an invalid evidence-constrained explanation")
+            # Do not retain generated prose: only record its validated shape.
+            validated_result = {
+                "text_chars": len(rendered_text.strip()),
+                "evidence_refs": evidence_refs,
+                "all_evidence_markers_present": True,
+            }
         elapsed_ms = round((time.monotonic() - started) * 1000, 3)
-        intent = result.payload.get("intent")
-        if intent not in ALLOWED_INTENTS:
-            raise ValueError("provider returned an unsupported intent")
         attempts = int(result.attempts)
         report: dict[str, Any] = {
             "schema_version": "llm-real-call-evidence-v1",
             "status": "PASS",
             "run_id": run_id,
             "checked_at": datetime.now(UTC).isoformat(),
-            "fixture": {
-                "fixture_id": FIXTURE_ID,
-                "input_sha256": hashlib.sha256(FIXTURE_TEXT.encode("utf-8")).hexdigest(),
-                "input_chars": len(FIXTURE_TEXT),
-                "sensitive_user_data": False,
-            },
+            "fixture": fixture_metadata,
             "provider": {
                 "provider": result.provider,
                 "model": result.model,
@@ -99,7 +147,7 @@ async def execute(*, env_file: Path, run_id: str, confirmation: str) -> dict[str
                 "attempts": attempts,
                 "latency_ms": elapsed_ms,
             },
-            "result": {"intent": intent},
+            "result": validated_result,
             "safety": {
                 "external_llm_requests": attempts,
                 "network_requests": attempts,
@@ -122,12 +170,7 @@ async def execute(*, env_file: Path, run_id: str, confirmation: str) -> dict[str
             "status": "FAIL",
             "run_id": run_id,
             "checked_at": datetime.now(UTC).isoformat(),
-            "fixture": {
-                "fixture_id": FIXTURE_ID,
-                "input_sha256": hashlib.sha256(FIXTURE_TEXT.encode("utf-8")).hexdigest(),
-                "input_chars": len(FIXTURE_TEXT),
-                "sensitive_user_data": False,
-            },
+            "fixture": fixture_metadata,
             "provider": {
                 "provider": settings.llm_provider,
                 "model": settings.llm_model,
@@ -160,6 +203,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--confirm", required=True)
+    parser.add_argument("--capability", choices=("intent", "explanation"), default="intent")
     return parser
 
 
@@ -171,6 +215,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 env_file=args.env_file,
                 run_id=args.run_id,
                 confirmation=args.confirm,
+                capability=args.capability,
             )
         )
     except (OSError, ValueError, RuntimeError, TimeoutError) as exc:

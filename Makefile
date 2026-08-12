@@ -148,6 +148,7 @@ LLM_REAL_CALL_READINESS_RUN_ID ?=
 LLM_REAL_CALL_ENV_FILE ?= .env.host
 LLM_FIXTURE_CALL_RUN_ID ?=
 LLM_FIXTURE_CALL_CONFIRM ?=
+LLM_FIXTURE_CALL_CAPABILITY ?= intent
 G4_REAL_LLM_READONLY_RUN_ID ?=
 G4_REAL_LLM_READONLY_CONFIRM ?=
 G4_REAL_LLM_READONLY_COMPOSE_ENV_FILE ?= .env.compose
@@ -396,7 +397,7 @@ verify-llm-real-call-readiness:
 execute-llm-fixture-call:
 	@test -n "$(LLM_FIXTURE_CALL_RUN_ID)" || { echo "LLM_FIXTURE_CALL_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	@test "$(LLM_FIXTURE_CALL_CONFIRM)" = "YES_REAL_EXTERNAL_LLM" || { echo "LLM_FIXTURE_CALL_CONFIRM=YES_REAL_EXTERNAL_LLM is required"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_llm_fixture_call --env-file "$(LLM_REAL_CALL_ENV_FILE)" --run-id "$(LLM_FIXTURE_CALL_RUN_ID)" --confirm "$(LLM_FIXTURE_CALL_CONFIRM)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_llm_fixture_call --env-file "$(LLM_REAL_CALL_ENV_FILE)" --run-id "$(LLM_FIXTURE_CALL_RUN_ID)" --confirm "$(LLM_FIXTURE_CALL_CONFIRM)" --capability "$(LLM_FIXTURE_CALL_CAPABILITY)"
 
 verify-g4-real-llm-readonly:
 	@test -n "$(G4_REAL_LLM_READONLY_RUN_ID)" || { echo "G4_REAL_LLM_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }

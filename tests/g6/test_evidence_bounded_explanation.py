@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import asyncio
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -80,6 +81,69 @@ class EvidenceBoundedExplanationTests(unittest.IsolatedAsyncioTestCase):
             explanation["evidence_refs"],
         )
         self.assertEqual("TEMPLATE", result.payload["provider"])
+
+    async def test_multiple_explanations_are_bounded_concurrent_and_keep_rank_order(self) -> None:
+        class ConcurrentProvider:
+            def __init__(self) -> None:
+                self.active = 0
+                self.peak = 0
+
+            async def render_explanation(self, evidence: dict[str, object]) -> LLMResult:
+                self.active += 1
+                self.peak = max(self.peak, self.active)
+                await asyncio.sleep(0.01)
+                self.active -= 1
+                reference = str(evidence["evidence_refs"][0])
+                return LLMResult(
+                    provider="deepseek",
+                    model="deepseek-v4-flash",
+                    prompt_version="prompt-v1",
+                    payload={
+                        "text": f"基于已验证证据 [{reference}]。",
+                        "evidence_refs": [reference],
+                    },
+                    prompt_id="explanation.render",
+                    attempts=1,
+                )
+
+        message = explanation_message()
+        ranked_items = [
+            {
+                "resource_id": resource_id,
+                "rank_no": rank_no,
+                "channel": "MYSQL+VECTOR",
+                "evidence_ref": f"catalog:resource:{resource_id}:metadata:v1",
+            }
+            for rank_no, resource_id in enumerate((11, 12, 13, 14, 15), start=1)
+        ]
+        message = AgentMessage(
+            schema_version=message.schema_version,
+            message_id=message.message_id,
+            trace_id=message.trace_id,
+            task_id=message.task_id,
+            sender=message.sender,
+            receiver=message.receiver,
+            message_type=message.message_type,
+            payload={"ranked_items": ranked_items},
+            deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+            idempotency_key=message.idempotency_key,
+            context_version=message.context_version,
+            created_at=message.created_at,
+        )
+        provider = ConcurrentProvider()
+
+        result = await LLMExplanationAgent(provider, max_concurrency=2).handle(message)
+
+        self.assertEqual(2, provider.peak)
+        self.assertEqual([11, 12, 13, 14, 15], [item["resource_id"] for item in result.payload["explanations"]])
+        self.assertFalse(result.fallback_used)
+        self.assertEqual(5, result.payload["llm_attempts"])
+
+    def test_concurrency_limit_is_fail_closed(self) -> None:
+        provider = FaultInjectingExplanationProvider()
+        for invalid in (0, 9, True):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                LLMExplanationAgent(provider, max_concurrency=invalid)
 
 
 if __name__ == "__main__":
