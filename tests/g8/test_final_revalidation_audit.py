@@ -49,6 +49,8 @@ class FinalRevalidationAuditTest(unittest.TestCase):
         self.assertEqual("PASS", cases[0]["final_revalidation"])
         self.assertEqual("PENDING", cases[1]["final_revalidation"])
         self.assertNotIn("final_runtime_evidence_not_supplied", cases[0]["blockers"])
+        self.assertIn("final_runtime_evidence_pending", cases[1]["blockers"])
+        self.assertIn("separate_exact_change_plan_required", cases[1]["blockers"])
 
     def test_audit_and_runtime_schemas_are_valid_contracts(self) -> None:
         self.assertEqual([], _validate_instance(AUDIT_SCHEMA_PATH, {

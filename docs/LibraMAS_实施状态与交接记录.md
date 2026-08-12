@@ -1986,15 +1986,15 @@ Gate：G4 动态多智能体闭环（Intent-only DeepSeek 只读接线）
 ```text
 交接ID：G8-READONLY-FAULT-MATRIX-IMPLEMENTATION-20260812-001
 Gate：G8 A01—A25 final revalidation（17 项无授权写入路径）
-状态：CODE_PASS / EVIDENCE_RUN_PENDING_CLEAN_COMMIT
+状态：PASS_WITH_BLOCKERS / FINAL_PASS_17 / FINAL_PENDING_8
 时间：2026-08-12（Asia/Shanghai）
 目标：把分散的只读/故障测试收敛为一个与当前 Git 提交和 G8 计划绑定的执行器，生成可被最终审计严格消费的运行证据；八个追加型用例继续保持 PENDING。
 新增文件：`contracts/verification/g8-readonly-fault-matrix.schema.json`、`scripts/verify_g8_readonly_fault_matrix.py`、`tests/g8/test_readonly_fault_matrix.py`、`tests/fixtures/g8/runtime-artifact.json`。
 修改文件：`scripts/verify_g8_final_revalidation_plan.py` 增加 PASS artifact 的路径、存在性、SHA-256、schema version、Git/plan 绑定和 ChangePlan 校验；`Makefile` 增加 `verify-g8-readonly-fault-matrix`；`scripts/validate_contracts.py` 冻结新证据 Schema。
 执行范围：A01/A05/A06/A11/A12/A13/A14/A15/A16/A17/A18/A19/A20/A21/A22/A24/A25；从计划中的 test refs 推导 13 个隔离模块，使用 fake adapters、规则 Agent 和故障注入执行。A02/A03/A04/A07/A08/A09/A10/A23 不会被执行器提升为 PASS。
-前置验证：13 个目标模块共 61 项测试 PASS；G8 定向 17 项 PASS；契约 28 documents PASS；`git diff --check` PASS。
+运行证据：`artifacts/verification/g8/g8-readonly-fault-matrix-20260812-001/readonly-fault-matrix.json` 与同目录 `final-runtime-evidence.json` 已在 clean commit 上生成；13 个目标模块共 61 项测试 PASS，17 项 final PASS、8 项 PENDING。首次聚合审计 `g8-final-revalidation-audit-20260812-003` 数值为 17/8，但发现计划旧总括 blocker 仍残留，已修正后重新生成最终证据，不将该文案瑕疵误报为最终审计。
 安全边界：执行器从子进程环境移除外部 LLM key，强制 provider=mock、production/recommendation/feedback HTTP=false、Worker=disabled；不连接数据库、Neo4j、Chroma，不 claim Outbox，不发送外部网络请求，不删除或覆盖文件。
-下一步唯一动作：提交本实现后，以新 run_id 生成与 clean commit 匹配的 G8 final plan，运行 `verify-g8-readonly-fault-matrix` 并将 `final-runtime-evidence.json` 交给最终审计；确认 final_pass=17/final_pending=8 后再为八个追加型案例分批生成精确 ChangePlan。
+下一步唯一动作：使用修正后的审计器在最终 clean commit 上重新生成计划、只读矩阵和审计；确认旧总括 blocker 消失、八个 PENDING 用例逐项显示 `separate_exact_change_plan_required` 后，再为八个追加型案例分批生成精确 ChangePlan。
 ```
 
 ## 阶段交接模板

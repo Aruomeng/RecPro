@@ -271,7 +271,13 @@ def _case_results(
             final_status = "FAIL"
         if evidence is None:
             blockers.append("final_runtime_evidence_not_supplied")
-        if case["authorization"] == "SEPARATE_EXACT_CHANGE_PLAN" and evidence is None:
+        elif final_status == "PENDING":
+            blockers.append("final_runtime_evidence_pending")
+        if (
+            case["authorization"] == "SEPARATE_EXACT_CHANGE_PLAN"
+            and (evidence is None or evidence.get("change_plan") is None)
+            and final_status != "PASS"
+        ):
             blockers.append("separate_exact_change_plan_required")
         return_item = {
             "case_id": case["case_id"],
@@ -312,7 +318,14 @@ def build_audit(
     current_commit = _git("rev-parse", "HEAD")
     cases = _case_results(plan, runtime_evidence)
     plan_git_matches = plan["git_commit"] == current_commit
-    blockers = list(plan["blockers"])
+    blockers = [
+        item
+        for item in plan["blockers"]
+        if not (
+            runtime_evidence is not None
+            and item == "A01-A25 final runtime evidence has not yet been executed."
+        )
+    ]
     if not plan_git_matches:
         blockers.append("selected plan Git commit differs from current checkout")
     if plan_issues:
@@ -335,6 +348,11 @@ def build_audit(
     final_pass = sum(item["final_revalidation"] == "PASS" for item in cases)
     final_fail = sum(item["final_revalidation"] == "FAIL" for item in cases)
     final_pending = sum(item["final_revalidation"] == "PENDING" for item in cases)
+    if runtime_evidence is not None and final_pending:
+        pending_ids = ",".join(
+            item["case_id"] for item in cases if item["final_revalidation"] == "PENDING"
+        )
+        blockers.append(f"final runtime cases remain PENDING: {pending_ids}")
     read_only_ready = sum(
         item["execution_mode"] == "READ_ONLY_RUNTIME" and item["offline_refs_valid"] and item["runtime_refs_valid"]
         for item in cases
