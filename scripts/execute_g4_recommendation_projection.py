@@ -8,8 +8,9 @@ hashes, the isolated MySQL identity/least-privilege grants, and all table
 counts immediately before invoking the opt-in G4 service.  The service owns
 one MySQL transaction for the task, Agent facts, candidates, record, items,
 policy and trace.  This command never migrates, seeds, updates, deletes, or
-writes Neo4j/Chroma.  An external DeepSeek Intent call is possible only when
-the reviewed plan binds the secret-free policy and both gates are explicit.
+writes Neo4j/Chroma.  External DeepSeek Intent/Explanation calls are possible
+only when the reviewed plan binds each secret-free policy and every gate is
+explicit.
 """
 
 from __future__ import annotations
@@ -34,6 +35,7 @@ from scripts.g4_projection_contract import (
     validate_g4_projection_request_matches_query_spec,
 )
 from scripts.g4_llm_plan_policy import (
+    load_deepseek_explanation_policy,
     load_deepseek_intent_policy,
     policy_hash,
 )
@@ -78,10 +80,21 @@ DEEPSEEK_PLAN_INTENT = (
     "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
     "Intent classification for explicit review; no apply is authorized by this plan."
 )
+DEEPSEEK_EXPLANATION_PLAN_INTENT = (
+    "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
+    "Intent classification and evidence-constrained Explanation rendering for explicit "
+    "review; no apply is authorized by this plan."
+)
 DEEPSEEK_PRECONDITIONS = {
     "DeepSeek is capability-scoped to IntentUnderstandingAgent; Explanation remains the evidence template",
     "the only external payload is the frozen non-sensitive request input_text and bounded intent prompt",
     "at most two DeepSeek attempts are authorized and raw provider responses are not persisted",
+    "same-request HTTP replay must add zero rows and must not call DeepSeek again",
+}
+DEEPSEEK_EXPLANATION_PRECONDITIONS = {
+    "DeepSeek is capability-scoped to IntentUnderstandingAgent and ExplanationAgent only",
+    "Intent receives only frozen non-sensitive input_text; Explanation receives only ranked factors and allowlisted evidence refs",
+    "every successful Explanation must use only allowlisted refs and include each used ref as an exact bracketed marker",
     "same-request HTTP replay must add zero rows and must not call DeepSeek again",
 }
 
@@ -196,7 +209,27 @@ def validate_plan(
         raise ValueError(
             "G4 projection ChangePlan max_changes must equal its bounded target deltas"
         )
-    if plan_enables_deepseek_intent(plan):
+    if plan_enables_deepseek_explanation(plan):
+        if not plan_enables_deepseek_intent(plan):
+            raise ValueError("DeepSeek Explanation plan must also bind Intent")
+        if plan.get("intent") != DEEPSEEK_EXPLANATION_PLAN_INTENT:
+            raise ValueError("DeepSeek Explanation plan intent is not the exact bounded policy")
+        preconditions = set(plan.get("preconditions", []))
+        if not DEEPSEEK_EXPLANATION_PRECONDITIONS.issubset(preconditions):
+            raise ValueError("DeepSeek Explanation plan is missing external-call preconditions")
+        request_payload = plan.get("request_payload", {})
+        limit = int(request_payload.get("limit", 0)) if isinstance(request_payload, dict) else 0
+        expected_attempt_bound = (
+            f"at most two Intent attempts plus {limit * 2} Explanation attempts are authorized; "
+            "raw provider responses are not persisted"
+        )
+        expected_concurrency = (
+            f"Explanation is bounded to {limit} ranked items with four-way concurrency and "
+            "per-item evidence-template fallback"
+        )
+        if expected_attempt_bound not in preconditions or expected_concurrency not in preconditions:
+            raise ValueError("DeepSeek Explanation plan limits do not match the frozen request")
+    elif plan_enables_deepseek_intent(plan):
         if plan.get("intent") != DEEPSEEK_PLAN_INTENT:
             raise ValueError("DeepSeek G4 plan intent is not the exact bounded policy")
         if not DEEPSEEK_PRECONDITIONS.issubset(set(plan.get("preconditions", []))):
@@ -206,6 +239,10 @@ def validate_plan(
 
 def plan_enables_deepseek_intent(plan: Mapping[str, Any]) -> bool:
     return "deepseek_intent_policy" in plan.get("input_hashes", {})
+
+
+def plan_enables_deepseek_explanation(plan: Mapping[str, Any]) -> bool:
+    return "deepseek_explanation_policy" in plan.get("input_hashes", {})
 
 
 def validate_git_boundary(plan: Mapping[str, Any]) -> str:
@@ -473,6 +510,7 @@ def build_settings(
     values: Mapping[str, str],
     *,
     enable_deepseek_intent: bool,
+    enable_deepseek_explanation: bool = False,
     llm_settings: Any | None = None,
 ):
     from backend.app.config import AppSettings
@@ -518,6 +556,7 @@ def build_settings(
         ),
         g4_http_enabled=True,
         g4_llm_intent_enabled=enable_deepseek_intent,
+        g4_llm_explanation_enabled=enable_deepseek_explanation,
     )
 
 
@@ -568,6 +607,69 @@ async def read_intent_llm_receipt(
         connection.close()
 
 
+async def read_explanation_llm_receipt(
+    values: Mapping[str, str], *, task_id: str, expected_items: int
+) -> dict[str, Any]:
+    connection = await asyncmy.connect(
+        host="127.0.0.1",
+        port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+        user=values["RECPRO_MYSQL_USER"],
+        password=values["RECPRO_MYSQL_PASSWORD"],
+        db=values["RECPRO_MYSQL_DATABASE"],
+        connect_timeout=10,
+        read_timeout=30,
+        charset="utf8mb4",
+        autocommit=True,
+    )
+    try:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT agent_version, fallback_used, payload_json "
+                "FROM recommendation_agent_result "
+                "WHERE task_id = %s AND context_version = 1 "
+                "AND agent_name = 'ExplanationAgent'",
+                (task_id,),
+            )
+            rows = await cursor.fetchall()
+        if len(rows) != 1:
+            raise RuntimeError("persisted task does not have exactly one Explanation Agent result")
+        payload = rows[0][2]
+        if isinstance(payload, (bytes, bytearray)):
+            payload = payload.decode("utf-8")
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if not isinstance(payload, dict):
+            raise RuntimeError("persisted Explanation Agent payload is invalid")
+        explanations = payload.get("explanations")
+        if not isinstance(explanations, list) or len(explanations) != expected_items:
+            raise RuntimeError("persisted Explanation count does not match ranked items")
+        validated_refs = 0
+        for explanation in explanations:
+            if not isinstance(explanation, dict):
+                raise RuntimeError("persisted Explanation entry is invalid")
+            summary = explanation.get("summary")
+            refs = explanation.get("evidence_refs")
+            if not isinstance(summary, str) or not summary.strip() or len(summary.strip()) > 240:
+                raise RuntimeError("persisted Explanation text is invalid")
+            if not isinstance(refs, list) or not refs:
+                raise RuntimeError("persisted Explanation omitted evidence refs")
+            for reference in refs:
+                if not isinstance(reference, str) or f"[{reference}]" not in summary:
+                    raise RuntimeError("persisted Explanation omitted an exact evidence marker")
+                validated_refs += 1
+        return {
+            "agent_version": str(rows[0][0]),
+            "fallback_used": bool(rows[0][1]),
+            "provider": payload.get("provider"),
+            "llm_attempts": int(payload.get("llm_attempts", 0)),
+            "explanation_count": len(explanations),
+            "validated_evidence_ref_count": validated_refs,
+            "evidence_markers_valid": True,
+        }
+    finally:
+        connection.close()
+
+
 def load_chroma(site_packages: Path):
     resolved = site_packages.resolve(strict=True)
     if str(resolved) not in sys.path:
@@ -591,18 +693,31 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         approved_hash=args.approved_plan_hash,
     )
     enable_deepseek_intent = plan_enables_deepseek_intent(plan)
+    enable_deepseek_explanation = plan_enables_deepseek_explanation(plan)
     if enable_deepseek_intent != bool(args.enable_deepseek_intent):
         raise ValueError("CLI DeepSeek Intent gate does not match the approved plan")
+    if enable_deepseek_explanation != bool(args.enable_deepseek_explanation):
+        raise ValueError("CLI DeepSeek Explanation gate does not match the approved plan")
     if enable_deepseek_intent and args.confirm_external_llm != EXTERNAL_LLM_CONFIRMATION:
         raise ValueError("exact external LLM confirmation is required")
     if not enable_deepseek_intent and args.confirm_external_llm:
         raise ValueError("external LLM confirmation was supplied for a Mock-only plan")
     llm_settings = None
     llm_policy = None
+    explanation_policy = None
     if enable_deepseek_intent:
         llm_settings, llm_policy = load_deepseek_intent_policy(args.llm_env_file)
         if policy_hash(llm_policy) != plan["input_hashes"]["deepseek_intent_policy"]:
             raise ValueError("local DeepSeek Intent policy differs from the approved plan")
+    if enable_deepseek_explanation:
+        llm_settings, explanation_policy = load_deepseek_explanation_policy(
+            args.llm_env_file, max_items=int(plan["request_payload"]["limit"])
+        )
+        if (
+            policy_hash(explanation_policy)
+            != plan["input_hashes"]["deepseek_explanation_policy"]
+        ):
+            raise ValueError("local DeepSeek Explanation policy differs from the approved plan")
     current_commit = validate_git_boundary(plan)
     mysql_baseline, mysql_baseline_raw = load_pass_evidence(
         args.mysql_baseline,
@@ -661,9 +776,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required runtime keys: {missing}")
-    configured_llm_provider = (
-        llm_settings.llm_provider if enable_deepseek_intent else "mock"
-    )
+    configured_llm_provider = llm_settings.llm_provider if enable_deepseek_intent else "mock"
     if values["COMPOSE_PROJECT_NAME"] != plan["environment"]["environment_id"]:
         raise ValueError("Compose project does not match the approved plan")
     database_identity = (
@@ -732,6 +845,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     settings = build_settings(
         values,
         enable_deepseek_intent=enable_deepseek_intent,
+        enable_deepseek_explanation=enable_deepseek_explanation,
         llm_settings=llm_settings,
     )
     service = build_research_g4_recommendation_service(
@@ -745,6 +859,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         index_version=INDEX_VERSION,
         enable_llm_provider=False,
         enable_llm_intent_provider=enable_deepseek_intent,
+        enable_llm_explanation_provider=enable_deepseek_explanation,
         deadline_seconds=120.0,
     )
     application = build_research_g4_http_app(
@@ -841,6 +956,27 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("G4 HTTP Intent receipt has the wrong prompt")
         if not 1 <= intent_receipt["llm_attempts"] <= 2:
             raise RuntimeError("G4 HTTP Intent attempts exceed the approved bound")
+    item_count = len(payload.get("items", [])) if isinstance(payload.get("items"), list) else 0
+    explanation_receipt: dict[str, Any] = {
+        "enabled": False,
+        "llm_attempts": 0,
+        "explanation_count": item_count,
+    }
+    if enable_deepseek_explanation:
+        explanation_receipt = await read_explanation_llm_receipt(
+            values,
+            task_id=str(payload["task_id"]),
+            expected_items=item_count,
+        )
+        explanation_receipt["enabled"] = True
+        if explanation_receipt["agent_version"] != "explanation-llm-prompt-v1":
+            raise RuntimeError("G4 HTTP task did not persist the LLM Explanation Agent")
+        if explanation_receipt["fallback_used"]:
+            raise RuntimeError("G4 HTTP DeepSeek Explanation unexpectedly fell back")
+        if explanation_receipt["provider"] != "DEEPSEEK":
+            raise RuntimeError("G4 HTTP Explanation receipt is not from DeepSeek")
+        if not item_count <= explanation_receipt["llm_attempts"] <= item_count * 2:
+            raise RuntimeError("G4 HTTP Explanation attempts exceed the approved bound")
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -898,11 +1034,14 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "can_recommend": ready.json().get("can_recommend"),
         },
         "intent_agent": intent_receipt,
+        "explanation_agent": explanation_receipt,
         "mode": "APPLY_ONE_BOUNDED_HTTP_APPEND_AND_EXACT_REPLAY",
         "database_write_rows": sum(deltas.values()),
         "database_writes": sum(deltas.values()),
-        "external_requests": intent_receipt["llm_attempts"],
-        "external_llm_requests": intent_receipt["llm_attempts"],
+        "external_requests": intent_receipt["llm_attempts"]
+        + (explanation_receipt["llm_attempts"] if enable_deepseek_explanation else 0),
+        "external_llm_requests": intent_receipt["llm_attempts"]
+        + (explanation_receipt["llm_attempts"] if enable_deepseek_explanation else 0),
         "configured_llm_provider": configured_llm_provider,
         "neo4j_writes": 0,
         "chroma_writes": 0,
@@ -933,6 +1072,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
     parser.add_argument("--enable-deepseek-intent", action="store_true")
+    parser.add_argument("--enable-deepseek-explanation", action="store_true")
     parser.add_argument("--confirm-external-llm")
     parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")

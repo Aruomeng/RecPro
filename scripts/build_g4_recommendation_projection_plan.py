@@ -24,6 +24,7 @@ from scripts.g4_projection_contract import (
     validate_g4_projection_request_matches_query_spec,
 )
 from scripts.g4_llm_plan_policy import (
+    load_deepseek_explanation_policy,
     load_deepseek_intent_policy,
     policy_hash,
 )
@@ -122,6 +123,7 @@ def build_plan(
     request_id: str | None = None,
     session_id: str | None = None,
     enable_deepseek_intent: bool = False,
+    enable_deepseek_explanation: bool = False,
     llm_env_file: Path = PROJECT_ROOT / ".env.host",
 ) -> dict[str, Any]:
     if RUN_ID_PATTERN.fullmatch(run_id) is None:
@@ -134,6 +136,8 @@ def build_plan(
         raise ValueError("limit must be between 1 and 20")
     if (request_id is None) != (session_id is None):
         raise ValueError("request_id and session_id must be supplied together")
+    if enable_deepseek_explanation and not enable_deepseek_intent:
+        raise ValueError("DeepSeek Explanation requires DeepSeek Intent in this HTTP plan")
     mysql_baseline, mysql_raw = load_pass_evidence(
         mysql_baseline_path, label="MySQL baseline evidence"
     )
@@ -235,8 +239,13 @@ def build_plan(
         )
         max_changes += delta
     llm_policy: dict[str, Any] | None = None
+    explanation_policy: dict[str, Any] | None = None
     if enable_deepseek_intent:
         _settings, llm_policy = load_deepseek_intent_policy(llm_env_file)
+    if enable_deepseek_explanation:
+        _settings, explanation_policy = load_deepseek_explanation_policy(
+            llm_env_file, max_items=limit
+        )
     input_hashes = {
         "mysql_baseline_readonly_evidence": sha256_bytes(mysql_raw),
         "g4_baseline_readonly_evidence": sha256_bytes(g4_raw),
@@ -245,6 +254,8 @@ def build_plan(
     }
     if llm_policy is not None:
         input_hashes["deepseek_intent_policy"] = policy_hash(llm_policy)
+    if explanation_policy is not None:
+        input_hashes["deepseek_explanation_policy"] = policy_hash(explanation_policy)
 
     preconditions = [
         "target Compose project/database identity and both PASS baselines match immediately before apply",
@@ -257,12 +268,23 @@ def build_plan(
     ]
     if llm_policy is None:
         preconditions.append("external LLM calls are disabled for this plan")
-    else:
+    elif explanation_policy is None:
         preconditions.extend(
             [
                 "DeepSeek is capability-scoped to IntentUnderstandingAgent; Explanation remains the evidence template",
                 "the only external payload is the frozen non-sensitive request input_text and bounded intent prompt",
                 "at most two DeepSeek attempts are authorized and raw provider responses are not persisted",
+                "same-request HTTP replay must add zero rows and must not call DeepSeek again",
+            ]
+        )
+    else:
+        preconditions.extend(
+            [
+                "DeepSeek is capability-scoped to IntentUnderstandingAgent and ExplanationAgent only",
+                "Intent receives only frozen non-sensitive input_text; Explanation receives only ranked factors and allowlisted evidence refs",
+                f"at most two Intent attempts plus {limit * 2} Explanation attempts are authorized; raw provider responses are not persisted",
+                f"Explanation is bounded to {limit} ranked items with four-way concurrency and per-item evidence-template fallback",
+                "every successful Explanation must use only allowlisted refs and include each used ref as an exact bracketed marker",
                 "same-request HTTP replay must add zero rows and must not call DeepSeek again",
             ]
         )
@@ -276,6 +298,10 @@ def build_plan(
         "mode": "DRY_RUN",
         "intent": (
             "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
+            "Intent classification and evidence-constrained Explanation rendering for explicit "
+            "review; no apply is authorized by this plan."
+            if explanation_policy is not None
+            else "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
             "Intent classification for explicit review; no apply is authorized by this plan."
             if llm_policy is not None
             else "Prepare one bounded G4 RecommendationTaskService projection for explicit review; "
@@ -327,6 +353,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--request-id")
     parser.add_argument("--session-id")
     parser.add_argument("--enable-deepseek-intent", action="store_true")
+    parser.add_argument("--enable-deepseek-explanation", action="store_true")
     parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     args = parser.parse_args(argv)
     try:
@@ -340,6 +367,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             request_id=args.request_id,
             session_id=args.session_id,
             enable_deepseek_intent=args.enable_deepseek_intent,
+            enable_deepseek_explanation=args.enable_deepseek_explanation,
             llm_env_file=args.llm_env_file,
         )
         output_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / args.run_id

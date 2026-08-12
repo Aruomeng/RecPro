@@ -50,6 +50,7 @@ G4_PROJECTION_PLAN_ID ?=
 G4_PROJECTION_PLAN_HASH ?=
 G4_PROJECTION_REQUEST_RUN_ID ?=
 G4_PROJECTION_ENABLE_DEEPSEEK_INTENT ?= false
+G4_PROJECTION_ENABLE_DEEPSEEK_EXPLANATION ?= false
 G4_PROJECTION_EXTERNAL_LLM_CONFIRM ?=
 G4_PROJECTION_LLM_ENV_FILE ?= .env.host
 G4_PROJECTION_RECONCILE_RUN_ID ?=
@@ -438,7 +439,7 @@ build-g4-recommendation-projection-plan:
 	@test -n "$(G4_PROJECTION_MYSQL_BASELINE)" || { echo "G4_PROJECTION_MYSQL_BASELINE is required and must point to a PASS MySQL read-only evidence file"; exit 2; }
 	@test -n "$(G4_PROJECTION_G4_BASELINE)" || { echo "G4_PROJECTION_G4_BASELINE is required and must point to a PASS G4 read-only evidence file"; exit 2; }
 	@test "$(G4_PROJECTION_REQUEST_ID)" = "$(G4_PROJECTION_SESSION_ID)" || { test -n "$(G4_PROJECTION_REQUEST_ID)" -a -n "$(G4_PROJECTION_SESSION_ID)" || { echo "G4_PROJECTION_REQUEST_ID and G4_PROJECTION_SESSION_ID must be supplied together"; exit 2; }; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_recommendation_projection_plan --run-id "$(G4_PROJECTION_PLAN_RUN_ID)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --user-id "$(G4_PROJECTION_USER_ID)" --input-text "$(G4_PROJECTION_INPUT_TEXT)" --limit "$(G4_PROJECTION_LIMIT)" $(if $(G4_PROJECTION_REQUEST_ID),--request-id "$(G4_PROJECTION_REQUEST_ID)" --session-id "$(G4_PROJECTION_SESSION_ID)",) $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_INTENT)),--enable-deepseek-intent --llm-env-file "$(G4_PROJECTION_LLM_ENV_FILE)",)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_recommendation_projection_plan --run-id "$(G4_PROJECTION_PLAN_RUN_ID)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --user-id "$(G4_PROJECTION_USER_ID)" --input-text "$(G4_PROJECTION_INPUT_TEXT)" --limit "$(G4_PROJECTION_LIMIT)" $(if $(G4_PROJECTION_REQUEST_ID),--request-id "$(G4_PROJECTION_REQUEST_ID)" --session-id "$(G4_PROJECTION_SESSION_ID)",) $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_INTENT)),--enable-deepseek-intent --llm-env-file "$(G4_PROJECTION_LLM_ENV_FILE)",) $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_EXPLANATION)),--enable-deepseek-explanation,)
 
 verify-g4-clarification-readonly:
 	@test -n "$(G4_CLARIFICATION_READONLY_RUN_ID)" || { echo "G4_CLARIFICATION_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
@@ -488,7 +489,7 @@ execute-g4-recommendation-projection:
 	@test -n "$(G4_PROJECTION_G4_BASELINE)" || { echo "G4_PROJECTION_G4_BASELINE is required and must point to the matching PASS G4 evidence"; exit 2; }
 	@test -n "$(G4_PROJECTION_REQUEST_RUN_ID)" || { echo "G4_PROJECTION_REQUEST_RUN_ID is required and must identify the reviewed request payload"; exit 2; }
 	@if [ "$(G4_PROJECTION_ENABLE_DEEPSEEK_INTENT)" = "true" ]; then test "$(G4_PROJECTION_EXTERNAL_LLM_CONFIRM)" = "YES_REAL_EXTERNAL_LLM" || { echo "G4_PROJECTION_EXTERNAL_LLM_CONFIRM=YES_REAL_EXTERNAL_LLM is required"; exit 2; }; fi
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g4_recommendation_projection --apply --plan-id "$(G4_PROJECTION_PLAN_ID)" --approved-plan-hash "$(G4_PROJECTION_PLAN_HASH)" --plan "$(G4_PROJECTION_PLAN)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --request-run-id "$(G4_PROJECTION_REQUEST_RUN_ID)" --run-id "$(G4_PROJECTION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_INTENT)),--enable-deepseek-intent --confirm-external-llm "$(G4_PROJECTION_EXTERNAL_LLM_CONFIRM)" --llm-env-file "$(G4_PROJECTION_LLM_ENV_FILE)",)
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g4_recommendation_projection --apply --plan-id "$(G4_PROJECTION_PLAN_ID)" --approved-plan-hash "$(G4_PROJECTION_PLAN_HASH)" --plan "$(G4_PROJECTION_PLAN)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --request-run-id "$(G4_PROJECTION_REQUEST_RUN_ID)" --run-id "$(G4_PROJECTION_APPLY_RUN_ID)" --env-file "$(COMPOSE_ENV_FILE)" $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_INTENT)),--enable-deepseek-intent --confirm-external-llm "$(G4_PROJECTION_EXTERNAL_LLM_CONFIRM)" --llm-env-file "$(G4_PROJECTION_LLM_ENV_FILE)",) $(if $(filter true,$(G4_PROJECTION_ENABLE_DEEPSEEK_EXPLANATION)),--enable-deepseek-explanation,)
 
 verify-g4-recommendation-projection-result:
 	@test -n "$(G4_PROJECTION_RECONCILE_RUN_ID)" || { echo "G4_PROJECTION_RECONCILE_RUN_ID is required and must identify a new reconciliation evidence run"; exit 2; }

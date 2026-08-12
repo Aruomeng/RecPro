@@ -1,4 +1,4 @@
-"""Safe, secret-free DeepSeek policy binding for one G4 Intent request."""
+"""Safe, secret-free DeepSeek policy bindings for bounded G4 capabilities."""
 
 from __future__ import annotations
 
@@ -13,7 +13,9 @@ from backend.app.config import AppSettings
 EXPECTED_MODEL = "deepseek-v4-flash"
 EXPECTED_BASE_URL = "https://api.deepseek.com"
 CAPABILITY = "intent.classify"
+EXPLANATION_CAPABILITY = "explanation.render"
 MAX_ATTEMPTS = 2
+EXPLANATION_MAX_CONCURRENCY = 4
 
 
 def canonical(value: object) -> bytes:
@@ -64,6 +66,39 @@ def load_deepseek_intent_policy(env_file: Path) -> tuple[AppSettings, dict[str, 
     return settings, policy
 
 
+def load_deepseek_explanation_policy(
+    env_file: Path, *, max_items: int
+) -> tuple[AppSettings, dict[str, Any]]:
+    """Bind evidence-only Explanation calls without exposing the API key."""
+
+    if isinstance(max_items, bool) or not 1 <= max_items <= 20:
+        raise ValueError("DeepSeek Explanation max_items must be between 1 and 20")
+    settings, _intent_policy = load_deepseek_intent_policy(env_file)
+    if not settings.g4_llm_explanation_enabled:
+        raise ValueError("DeepSeek G4 plan requires the Explanation LLM switch")
+    prompt_path = settings.prompt_bundle_path.resolve(strict=True)
+    policy = {
+        "provider": settings.llm_provider,
+        "model": settings.llm_model,
+        "base_url_origin": settings.llm_base_url,
+        "capability": EXPLANATION_CAPABILITY,
+        "max_items": max_items,
+        "max_attempts_per_item": MAX_ATTEMPTS,
+        "max_total_attempts": max_items * MAX_ATTEMPTS,
+        "max_concurrency": EXPLANATION_MAX_CONCURRENCY,
+        "timeout_seconds": settings.llm_timeout_seconds,
+        "max_output_tokens": settings.llm_max_output_tokens,
+        "prompt_version": settings.prompt_bundle_version,
+        "prompt_bundle_sha256": sha256_bytes(prompt_path.read_bytes()),
+        "input_scope": "ranked_factors_and_allowlisted_evidence_refs_only",
+        "raw_response_persisted": False,
+        "evidence_validation_required": True,
+        "per_item_template_fallback": True,
+        "intent_llm_required": True,
+    }
+    return settings, policy
+
+
 def policy_hash(policy: dict[str, Any]) -> str:
     return sha256_bytes(canonical(policy))
 
@@ -72,9 +107,12 @@ __all__ = [
     "CAPABILITY",
     "EXPECTED_BASE_URL",
     "EXPECTED_MODEL",
+    "EXPLANATION_CAPABILITY",
+    "EXPLANATION_MAX_CONCURRENCY",
     "MAX_ATTEMPTS",
     "canonical",
     "load_deepseek_intent_policy",
+    "load_deepseek_explanation_policy",
     "policy_hash",
     "sha256_bytes",
 ]

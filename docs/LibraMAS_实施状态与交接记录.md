@@ -2050,6 +2050,20 @@ Prompt 版本：旧 rec-prompts-v1.0.0.json 完整保留；新增 rec-prompts-v1
 下一步唯一动作：完成全量离线回归、提交推送；生成绑定新提交与新 Prompt hash 的 Intent+Explanation HTTP ChangePlan，批准前不发业务 POST。
 ```
 
+## G4 Intent + Explanation HTTP ChangePlan 工具
+
+```text
+交接ID：G4-INTENT-EXPLANATION-PLAN-20260812-001
+Gate：完整 HTTP 推荐的双 LLM 能力审批边界
+状态：CODE_COMPLETE / REAL_PLAN_PENDING
+时间：2026-08-12（Asia/Shanghai）
+目标：在不扩大数据写入集合的前提下，把 1 次 Intent 与最多 8 条 Explanation 的外部请求预算、输入范围、并发和回退策略冻结进可哈希审批计划。
+策略边界：Intent policy 与 Explanation policy 分别哈希；Explanation 必须同时启用 Intent，最多 8 条、每条最多 2 次尝试、总计最多 16 次、四路并发，只发送排序因素与白名单 evidence refs，不持久化原始 provider 响应。
+执行回读：除既有 Intent Agent 回执外，严格检查 ExplanationAgent=explanation-llm-prompt-v1、provider=DEEPSEEK、fallback=false、尝试次数在 item_count 到 item_count×2、解释条目数匹配，并逐个验证 [evidence_ref] 标记。
+数据边界：MySQL 目标表及最大 56 行追加不变；Neo4j/Chroma 写入、Outbox claim、UPDATE/DELETE、文件删除、数据库物理删除均为 0；HTTP replay 必须零行增量且不再次调用模型。
+下一步唯一动作：提交推送工具，在 clean commit 上生成最新 MySQL/G4 只读基线和双 LLM ChangePlan；用户精确批准新 plan_id/hash 前不执行。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
