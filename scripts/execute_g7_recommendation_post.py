@@ -294,6 +294,25 @@ def delta(before: dict[str, int], after: dict[str, int]) -> dict[str, int]:
     return {table: after[table] - before[table] for table in ALL_COUNT_TABLES}
 
 
+def validate_exact_replay(
+    *,
+    first_task_id: str,
+    replay_status_code: int,
+    replay_header: str | None,
+    replay_body: dict[str, Any],
+    after_first_post: dict[str, int],
+    after_replay_post: dict[str, int],
+) -> None:
+    if replay_status_code != 200:
+        raise RuntimeError(f"same-request replay returned unexpected status {replay_status_code}")
+    if replay_header != "true":
+        raise RuntimeError("same-request replay was not marked Idempotency-Replayed=true")
+    if replay_body.get("task_id") != first_task_id:
+        raise RuntimeError("same-request replay returned a different task identity")
+    if after_replay_post != after_first_post:
+        raise RuntimeError("same-request replay changed one or more database table counts")
+
+
 def validate_deltas(
     *, plan: dict[str, Any], before: dict[str, int], after: dict[str, int]
 ) -> dict[str, int]:
@@ -406,6 +425,27 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         task_id = response_body.get("task_id")
         if not isinstance(task_id, str) or not task_id:
             raise RuntimeError("recommendation response did not contain task_id")
+        after_first_post = await read_counts(values)
+        replay_response = client.post(
+            "/api/v1/recommendation-tasks",
+            json=payload,
+            headers={
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Idempotency-Key": str(request_id),
+                "X-Demo-User-Id": str(args.user_id),
+            },
+        )
+        replay_body = replay_response.json()
+        after_replay_post = await read_counts(values)
+        validate_exact_replay(
+            first_task_id=task_id,
+            replay_status_code=replay_response.status_code,
+            replay_header=replay_response.headers.get("Idempotency-Replayed"),
+            replay_body=replay_body,
+            after_first_post=after_first_post,
+            after_replay_post=after_replay_post,
+        )
         persisted = client.get(
             f"/api/v1/recommendation-tasks/{task_id}",
             headers={"X-Demo-User-Id": str(args.user_id)},
@@ -417,6 +457,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         persisted_body = persisted.json()
 
     after = await read_counts(values)
+    if after != after_replay_post:
+        raise RuntimeError("read-only task GET changed one or more database table counts")
     changes = validate_deltas(plan=plan, before=before, after=after)
     if persisted_body.get("task_id") != task_id:
         raise RuntimeError("persisted task identity mismatch")
@@ -462,6 +504,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "database_guard": guard,
         "before_counts": before,
         "after_counts": after,
+        "after_first_post_counts": after_first_post,
+        "after_replay_post_counts": after_replay_post,
         "deltas": changes,
         "response_summary": {
             "status_code": response.status_code,
@@ -472,14 +516,21 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "persisted_record_id": persisted_body.get("record_id"),
             "persisted_get_status_code": persisted.status_code,
         },
-        "mode": "APPLY_ONE_BOUNDED_APPEND",
+        "replay_summary": {
+            "status_code": replay_response.status_code,
+            "idempotency_replayed": replay_response.headers.get("Idempotency-Replayed"),
+            "task_id": replay_body.get("task_id"),
+            "same_task_identity": replay_body.get("task_id") == task_id,
+            "zero_additional_row_delta": True,
+        },
+        "mode": "APPLY_ONE_BOUNDED_APPEND_AND_EXACT_REPLAY",
         "database_write_rows": sum(changes[table] for table in APPEND_TABLES),
         "database_writes": sum(changes[table] for table in APPEND_TABLES),
         "external_requests": 0,
         "actual_delete_count": 0,
         "files_deleted": 0,
         "overwritten_inputs": 0,
-        "http_business_posts": 1,
+        "http_business_posts": 2,
         "http_business_gets": 1,
         "max_changes": int(plan["max_changes"]),
     }

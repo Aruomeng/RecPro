@@ -2007,14 +2007,15 @@ Gate：G8 A07/A09/A10 final revalidation 的受控交互边界
 状态：CODE_COMPLETE / FULL_OFFLINE_GATE_PASS / PLAN_NOT_YET_GENERATED
 时间：2026-08-12（Asia/Shanghai）
 目标：为 ALREADY_READ 与两个闭区间曝光阈值提供独立、低耦合、fail-closed 的计划和执行器，使剩余用例可以在精确审批后真实验证，而不复用其他业务授权。
-新增文件：`contracts/verification/g8-boundary-change-plan.schema.json`、`contracts/verification/g8-boundary-apply-evidence.schema.json`、`scripts/build_g8_boundary_change_plan.py`、`scripts/execute_g8_boundary_change_plan.py`、`tests/g8/test_boundary_change_plan.py`、`tests/g8/test_boundary_change_executor.py`。
-修改文件：`Makefile` 增加计划/执行目标；`scripts/validate_contracts.py` 冻结两份新 Schema；`scripts/verify_g8_final_revalidation_plan.py` 注册专用 apply artifact 的严格校验；README、本交接记录更新当前边界。
+新增文件：`contracts/verification/g8-boundary-change-plan.schema.json`、`contracts/verification/g8-boundary-apply-evidence.schema.json`、`scripts/build_g8_boundary_change_plan.py`、`scripts/execute_g8_boundary_change_plan.py`、`tests/g8/test_boundary_change_plan.py`、`tests/g8/test_boundary_change_executor.py`、`tests/g7/test_recommendation_replay_executor.py`。
+修改文件：`Makefile` 增加计划/执行目标；`scripts/validate_contracts.py` 冻结两份新 Schema；`scripts/verify_g8_final_revalidation_plan.py` 注册专用 apply artifact 的严格校验；G5/G7 计划器与执行器补齐时间线和精确重放门禁；README、本交接记录更新当前边界。
 精确语义：A09=`visible_ms=999/max_visible_ratio=0.8/is_valid_exposure=false`；A10=`1000/0.49/false`；A07 先记录 `1500/0.8/true`，再追加 `NOT_INTERESTED/ALREADY_READ`，只能创建 `READ` 状态。四个 UUID 重放必须零增量；Worker 只 claim 新产生的一条 Outbox，第二次运行返回 0；兴趣标签和主题负偏好内容哈希保持不变。
 影响上限：总计 20 行增量，其中 impression=3、feedback=1、behavior=4、outbox=1、resource_state=1、profile_replay=1、profile_change_log=4、domain_state_transition=5，interest/negative/user_profile 行数增量均为 0。交互阶段 12 行，单条 Worker 闭环再增加 8 行。
 执行门禁：计划只允许在 clean worktree 生成；执行器要求同一 Git commit、同一 Compose/MySQL 身份、完整表计数与 baseline hash 未漂移、两项资源目标快照未漂移、四个 UUID 不存在、无 PENDING/PROCESSING Outbox、最小权限通过，并要求用户批准精确 plan_id/hash。
-验证结果：Python G0—G9 共 534 项 PASS；前端 46 项 PASS 且生产构建 PASS；文档、契约（30 份）、架构（128 文件）和安全扫描（373 文件）全部 PASS；`git diff --check` PASS。
+验证结果：Python G0—G9 共 536 项 PASS；前端 46 项 PASS 且生产构建 PASS；文档、契约（30 份）、架构（128 文件）和安全扫描（374 文件）全部 PASS；`git diff --check` PASS。
 安全边界：本阶段未执行数据库业务写入、业务 POST、Outbox claim、Neo4j/Chroma 写入或外部 LLM 请求；未删除或覆盖任何文件、artifact、数据库对象或数据库数据。计划尚未在最终 clean commit 上生成，因此当前不存在可批准的最终 plan_id/hash。
 时间边界修复：只读查询发现用户 1001 的最新历史行为时间为 `2030-01-20T12:06:00Z`；旧 G5 计划器未拒绝更早的 2026 交互时间，边界计划器也曾把 MySQL 无时区 UTC 字符串误判为非法。现统一按数据库 UTC 解释，并要求新 impression 严格晚于最新行为；builder 与 executor 双重校验。此前生成的 `g8-a02-recommendation-replay-plan-20260812-002`、`g8-a03-a04-a08-a23-feedback-plan-20260812-003`/`-004` 绑定旧提交，均不作为最终审批对象；artifact 全部保留未删除。首次 `g8-a07-a09-a10-boundary-plan-20260812-001` 在 artifact 创建前安全失败，不存在可执行计划文件。
+A02 执行边界修复：旧 G7 执行器只完成首写和 GET，不能证明同 request_id 的运行态重放。现同一批准执行固定发送两次完全相同的 POST，严格要求首写 `201/Idempotency-Replayed=false`、重放 `200/true`、task identity 相同，并在两次请求后统一核对最大 37 行增量；重放不增加额外行。提交修复前生成的 `g8-a02-recommendation-replay-plan-20260812-003` 与 `g8-a03-a04-a08-a23-feedback-plan-20260812-005` 同样保留但不批准，最终计划必须重新绑定新提交。
 未解决风险：真实运行仍需先提交本实现、重新生成 G5 只读基线和计划，再等待用户精确批准；执行器跨多个事务，获批后若中途异常会保留已提交的受控追加事实并由独立只读回读审计，不执行补偿删除。
 下一步唯一动作：提交并推送当前实现；在 clean commit 上只读生成 A02、A03/A04/A08/A23、A07/A09/A10 三批新计划，向用户报告精确 plan_id/hash，批准前保持数据库零写入。
 ```

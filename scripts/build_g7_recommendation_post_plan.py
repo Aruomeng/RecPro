@@ -133,8 +133,8 @@ def build_plan(*, run_id: str, baseline_path: Path, user_id: int) -> dict[str, A
         "classification": "S1_APPEND",
         "mode": "DRY_RUN",
         "intent": (
-            "Prepare one bounded G3 MySQL recommendation task for explicit review; "
-            "no apply is authorized by this plan."
+            "Prepare one bounded G3 MySQL recommendation task plus one exact same-request "
+            "idempotency replay for explicit review; no apply is authorized by this plan."
         ),
         "environment": {
             "environment_id": project,
@@ -159,6 +159,7 @@ def build_plan(*, run_id: str, baseline_path: Path, user_id: int) -> dict[str, A
             "all expected_before_count values are re-read immediately before apply",
             "runtime grants still match the reviewed least-privilege read/append capability",
             "request_id and idempotency key are absent or replay-identical before apply",
+            "the executor submits the exact request twice and requires 201/false then 200/true with one task identity",
             "no migration, seed, index switch, graph write, vector write, or external LLM call is part of this plan",
             "apply requires a separate explicit approval of this unchanged plan hash",
         ],
