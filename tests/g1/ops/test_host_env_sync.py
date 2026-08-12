@@ -44,6 +44,7 @@ class HostEnvSyncTests(unittest.TestCase):
         self.assertEqual("recpro_migrator", values["RECPRO_MYSQL_MIGRATION_USER"])
         self.assertIn("# keep this comment", rendered)
         self.assertIn("RECPRO_DEMO_HTTP_ENABLED", changed)
+        self.assertEqual("false", values["RECPRO_G5_INTERACTION_HTTP_ENABLED"])
 
     def test_render_does_not_remove_unrelated_existing_keys(self) -> None:
         overrides = build_overrides(self.compose_values())

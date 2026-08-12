@@ -31,6 +31,17 @@ VITE_G5_INTERACTION_ENABLED=true npm run dev -- --host 127.0.0.1
 
 交互端口位于 `src/api/interactionClient.ts`，响应会先通过严格契约校验；`InteractionPanel.vue` 要求先显式记录 impression，再允许反馈或点击行为，避免产生无法关联的事实。未设置该变量时，按钮只显示说明或本地交互演示，不发起网络请求。
 
+若要在经过单独审批的本地研究环境中同时启用真实 G4 推荐和 G5 交互端点，必须使用独立入口；默认 `backend.app.main:app`、Compose backend 和 Worker 不会切换：
+
+```bash
+RECPRO_APP_ENV=demo \
+RECPRO_G4_HTTP_ENABLED=true \
+RECPRO_G5_INTERACTION_HTTP_ENABLED=true \
+python -m uvicorn backend.app.g4_feedback_demo_main:app --host 127.0.0.1 --port 8000
+```
+
+该入口要求已存在且版本匹配的 operator-only Chroma collection、隔离 Neo4j 只读凭据和隔离 MySQL 运行账号；构造阶段不连接数据库，只有显式 POST 才会追加 MySQL 事实或创建 Profile Outbox。它始终关闭 DeepSeek，Worker 也必须单独通过 `RECPRO_WORKER_ENABLED=true` 与 `RECPRO_WORKER_MODE=profile_outbox` 双闸门运行。启用前仍需为具体业务数据生成并批准新的 `plan_id`/`plan_hash`。
+
 ```bash
 npm run test
 RECPRO_BUILD_RUN_ID=local-20260802-001 npm run build

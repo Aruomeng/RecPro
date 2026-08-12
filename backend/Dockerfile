@@ -16,6 +16,7 @@ RUN python -m pip install --no-cache-dir --require-hashes \
 
 COPY backend /srv/recpro/backend
 COPY contracts/config /srv/recpro/contracts/config
+COPY contracts/prompts /srv/recpro/contracts/prompts
 
 RUN useradd --create-home --shell /usr/sbin/nologin recpro
 USER recpro

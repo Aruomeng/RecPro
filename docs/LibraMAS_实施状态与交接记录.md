@@ -100,6 +100,7 @@
   - 已完成该次受控链的独立只读 reconciliation：`recommendation_impression/feedback/user_behavior_event/profile_update_outbox/user_resource_state/profile_replay_run/profile_change_log/domain_state_transition` 分别为 `+1/+1/+3/+2/+1/+2/+3/+9`，正/负画像为 `+3/+3`，Outbox=`33/34` 均 `DONE`、全局无 `PENDING/PROCESSING`，非目标表 delta=`0`；证据状态为 `PARTIAL_APPLY_RECONCILED`，不是原计划 `PASS`。
   - 已修正 G5 计划/执行器：计划快照现在冻结用户已有画像键集合，动态计算 upsert 表的真实新增行数；执行器在任何业务写入前核对计划 delta 与实时画像键集合，避免再次出现“写入完成后才发现预算漂移”。新增纯只读 reconciliation verifier 与 Make 目标，默认仍不启用 Worker。
   - 已完成 G7 前端 G5 交互工作台代码切片：新增 `frontend/src/domain/interaction.ts`、`frontend/src/api/interactionClient.ts` 与 `InteractionPanel.vue`，严格校验 impression/feedback/behavior 响应，要求先显式曝光再允许反馈/点击；`VITE_G5_INTERACTION_ENABLED` 默认关闭，未启用时不会发送网络请求。前端测试 46 项通过，构建 `g7-interaction-ui-20260812-001` 通过。
+  - 已完成 G7 G4+G5 独立后端入口：新增 `backend.app.g4_feedback_demo_main:app` 与 `RECPRO_G5_INTERACTION_HTTP_ENABLED` 双闸门；只有显式入口同时注入 G4 Graph/Vector 推荐、G5 Feedback/Behavior 服务时才挂载真实交互 POST，默认 Compose backend、Worker、DeepSeek 仍关闭；后端镜像补齐冻结 Prompt Bundle 文件。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -116,7 +117,7 @@
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
-  - G7 前端交互工作台目前只完成代码和契约门禁；真实浏览器操作仍需显式启用 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
+  - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
 - `next_step`：先提交并推送画像 delta 预检与 reconciliation verifier；随后进入 G7 feedback/behavior 前端真实只读页面和 opt-in API 接线。任何新的数据库业务追加仍须重新生成并批准精确 plan_id/hash，之后再进入 G8 可靠性与发布候选评审。
 
 ---
@@ -133,7 +134,7 @@
 | G4 动态多智能体闭环 | IN_PROGRESS | `artifacts/verification/g4/g4-orchestrator-20260809-001/orchestrator.json`；`artifacts/verification/g4/g4-agent-runtime-20260809-002/agent-runtime.json`；`artifacts/verification/g4/g4-real-ports-20260809-001/real-ports-runtime.json`；`artifacts/verification/g4/g4-composition-20260809-001/composition-runtime.json`；28 项 G4 测试 | Registry、结构化消息、四路径、真实 Catalog/Profile 只读端口、bounded retry、显式组合根和同事务持久化 PASS；重放 delta=0、失败回滚、受保护事实不变；正式 HTTP/Worker 接入、恢复读取和历史画像重算待完成 |
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
-| G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建 | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G5 交互页面已完成默认关闭的真实 API 端口与显式操作边界，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
+| G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
 | G8 可靠性与发布候选 | NOT_STARTED | — | 依赖G5—G7 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
@@ -1621,6 +1622,23 @@ Gate：G7 前端 feedback/behavior 交互端口与默认安全边界
 验证结果：前端 8 个测试文件、46 项测试全部 PASS；`RECPRO_BUILD_RUN_ID=g7-interaction-ui-20260812-001 npm --prefix frontend run build` PASS；没有启动真实业务 API、没有发送 POST、没有数据库连接或数据修改。
 未解决风险：真实浏览器反馈/行为闭环仍需新的 opt-in 后端运行态、脱敏/伦理/费用审查和独立的业务 ChangePlan；默认 Compose backend 与 Worker 继续关闭。
 下一步唯一动作：在不追加数据库事实的前提下补齐浏览器只读/默认关闭验收；如需真实按钮写入，重新生成并批准新的精确 plan_id/hash。
+```
+
+## G7 G4+G5 独立后端入口与浏览器默认关闭验收
+
+```text
+交接ID：G7-G4-G5-ENTRYPOINT-BROWSER-20260812-002
+Gate：G7 前端交互工作台与 G4+G5 opt-in 后端接线
+状态：ENTRYPOINT_CODE_COMPLETE / DEFAULT_OFF_BROWSER_PASS / NO_DATABASE_WRITE
+时间：2026-08-12（Asia/Shanghai）
+新增文件：`backend/app/g4_feedback_demo_main.py`、`tests/g7/test_g4_feedback_demo_entrypoint.py`。
+修改文件：`backend/app/config.py` 新增 `g5_interaction_http_enabled`；`compose.yaml`、`.env.compose.example`、`.env.host.example` 与 `scripts/sync_host_env_from_compose.py` 新增默认关闭的 G4/G5 后端开关传递；`backend/Dockerfile` 补齐 `contracts/prompts`；`frontend/README.md`、`docs/api.md` 和本交接记录补充独立入口说明。
+运行边界：默认 `backend.app.main:app`、Compose backend、Worker 和 DeepSeek 不变；只有 `RECPRO_APP_ENV=demo`、`RECPRO_G4_HTTP_ENABLED=true`、`RECPRO_G5_INTERACTION_HTTP_ENABLED=true`、`AppSettings` 校验后的同名设置和已核验 Graph/Vector 运行时全部满足时，才会挂载 Recommendation/Feedback/Behavior 三类服务。构造阶段不连接 MySQL、Neo4j 或 Chroma。
+浏览器证据：使用追加式构建 `g7-interaction-ui-20260812-001` 的本地预览；页面显示“交互 API 默认关闭”。点击“记录曝光”“不感兴趣”“记录点击”均只显示关闭提示，点击“查看交互演示”只改变前端状态；预览日志仅出现后端健康探针 `GET /api/v1/health/live`、`GET /api/v1/health/ready` 因 8000 未启动而失败，未出现交互 POST。移动视口 390×844：G4/G5 区域可见，document/body 宽度均为 390，无横向溢出。
+数据库与外部服务：database_reads=0、database_writes=0、Neo4j writes=0、Chroma writes=0、DeepSeek requests=0、文件删除=0、数据库物理删除=0。
+验证命令：`.venv-g1-final-py311/bin/python -m unittest tests.g7.test_g4_feedback_demo_entrypoint`；`make test-g1-python test-g7 contracts-check docs-check architecture-check safety-check compose-config`（全部 PASS）；`npm --prefix frontend test`；`RECPRO_BUILD_RUN_ID=g7-interaction-ui-20260812-002 npm --prefix frontend run build`；`docker build --tag recpro-backend:g7-g4-g5-entrypoint-check-20260812 --file backend/Dockerfile .`（PASS，仅构建镜像，不启动容器）；浏览器本地默认关闭/移动端验收。
+未解决风险：真实浏览器写入仍需用户/伦理范围、正式身份和新的精确 `plan_id`/`plan_hash`；G5 Outbox 非空消费仍需单独 ChangePlan；生产 OIDC/JWKS、发布候选和外部 DeepSeek 网络审查未完成。
+下一步唯一动作：完成本阶段测试与门禁后，进入 G8 发布候选清单，或在用户批准新的 G5 业务 ChangePlan 后进行一次最小真实浏览器闭环。
 ```
 
 ## 阶段交接模板

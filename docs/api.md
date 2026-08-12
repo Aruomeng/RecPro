@@ -85,6 +85,14 @@ Graph/Vector 版本传入 G4 service，防止请求在不同索引代际之间�
 collection 必须由 operator-only 运行层以只读方式取得，基础 backend 不依赖
 `chromadb`，也不会在缺少显式 collection 时创建目录或 collection。
 
+G4 + G5 本地研究入口为 `backend.app.g4_feedback_demo_main:app`。它额外要求
+`RECPRO_G5_INTERACTION_HTTP_ENABLED=true` 与 `AppSettings` 校验后的同名布尔开关，随后才会
+把 `FeedbackApplicationService`、`BehaviorApplicationService` 和三个交互 POST
+路由挂到同一版本锁定的 G4 图上。该入口仍然不启用 DeepSeek；真实交互请求才会
+进入 MySQL 事实/Outbox 事务，默认 Compose backend 不会加载它。前端的
+`VITE_G5_INTERACTION_ENABLED` 只是按钮开关，不能替代后端入口、身份授权或新的
+业务 `plan_id`/`plan_hash` 审批。
+
 当前 operator-only 入口为 `scripts/g4_operator_runtime.py` 与
 `scripts/verify_g4_http_host_readonly.py`。loader 只允许打开已存在的
 collection，要求 collection 名、graph/embedding/index 版本、cosine 距离度量和

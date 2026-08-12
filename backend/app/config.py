@@ -135,6 +135,11 @@ class AppSettings(BaseSettings):
     # separate switch prevents a configured G4 service from being exposed by
     # the default health-only app or by the Compose command.
     g4_http_enabled: bool = False
+    # G5 interaction HTTP is a second, independent opt-in.  It is deliberately
+    # separate from the frontend flag and from ``g4_http_enabled`` so a local
+    # recommendation server cannot acquire database-writing feedback routes by
+    # accident.
+    g5_interaction_http_enabled: bool = False
     debug_api_enabled: bool = False
     # A production HTTP composition must opt in separately from authentication
     # and from the default health-only application.
