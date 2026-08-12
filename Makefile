@@ -38,6 +38,11 @@ G4_HTTP_READONLY_HOST_CONFIRM ?=
 G4_PROJECTION_PLAN_RUN_ID ?=
 G4_PROJECTION_MYSQL_BASELINE ?=
 G4_PROJECTION_G4_BASELINE ?=
+G4_PROJECTION_USER_ID ?= 1001
+G4_PROJECTION_INPUT_TEXT ?= 多智能体系统与智慧图书馆
+G4_PROJECTION_LIMIT ?= 8
+G4_PROJECTION_REQUEST_ID ?=
+G4_PROJECTION_SESSION_ID ?=
 G4_PROJECTION_APPLY_RUN_ID ?=
 G4_PROJECTION_PLAN ?=
 G4_PROJECTION_PLAN_ID ?=
@@ -276,7 +281,8 @@ build-g4-recommendation-projection-plan:
 	@test -n "$(G4_PROJECTION_PLAN_RUN_ID)" || { echo "G4_PROJECTION_PLAN_RUN_ID is required and must identify a new dry-run plan"; exit 2; }
 	@test -n "$(G4_PROJECTION_MYSQL_BASELINE)" || { echo "G4_PROJECTION_MYSQL_BASELINE is required and must point to a PASS MySQL read-only evidence file"; exit 2; }
 	@test -n "$(G4_PROJECTION_G4_BASELINE)" || { echo "G4_PROJECTION_G4_BASELINE is required and must point to a PASS G4 read-only evidence file"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_recommendation_projection_plan --run-id "$(G4_PROJECTION_PLAN_RUN_ID)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)"
+	@test "$(G4_PROJECTION_REQUEST_ID)" = "$(G4_PROJECTION_SESSION_ID)" || { test -n "$(G4_PROJECTION_REQUEST_ID)" -a -n "$(G4_PROJECTION_SESSION_ID)" || { echo "G4_PROJECTION_REQUEST_ID and G4_PROJECTION_SESSION_ID must be supplied together"; exit 2; }; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g4_recommendation_projection_plan --run-id "$(G4_PROJECTION_PLAN_RUN_ID)" --mysql-baseline "$(G4_PROJECTION_MYSQL_BASELINE)" --g4-baseline "$(G4_PROJECTION_G4_BASELINE)" --user-id "$(G4_PROJECTION_USER_ID)" --input-text "$(G4_PROJECTION_INPUT_TEXT)" --limit "$(G4_PROJECTION_LIMIT)" $(if $(G4_PROJECTION_REQUEST_ID),--request-id "$(G4_PROJECTION_REQUEST_ID)" --session-id "$(G4_PROJECTION_SESSION_ID)",)
 
 verify-g4-clarification-readonly:
 	@test -n "$(G4_CLARIFICATION_READONLY_RUN_ID)" || { echo "G4_CLARIFICATION_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }

@@ -1457,6 +1457,22 @@ Gate：G4 版本锁定 runtime 的真实推荐投影、HTTP GET 回读与追加�
 下一步唯一动作：先复核并通过代码/文档/安全门禁，再进入前端真实 GET/POST 受控闭环设计；未生成并批准新的前端或续跑 ChangePlan 前不追加新的业务行、不启用 DeepSeek。
 ```
 
+## G4 前端真实运行入口与浏览器请求冻结记录
+
+```text
+交接ID：G4-FRONTEND-RUNTIME-20260812-001
+Gate：G4 版本锁定 Graph/Vector HTTP 入口与前端请求身份冻结
+状态：CODE_PASS / READONLY_BASELINES_PASS / PLAN_PENDING_APPROVAL / DEFAULT_HTTP_OFF
+时间：2026-08-12（Asia/Shanghai）
+目标：为真实前端推荐/澄清浏览器闭环提供独立、显式、可审查的 G4 入口；默认 backend.app.main:app、Compose backend、Worker 和 DeepSeek provider 继续 fail-closed。
+入口：新增 `backend.app.g4_demo_main:app`。只有 `RECPRO_APP_ENV=demo`、`RECPRO_G4_HTTP_ENABLED=true`、有效隔离 Neo4j 凭据、固定版本 Graph/Vector runtime 和已有 operator-only Chroma collection 全部满足时才构造；始终以 `enable_llm_provider=false` 运行。默认入口与 Compose 配置未切换。
+前端：`RecommendationWorkbench.vue` 标识为 G4，默认请求文本=`多智能体系统与智慧图书馆`、limit=`8`；澄清续跑复用同一 session/context/answers，并支持 AbortSignal；可选 `VITE_G4_DEMO_REQUEST_ID`/`VITE_G4_DEMO_SESSION_ID` 将浏览器请求与 ChangePlan 固定身份对齐，未设置时仍使用随机 UUID。RecommendationClient 超时上限提升为 150 秒以覆盖真实只读融合冷启动。
+只读证据：G4=`artifacts/verification/g4/g4-frontend-browser-readonly-20260812-001/readonly.json`，状态=`PASS`，7 dispatches、8 candidates、通道=`MYSQL+VECTOR`，候选持久化预期=`13`，MySQL/Chroma 前后计数一致；MySQL=`artifacts/verification/g7/g7-frontend-browser-mysql-readonly-20260812-001/readonly.json`，状态=`PASS`，推荐与资源事实表计数不变，业务 POST=`0`。
+计划边界：本 Gate 仅生成新的 `S1_APPEND/DRY_RUN` ChangePlan，固定 `request_run_id`、`request_payload`、idempotency key 与浏览器请求身份；计划生成后向用户报告精确 `plan_id`/`plan_hash`，未获批准前不得点击真实推荐按钮、不得提交任何业务 POST、不得启用 DeepSeek。
+安全边界：本 Gate 未执行 INSERT/UPDATE/DELETE/DROP/TRUNCATE、迁移、Neo4j/Chroma 写入或外部请求；未删除文件、artifact、容器、卷、数据库对象或数据库数据。
+下一步唯一动作：完成代码/前端/文档/契约/安全门禁并推送后，提交该 DRY_RUN 计划的精确 hash；仅在用户明确批准同一 hash 后，执行一次隔离追加，再做浏览器 POST、GET、幂等和计数回读。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
