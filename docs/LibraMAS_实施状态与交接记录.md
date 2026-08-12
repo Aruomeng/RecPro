@@ -120,6 +120,7 @@
   - 已完成最终复验就绪审计器：新增 `contracts/verification/g8-final-revalidation-audit.schema.json`、`contracts/verification/g8-final-runtime-evidence.schema.json`、`scripts/verify_g8_final_revalidation_plan.py`、`tests/g8/test_final_revalidation_audit.py` 与 `make verify-g8-final-revalidation-plan`；审计验证计划 hash、Git 绑定、测试/验证器引用和历史 artifact 清单，严格不把历史证据提升为 final 通过。
   - 已生成追加式最终复验计划与就绪审计：计划 `artifacts/verification/g8/g8-final-revalidation-plan-20260812-003/final-revalidation-plan.json`=`PLAN_READY_WITH_BLOCKERS`，绑定 commit=`ccdf71f981a223db26cc54ca561480cf1f3ecf01`、`plan_hash=00a21f9f9c58737186fa4949e1a13c2318a37d9a82ed17b77d5ce9ff6fedba87`；审计 `artifacts/verification/g8/g8-final-revalidation-audit-20260812-001/final-revalidation-audit.json`=`READY_FOR_RUNTIME`，25 项计划有效，17 项只读路径、8 项需要独立 ChangePlan，历史 artifact cases=25，final_pass=0、final_pending=25；审计前工作区 clean，安全计数全部为 0。
   - 已在当前提交完成首批真实只读运行态复验：`data-plane-20260812-004` 验证隔离 Compose 的 backend/frontend/mysql/neo4j 均 healthy、MySQL=40 张表、Neo4j=0/0；`g4-orchestrator-20260812-006` 验证 direct/guided/degraded/replanning 四分支；`g4-readonly-fusion-20260812-012` 验证 7 Agent、8 候选、`MYSQL+GRAPH+VECTOR`、MySQL/Chroma 计数不变；`g4-clarification-readonly-20260812-004` 验证 HOME 空请求为 `WAITING_CLARIFICATION`、4 Agent、19 张相关表计数不变；`g6-retrieval-fusion-readonly-20260812-012` 验证三通道融合和 Chroma=14,983；`g7-mysql-http-readonly-20260812-006` 验证 live/ready health-only、13 张相关表前后不变、业务 POST/数据库写入=0。G7 的 readiness 仍为 `DEGRADED`，未被误报为生产就绪；以上证据均未调用 DeepSeek、claim Outbox 或执行任何数据库/图/向量写入、删除、覆盖。
+  - 已基于提交 `a490652664306d4fe89bcbc9a16a608e02f6ff5b` 重新生成最终复验计划 `artifacts/verification/g8/g8-final-revalidation-plan-20260812-004/final-revalidation-plan.json`（`plan_hash=0cac04a818e9ff61ae2df7c3a6e4f90a414462ff7f755aa9d7171cfd528d9dfb`）和审计 `artifacts/verification/g8/g8-final-revalidation-audit-20260812-002/final-revalidation-audit.json`；计划 Git 匹配当前提交，25/25 有效，17 项只读、8 项需独立 ChangePlan，final_pass=0、final_pending=25，审计安全计数仍全为 0。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -137,7 +138,7 @@
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
-  - `next_step`：继续按 `g8-final-revalidation-plan-20260812-003` 补齐尚未有当前提交证据的只读/故障案例，并在不改变历史 artifact 的前提下生成新的审计报告；A02/A03/A04/A07/A08/A09/A10/A23、任何浏览器业务流、非空 Worker claim、索引写入和 DeepSeek 请求必须另行生成精确 ChangePlan、plan_id/hash 并获批。25 项 final_revalidation 仍为 `PENDING`，随后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
+  - `next_step`：依据与当前提交匹配的 `g8-final-revalidation-plan-20260812-004` 与 `g8-final-revalidation-audit-20260812-002`，补齐尚未有当前提交证据的只读/故障案例并保持追加式审计；A02/A03/A04/A07/A08/A09/A10/A23、任何浏览器业务流、非空 Worker claim、索引写入和 DeepSeek 请求必须另行生成精确 ChangePlan、plan_id/hash 并获批。25 项 final_revalidation 仍为 `PENDING`，随后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
 
 ---
 
@@ -164,7 +165,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 发布候选只读/构建前置已通过，A01—A25 已全部达到 DIRECT 离线覆盖；计划 `g8-final-revalidation-plan-20260812-003` 与审计 `g8-final-revalidation-audit-20260812-001` 已冻结边界，当前提交已补充数据平面、G4 编排/融合/澄清、G6 融合和 G7 health-only 证据。17 项只读路径继续逐项补证，8 项及六个浏览器场景仍需独立 ChangePlan；G7 readiness=`DEGRADED` 仍是公开阻塞项。所有本轮数据库/Neo4j/Chroma 写入、Outbox claim、DeepSeek、删除/覆盖均为 0。
+- `current_subtask`：G8 发布候选只读/构建前置已通过，A01—A25 已全部达到 DIRECT 离线覆盖；当前计划 `g8-final-revalidation-plan-20260812-004` 与审计 `g8-final-revalidation-audit-20260812-002` 已与提交 `a490652` 匹配，当前提交已补充数据平面、G4 编排/融合/澄清、G6 融合和 G7 health-only 证据。17 项只读路径继续逐项补证，8 项及六个浏览器场景仍需独立 ChangePlan；G7 readiness=`DEGRADED` 仍是公开阻塞项。所有本轮数据库/Neo4j/Chroma 写入、Outbox claim、DeepSeek、删除/覆盖均为 0。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -1867,6 +1868,22 @@ Gate：G8 A01—A25 最终复验的首批只读运行态证据
 安全计数：所有报告的 database/Neo4j/Chroma writes=0、Outbox claim=0、external requests=0、files_deleted=0、database physical deletions=0、artifact overwrite=0；MySQL 读取仅 SELECT/rollback，容器未启动或停止。
 未解决风险：这些证据尚未组成 `g8-final-runtime-evidence-v1`，不会把历史或部分运行证据提升为 A01—A25 final PASS；A02/A03/A04/A07/A08/A09/A10/A23、六个浏览器业务场景、非空 Worker 和 DeepSeek 仍需独立 ChangePlan/审批。
 下一步唯一动作：继续补齐剩余只读/故障案例，并生成新的追加式 G8 审计；任何写入前先报告精确目标、影响和回读方案，未经批准不写入。
+```
+
+## G8 最终复验审计（当前提交绑定）
+
+```text
+交接ID：G8-FINAL-REVALIDATION-AUDIT-20260812-002
+Gate：G8 A01—A25 最终复验计划的当前提交一致性审计
+状态：READY_FOR_RUNTIME / NO_DATABASE_ACCESS
+时间：2026-08-12（Asia/Shanghai）
+目标：将最终复验计划重新绑定到文档交接提交 `a490652664306d4fe89bcbc9a16a608e02f6ff5b`，复核计划引用、Git 一致性、历史 artifact 清单和授权边界；不连接数据库或服务，不把首批部分运行证据提升为 final PASS。
+计划：`artifacts/verification/g8/g8-final-revalidation-plan-20260812-004/final-revalidation-plan.json`，`plan_hash=0cac04a818e9ff61ae2df7c3a6e4f90a414462ff7f755aa9d7171cfd528d9dfb`。
+实际命令：`make PYTHON=.venv-g1-final-py311/bin/python G8_FINAL_REVALIDATION_PLAN_RUN_ID=g8-final-revalidation-plan-20260812-004 build-g8-final-revalidation-plan`；`make PYTHON=.venv-g1-final-py311/bin/python G8_FINAL_REVALIDATION_AUDIT_RUN_ID=g8-final-revalidation-audit-20260812-002 G8_FINAL_REVALIDATION_PLAN=artifacts/verification/g8/g8-final-revalidation-plan-20260812-004/final-revalidation-plan.json verify-g8-final-revalidation-plan`。
+实际结果：`artifacts/verification/g8/g8-final-revalidation-audit-20260812-002/final-revalidation-audit.json`=`READY_FOR_RUNTIME`；计划有效 25/25，Git 匹配当前提交，17 项只读路径、8 项需独立 ChangePlan，历史 artifact cases=25，final_pass=0、final_pending=25；六个浏览器业务场景均为 `BLOCKED_NO_CHANGE_PLAN`。
+安全计数：database_reads=0、database_writes=0、neo4j_reads=0、neo4j_writes=0、chroma_reads=0、chroma_writes=0、outbox_claims=0、external_llm_requests=0、files_deleted=0、database_physical_deletions=0、artifact_overwrites=0。
+未解决风险：A01—A25 尚未形成完整 `g8-final-runtime-evidence-v1`；A02/A03/A04/A07/A08/A09/A10/A23、浏览器业务流、非空 Worker、索引写入、生产 OIDC/JWKS、G9 输入冻结和 DeepSeek 外部调用评审仍未完成。
+下一步唯一动作：继续补齐只读/故障案例；任何追加写入前先提交精确 ChangePlan、影响范围、回读和回滚边界，等待用户明确批准。
 ```
 
 ## 阶段交接模板
