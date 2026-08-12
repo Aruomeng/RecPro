@@ -142,6 +142,8 @@ G8_FINAL_REVALIDATION_PLAN ?=
 G8_FINAL_RUNTIME_EVIDENCE ?=
 LLM_REAL_CALL_READINESS_RUN_ID ?=
 LLM_REAL_CALL_ENV_FILE ?= .env.host
+LLM_FIXTURE_CALL_RUN_ID ?=
+LLM_FIXTURE_CALL_CONFIRM ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -153,7 +155,7 @@ LLM_REAL_CALL_ENV_FILE ?= .env.host
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
-	verify-prompt-bundle verify-llm-real-call-readiness \
+	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -349,6 +351,11 @@ verify-prompt-bundle:
 
 verify-llm-real-call-readiness:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_llm_real_call_readiness --env-file "$(LLM_REAL_CALL_ENV_FILE)" $(if $(LLM_REAL_CALL_READINESS_RUN_ID),--run-id "$(LLM_REAL_CALL_READINESS_RUN_ID)",)
+
+execute-llm-fixture-call:
+	@test -n "$(LLM_FIXTURE_CALL_RUN_ID)" || { echo "LLM_FIXTURE_CALL_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	@test "$(LLM_FIXTURE_CALL_CONFIRM)" = "YES_REAL_EXTERNAL_LLM" || { echo "LLM_FIXTURE_CALL_CONFIRM=YES_REAL_EXTERNAL_LLM is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_llm_fixture_call --env-file "$(LLM_REAL_CALL_ENV_FILE)" --run-id "$(LLM_FIXTURE_CALL_RUN_ID)" --confirm "$(LLM_FIXTURE_CALL_CONFIRM)"
 
 verify-g7-optin-http:
 	@test -n "$(G7_RUN_ID)" || { echo "G7_RUN_ID is required and must identify a new evidence run"; exit 2; }

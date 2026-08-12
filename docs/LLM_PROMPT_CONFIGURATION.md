@@ -95,3 +95,15 @@ PYTHONPATH=. .venv-g1-final-py311/bin/python scripts/validate_runtime_env.py \
 ```
 
 验证失败时不得修改旧 artifact 或旧 Prompt Bundle；应新建版本文件和新的验证记录。任何真实 DeepSeek 调用都必须先记录数据脱敏、学校/论文伦理要求、费用上限、超时、回退和审计方案，再由用户明确授权。
+
+获批后的首个真实调用只允许使用固定非敏感 fixture，并且必须显式提供确认字符串；该命令只调用 `intent.classify`，不连接任何数据库：
+
+```bash
+make PYTHON=.venv-g1-final-py311/bin/python \
+  LLM_REAL_CALL_ENV_FILE=.env.host \
+  LLM_FIXTURE_CALL_RUN_ID=llm-fixture-call-<unique-id> \
+  LLM_FIXTURE_CALL_CONFIRM=YES_REAL_EXTERNAL_LLM \
+  execute-llm-fixture-call
+```
+
+命令不会保存原始响应或密钥，只保存校验后的意图枚举、Prompt/请求审计字段、延迟和安全计数；运行前后不执行 MySQL/Neo4j/Chroma 操作、不 claim Outbox。
