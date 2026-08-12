@@ -30,7 +30,9 @@ import asyncmy
 from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scripts.g4_projection_contract import validate_g4_projection_query_spec
+from scripts.g4_projection_contract import (
+    validate_g4_projection_request_matches_query_spec,
+)
 from scripts.g4_llm_plan_policy import (
     load_deepseek_intent_policy,
     policy_hash,
@@ -628,10 +630,16 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     )
     if int(g4_baseline.get("candidate_persistence_rows", -1)) != target_candidate_delta:
         raise ValueError("G4 baseline candidate row count does not match the plan")
-    validate_g4_projection_query_spec(g4_baseline.get("query_spec"))
     if sha256_bytes(CONFIG_PATH.read_bytes()) != plan["input_hashes"]["config_bundle"]:
         raise ValueError("config bundle hash does not match the approved plan")
     request_payload = load_request_payload(plan, request_run_id=args.request_run_id)
+    validate_g4_projection_request_matches_query_spec(
+        g4_baseline.get("query_spec"),
+        input_text=str(request_payload["input_text"]),
+        resource_types=list(request_payload["requested_resource_types"]),
+        output_type=str(request_payload["requested_output_type"]),
+        limit=int(request_payload["limit"]),
+    )
 
     from scripts.validate_runtime_env import read_env, validate_compose
 

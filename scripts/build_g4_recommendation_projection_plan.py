@@ -20,7 +20,9 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from scripts.g4_projection_contract import validate_g4_projection_query_spec
+from scripts.g4_projection_contract import (
+    validate_g4_projection_request_matches_query_spec,
+)
 from scripts.g4_llm_plan_policy import (
     load_deepseek_intent_policy,
     policy_hash,
@@ -168,7 +170,13 @@ def build_plan(
         "evidence_confidence": True,
     }:
         raise ValueError("G4 baseline does not prove the writer candidate enrichment")
-    validate_g4_projection_query_spec(g4_baseline.get("query_spec"))
+    validate_g4_projection_request_matches_query_spec(
+        g4_baseline.get("query_spec"),
+        input_text=input_text,
+        resource_types=["BOOK"],
+        output_type="TOPIC_RESOURCES",
+        limit=limit,
+    )
     channel_counts = g4_baseline.get("candidate_channel_counts")
     if (
         not isinstance(channel_counts, dict)

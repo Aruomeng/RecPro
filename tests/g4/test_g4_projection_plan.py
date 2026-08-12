@@ -3,7 +3,10 @@ from __future__ import annotations
 import unittest
 
 from scripts.build_g4_recommendation_projection_plan import count_targets
-from scripts.g4_projection_contract import validate_g4_projection_query_spec
+from scripts.g4_projection_contract import (
+    validate_g4_projection_query_spec,
+    validate_g4_projection_request_matches_query_spec,
+)
 
 
 class G4ProjectionPlanTests(unittest.TestCase):
@@ -42,6 +45,32 @@ class G4ProjectionPlanTests(unittest.TestCase):
                     "limit": 8,
                 }
             )
+
+    def test_planned_request_must_match_recall_evidence(self) -> None:
+        query_spec = {
+            "input_text": "多智能体系统与智慧图书馆",
+            "resource_types": ["BOOK"],
+            "output_type": "TOPIC_RESOURCES",
+            "limit": 8,
+            "deadline_seconds": 180.0,
+        }
+        validate_g4_projection_request_matches_query_spec(
+            query_spec,
+            input_text="多智能体系统与智慧图书馆",
+            resource_types=["BOOK"],
+            output_type="TOPIC_RESOURCES",
+            limit=8,
+        )
+        with self.assertRaisesRegex(ValueError, "does not match"):
+            validate_g4_projection_request_matches_query_spec(
+                query_spec,
+                input_text="多智能体 智慧图书馆",
+                resource_types=["BOOK"],
+                output_type="TOPIC_RESOURCES",
+                limit=8,
+            )
+
+    def test_query_spec_rejects_out_of_bounds_deadline(self) -> None:
         with self.assertRaises(ValueError):
             validate_g4_projection_query_spec(
                 {

@@ -349,7 +349,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--user-id", type=int, default=1001)
     parser.add_argument("--limit", type=int, default=8)
-    parser.add_argument("--input-text", default="多智能体 智慧图书馆")
+    parser.add_argument("--input-text", default="多智能体系统与智慧图书馆")
     parser.add_argument("--resource-type", action="append", default=None)
     parser.add_argument("--output-type", default="TOPIC_RESOURCES")
     parser.add_argument("--deadline-seconds", type=float, default=180.0)

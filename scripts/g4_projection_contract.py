@@ -40,4 +40,31 @@ def validate_g4_projection_query_spec(value: object) -> dict[str, Any]:
     return dict(value)
 
 
-__all__ = ["EXPECTED_G4_QUERY_SPEC", "validate_g4_projection_query_spec"]
+def validate_g4_projection_request_matches_query_spec(
+    query_spec: object,
+    *,
+    input_text: str,
+    resource_types: list[str],
+    output_type: str,
+    limit: int,
+) -> dict[str, Any]:
+    """Fail closed when a planned HTTP request differs from its recall evidence."""
+
+    validated = validate_g4_projection_query_spec(query_spec)
+    request_semantics = {
+        "input_text": input_text.strip(),
+        "resource_types": resource_types,
+        "output_type": output_type,
+        "limit": limit,
+    }
+    expected_semantics = {key: validated[key] for key in EXPECTED_G4_QUERY_SPEC}
+    if request_semantics != expected_semantics:
+        raise ValueError("planned HTTP request does not match the G4 recall evidence")
+    return validated
+
+
+__all__ = [
+    "EXPECTED_G4_QUERY_SPEC",
+    "validate_g4_projection_query_spec",
+    "validate_g4_projection_request_matches_query_spec",
+]

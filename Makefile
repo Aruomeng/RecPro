@@ -33,6 +33,7 @@ G4_PORT_RUN_ID ?=
 G4_COMPOSITION_RUN_ID ?=
 G4_READONLY_FUSION_RUN_ID ?=
 G4_READONLY_FUSION_DEADLINE_SECONDS ?= 180
+G4_READONLY_FUSION_INPUT_TEXT ?= 多智能体系统与智慧图书馆
 G4_HTTP_READONLY_HOST_RUN_ID ?=
 G4_HTTP_READONLY_HOST_CONFIRM ?=
 G4_PROJECTION_PLAN_RUN_ID ?=
@@ -626,7 +627,7 @@ verify-g4-composition:
 
 verify-g4-readonly-fusion:
 	@test -n "$(G4_READONLY_FUSION_RUN_ID)" || { echo "G4_READONLY_FUSION_RUN_ID is required and must identify a new evidence run"; exit 2; }
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --deadline-seconds "$(G4_READONLY_FUSION_DEADLINE_SECONDS)" --env-file "$(COMPOSE_ENV_FILE)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_readonly_fusion_runtime --run-id "$(G4_READONLY_FUSION_RUN_ID)" --input-text "$(G4_READONLY_FUSION_INPUT_TEXT)" --deadline-seconds "$(G4_READONLY_FUSION_DEADLINE_SECONDS)" --env-file "$(COMPOSE_ENV_FILE)"
 
 verify-g4-http-readonly-host:
 	@test -n "$(G4_HTTP_READONLY_HOST_RUN_ID)" || { echo "G4_HTTP_READONLY_HOST_RUN_ID is required and must identify a new evidence run"; exit 2; }
