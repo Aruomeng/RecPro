@@ -160,6 +160,36 @@ def validate_decision(agent_name: str, decision: AgentDecision) -> AgentDecision
     return decision
 
 
+def decision_from_dict(value: object) -> AgentDecision:
+    """Parse a persisted/public decision without accepting free-form actions."""
+
+    if not isinstance(value, Mapping):
+        raise AgentAutonomyError("autonomy decision must be a mapping")
+    try:
+        action = AgentActionType(value["action"])
+        target = value["target"]
+        reason_code = value["reason_code"]
+        confidence = value["confidence"]
+        parameters = value.get("parameters", {})
+        evidence_refs = tuple(value.get("evidence_refs", ()))
+        return AgentDecision(
+            action=action,
+            target=target,
+            reason_code=reason_code,
+            confidence=confidence,
+            parameters=parameters,
+            evidence_refs=evidence_refs,
+        )
+    except (KeyError, TypeError, ValueError) as exc:
+        raise AgentAutonomyError("autonomy decision is not a valid contract") from exc
+
+
+def validate_decision_dict(agent_name: str, value: object) -> AgentDecision:
+    """Parse and validate a decision emitted in a trace or HTTP projection."""
+
+    return validate_decision(agent_name, decision_from_dict(value))
+
+
 def default_decision(
     agent_name: str,
     *,
@@ -200,7 +230,9 @@ __all__ = [
     "ROLE_PROFILES",
     "assert_payload_decision",
     "attach_decision",
+    "decision_from_dict",
     "default_decision",
     "profile_for",
     "validate_decision",
+    "validate_decision_dict",
 ]

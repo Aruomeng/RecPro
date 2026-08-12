@@ -152,6 +152,7 @@ G4_REAL_LLM_READONLY_LLM_ENV_FILE ?= .env.host
 G4_REAL_LLM_READONLY_CHROMA_PATH ?= data/chroma
 G4_REAL_LLM_READONLY_CHROMA_SITE_PACKAGES ?= .venv-chroma-g6-20260811/lib/python3.11/site-packages
 G4_AGENT_AUTONOMY_RUN_ID ?=
+G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -163,7 +164,7 @@ G4_AGENT_AUTONOMY_RUN_ID ?=
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
-	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy \
+	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -373,6 +374,10 @@ verify-g4-real-llm-readonly:
 verify-g4-agent-autonomy:
 	@test -n "$(G4_AGENT_AUTONOMY_RUN_ID)" || { echo "G4_AGENT_AUTONOMY_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_agent_autonomy_runtime --run-id "$(G4_AGENT_AUTONOMY_RUN_ID)"
+
+verify-g4-http-feedback-autonomy:
+	@test -n "$(G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID)" || { echo "G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID is required and must identify a new evidence run"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_http_feedback_autonomy --run-id "$(G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID)"
 
 verify-g7-optin-http:
 	@test -n "$(G7_RUN_ID)" || { echo "G7_RUN_ID is required and must identify a new evidence run"; exit 2; }

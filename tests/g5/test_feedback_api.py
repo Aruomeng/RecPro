@@ -109,6 +109,10 @@ class FeedbackAPITest(unittest.TestCase):
         self.assertEqual(1, replay.json()["replayed_count"])
         self.assertEqual("true", replay.headers["Idempotency-Replayed"])
         self.assertEqual(7, feedback.impressions[0].user_id)
+        self.assertEqual(
+            "RETURN_RESULT",
+            first.json()["results"][0]["agent_action"]["action"],
+        )
 
     def test_feedback_returns_pending_then_replayed(self) -> None:
         feedback = FakeFeedbackService()
@@ -131,6 +135,14 @@ class FeedbackAPITest(unittest.TestCase):
         self.assertEqual("REPLAYED", replay.json()["status"])
         self.assertEqual("true", replay.headers["Idempotency-Replayed"])
         self.assertEqual(9, feedback.feedback[0].user_id)
+        self.assertEqual(
+            "PROPOSE_PROFILE_DELTA",
+            first.json()["agent_action"]["action"],
+        )
+        self.assertEqual(
+            "RETURN_RESULT",
+            replay.json()["agent_action"]["action"],
+        )
 
     def test_behavior_accepts_direct_events_and_rejects_derived_events(self) -> None:
         feedback = FakeFeedbackService()
@@ -160,6 +172,10 @@ class FeedbackAPITest(unittest.TestCase):
             )
         self.assertEqual(202, accepted.status_code)
         self.assertEqual("PENDING", accepted.json()["profile_update_status"])
+        self.assertEqual(
+            "PROPOSE_PROFILE_DELTA",
+            accepted.json()["agent_action"]["action"],
+        )
         self.assertEqual(BehaviorEventType.CLICK_RECOMMENDATION, behavior.commands[0].event_type)
         self.assertEqual("DERIVED_EVENT_NOT_ALLOWED", derived.json()["error"]["code"])
         self.assertEqual(422, derived.status_code)

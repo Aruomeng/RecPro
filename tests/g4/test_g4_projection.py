@@ -140,6 +140,44 @@ class G4ProjectionTests(unittest.TestCase):
         self.assertEqual(42, response.record_id)
         self.assertEqual(3, len(response.items or []))
         self.assertEqual(101, response.items[0].item_id)
+        self.assertGreaterEqual(len(response.agent_actions), 1)
+        self.assertEqual("PLAN_RECALL", response.agent_actions[3].action.value)
+
+    def test_projection_rejects_an_agent_action_outside_its_role(self) -> None:
+        result = orchestration_result()
+        tampered_trace = list(result.trace)
+        ranking_step = next(
+            index for index, step in enumerate(tampered_trace)
+            if step["agent_name"] == "RankingAgent"
+        )
+        tampered_trace[ranking_step] = {
+            **tampered_trace[ranking_step],
+            "autonomy": {
+                **tampered_trace[ranking_step]["autonomy"],
+                "action": "ASK_CLARIFICATION",
+                "target": "User",
+            },
+        }
+        with self.assertRaisesRegex(G4ProjectionError, "outside the role contract"):
+            build_http_execution_payload(
+                replace(result, trace=tuple(tampered_trace)),
+                resources={
+                    resource_id: G4ResourceProjection(
+                        resource_id=resource_id,
+                        resource_type="BOOK",
+                        title=f"Book {resource_id}",
+                        authors=("Author",),
+                        publication_year=2024,
+                        availability_status="AVAILABLE_BORROW",
+                    )
+                    for resource_id in range(1, 4)
+                },
+                versions=G4ProjectionVersions(
+                    config_bundle="rec-1.0.0", dataset="lib-books-v1"
+                ),
+                evaluation_at=datetime(2026, 8, 11, 1, 0, tzinfo=UTC),
+                item_ids={1: 101, 2: 102, 3: 103},
+            )
 
     def test_projection_fails_closed_when_agent_omits_evidence_confidence(self) -> None:
         result = orchestration_result()

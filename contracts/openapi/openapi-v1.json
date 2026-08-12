@@ -765,6 +765,7 @@
           "items": {"type": "array", "items": {"$ref": "#/components/schemas/RecommendationItem"}},
           "questions": {"type": "array", "items": {"$ref": "#/components/schemas/ClarificationQuestion"}},
           "warnings": {"type": "array", "items": {"$ref": "#/components/schemas/WarningCode"}},
+          "agent_actions": {"type": "array", "items": {"$ref": "#/components/schemas/AgentAction"}},
           "versions": {"$ref": "#/components/schemas/VersionBundle"}
         }
       },
@@ -813,6 +814,23 @@
           "decision_reason_codes": {"type": "array", "minItems": 1, "items": {"type": "string"}},
           "decision_reason": {"type": "string", "minLength": 1},
           "policy_version": {"type": "string", "minLength": 1}
+        }
+      },
+      "AgentAction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["agent_name", "agent_version", "action", "target", "reason_code", "confidence"],
+        "properties": {
+          "step_no": {"type": ["integer", "null"], "minimum": 1},
+          "agent_name": {"type": "string", "minLength": 1},
+          "agent_version": {"type": "string", "minLength": 1},
+          "message_type": {"type": ["string", "null"], "minLength": 1},
+          "action": {"type": "string", "enum": ["RETURN_RESULT", "FALLBACK", "ASK_CLARIFICATION", "READ_PROFILE", "PROBE_RESOURCES", "PLAN_RECALL", "SELECT_CHANNELS", "REQUEST_REPLAN", "RENDER_EVIDENCE", "PROPOSE_PROFILE_DELTA", "DEGRADE"]},
+          "target": {"type": "string", "minLength": 1},
+          "reason_code": {"type": "string", "minLength": 1},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "parameters": {"type": "object", "additionalProperties": true},
+          "evidence_refs": {"type": "array", "items": {"type": "string", "minLength": 1}}
         }
       },
       "ClarificationQuestion": {
@@ -952,7 +970,8 @@
                 "impression_uuid": {"type": "string", "format": "uuid"},
                 "status": {"type": "string", "enum": ["ACCEPTED", "REPLAYED", "REJECTED"]},
                 "is_valid_exposure": {"type": "boolean"},
-                "error_code": {"type": ["string", "null"]}
+                "error_code": {"type": ["string", "null"]},
+                "agent_action": {"oneOf": [{"$ref": "#/components/schemas/AgentAction"}, {"type": "null"}]}
               }
             }
           }
@@ -1000,7 +1019,8 @@
           "resource_state": {"oneOf": [{"$ref": "#/components/schemas/ResourceState"}, {"type": "null"}]},
           "profile_update_status": {"type": "string", "enum": ["APPLIED", "PENDING", "NOT_REQUIRED"]},
           "profile_version_before": {"type": ["integer", "null"], "minimum": 1},
-          "profile_version_after": {"type": ["integer", "null"], "minimum": 1}
+          "profile_version_after": {"type": ["integer", "null"], "minimum": 1},
+          "agent_action": {"oneOf": [{"$ref": "#/components/schemas/AgentAction"}, {"type": "null"}]}
         }
       },
       "ResourceState": {
@@ -1020,7 +1040,8 @@
           "event_uuid": {"type": "string", "format": "uuid"},
           "event_id": {"type": "integer", "minimum": 1},
           "status": {"type": "string", "enum": ["ACCEPTED", "APPLIED", "REPLAYED"]},
-          "profile_update_status": {"type": "string", "enum": ["APPLIED", "PENDING", "NOT_REQUIRED"]}
+          "profile_update_status": {"type": "string", "enum": ["APPLIED", "PENDING", "NOT_REQUIRED"]},
+          "agent_action": {"oneOf": [{"$ref": "#/components/schemas/AgentAction"}, {"type": "null"}]}
         }
       },
       "ProfileResponse": {

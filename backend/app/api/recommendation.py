@@ -18,7 +18,7 @@ from pydantic import Field, field_validator
 from backend.app.api.auth import PrincipalResolver, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
-from backend.app.api.models import ErrorResponse, StrictModel
+from backend.app.api.models import AgentActionResponse, ErrorResponse, StrictModel
 from backend.app.recommendation.application.public import (
     IdempotencyConflictError,
     RecommendationTaskCommand,
@@ -155,6 +155,7 @@ class RecommendationExecutionResponse(StrictModel):
     items: list[RecommendationItemResponse] | None = None
     questions: list[ClarificationQuestionResponse] | None = None
     warnings: list[WarningCode]
+    agent_actions: list[AgentActionResponse] = Field(default_factory=list)
     versions: VersionBundleResponse | None = None
 
 

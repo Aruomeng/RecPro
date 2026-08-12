@@ -36,6 +36,14 @@ from .enums import (
     TriggerScene,
 )
 from .errors import ErrorCode, WarningCode
+from .autonomy import (
+    AgentAutonomyError,
+    AgentRoleProfile,
+    ROLE_PROFILES,
+    decision_from_dict,
+    validate_decision,
+    validate_decision_dict,
+)
 from .policy import (
     ClarificationQuestion,
     InteractionDecision,
@@ -48,7 +56,9 @@ from .state import can_transition
 __all__ = [
     "AdaptationState",
     "AgentActionType",
+    "AgentAutonomyError",
     "AgentDecision",
+    "AgentRoleProfile",
     "AgentMessageStatus",
     "AgentDispatch",
     "AgentMessage",
@@ -90,5 +100,9 @@ __all__ = [
     "TaskStatus",
     "TriggerScene",
     "WarningCode",
+    "ROLE_PROFILES",
+    "decision_from_dict",
+    "validate_decision",
+    "validate_decision_dict",
     "can_transition",
 ]

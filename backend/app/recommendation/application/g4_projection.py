@@ -25,6 +25,10 @@ from backend.app.recommendation.agents.orchestrator import (
     OrchestrationResult,
 )
 from backend.app.recommendation.domain.public import RecommendationTaskCommand
+from backend.app.shared_kernel.contracts.autonomy import (
+    AgentAutonomyError,
+    validate_decision_dict,
+)
 from backend.app.shared_kernel.contracts.enums import TaskStatus
 
 
@@ -184,6 +188,46 @@ def _required_mapping(value: object, name: str) -> Mapping[str, Any]:
     if not isinstance(value, Mapping):
         raise G4ProjectionError(f"{name} must be a JSON object")
     return value
+
+
+def _project_agent_actions(result: OrchestrationResult) -> list[dict[str, Any]]:
+    """Expose only validated Agent decisions at the explicit HTTP boundary."""
+
+    actions: list[dict[str, Any]] = []
+    for step in result.trace:
+        if not isinstance(step, Mapping):
+            raise G4ProjectionError("Agent trace step must be a mapping")
+        agent_name = step.get("agent_name")
+        autonomy = step.get("autonomy")
+        if not isinstance(agent_name, str) or not agent_name.strip():
+            raise G4ProjectionError("Agent trace step is missing agent_name")
+        try:
+            decision = validate_decision_dict(agent_name, autonomy)
+        except AgentAutonomyError as exc:
+            raise G4ProjectionError(
+                f"Agent trace action is outside the role contract: {agent_name}"
+            ) from exc
+        step_no = step.get("step_no")
+        message_type = step.get("message_type")
+        if isinstance(step_no, bool) or not isinstance(step_no, int) or step_no < 1:
+            raise G4ProjectionError("Agent trace step_no must be positive")
+        if not isinstance(message_type, str) or not message_type.strip():
+            raise G4ProjectionError("Agent trace message_type must be non-blank")
+        agent_version = step.get("agent_version")
+        if not isinstance(agent_version, str) or not agent_version.strip():
+            raise G4ProjectionError("Agent trace agent_version must be non-blank")
+        actions.append(
+            {
+                "step_no": step_no,
+                "agent_name": agent_name,
+                "agent_version": agent_version,
+                "message_type": message_type,
+                **decision.as_dict(),
+            }
+        )
+    if not actions:
+        raise G4ProjectionError("G4 HTTP projection requires Agent autonomy trace")
+    return actions
 
 
 def _bounded_number(value: object, name: str) -> float:
@@ -450,6 +494,7 @@ def build_http_execution_payload(
         raise G4ProjectionError("warnings must be a list")
     if any(not isinstance(warning, str) or not warning.strip() for warning in warnings):
         raise G4ProjectionError("warnings must contain non-blank strings")
+    agent_actions = _project_agent_actions(result)
     return {
         "task_id": str(result.task_id),
         "record_id": record_id,
@@ -470,6 +515,7 @@ def build_http_execution_payload(
         "items": projected_items or None,
         "questions": list(questions) if questions is not None else None,
         "warnings": list(warnings),
+        "agent_actions": agent_actions,
         "versions": {
             "config_bundle": versions.config_bundle,
             "policy": policy_version,

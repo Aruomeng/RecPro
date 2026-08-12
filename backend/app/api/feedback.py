@@ -12,13 +12,14 @@ from pydantic import Field, field_validator, model_validator
 from backend.app.api.auth import PrincipalResolver, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
-from backend.app.api.models import ErrorResponse, StrictModel
+from backend.app.api.models import AgentActionResponse, ErrorResponse, StrictModel
 from backend.app.feedback.application.public import (
     BehaviorApplicationService,
     BehaviorAppendCommand,
     FeedbackApplicationService,
     FeedbackCommand,
     ImpressionCommand,
+    feedback_learning_decision,
 )
 from backend.app.shared_kernel.contracts.enums import (
     BehaviorEventType,
@@ -47,6 +48,24 @@ DIRECT_BEHAVIOR_TYPES = frozenset(
         BehaviorEventType.ACCESS_PAPER_FULLTEXT,
     }
 )
+
+
+def _feedback_event_type(feedback_type: FeedbackType, rating: float | None) -> str:
+    if feedback_type is FeedbackType.FAVORITE:
+        return BehaviorEventType.FAVORITE_RESOURCE.value
+    if feedback_type is FeedbackType.BORROW:
+        return BehaviorEventType.BORROW_BOOK.value
+    if feedback_type is FeedbackType.REJECT:
+        return BehaviorEventType.REJECT_RECOMMENDATION.value
+    if feedback_type is FeedbackType.NOT_INTERESTED:
+        return BehaviorEventType.NOT_INTERESTED.value
+    if rating is None:
+        raise ValueError("RATE feedback requires rating")
+    if rating >= 4:
+        return BehaviorEventType.RATE_HIGH.value
+    if rating <= 2:
+        return BehaviorEventType.RATE_LOW.value
+    return BehaviorEventType.RATE_NEUTRAL.value
 
 
 def _aware(value: datetime, field_name: str) -> datetime:
@@ -90,6 +109,7 @@ class ImpressionResult(StrictModel):
     status: Literal["ACCEPTED", "REPLAYED", "REJECTED"]
     is_valid_exposure: bool = False
     error_code: str | None = None
+    agent_action: AgentActionResponse | None = None
 
 
 class ImpressionBatchResponse(StrictModel):
@@ -130,6 +150,7 @@ class FeedbackReceiptResponse(StrictModel):
     profile_update_status: Literal["APPLIED", "PENDING", "NOT_REQUIRED"]
     profile_version_before: int | None = Field(default=None, ge=1)
     profile_version_after: int | None = Field(default=None, ge=1)
+    agent_action: AgentActionResponse | None = None
 
 
 class BehaviorEventRequest(StrictModel):
@@ -183,6 +204,7 @@ class BehaviorEventReceiptResponse(StrictModel):
     event_id: int = Field(ge=1)
     status: Literal["ACCEPTED", "APPLIED", "REPLAYED"]
     profile_update_status: Literal["APPLIED", "PENDING", "NOT_REQUIRED"]
+    agent_action: AgentActionResponse | None = None
 
 
 def _api_error_for_value(exc: ValueError) -> PublicAPIError:
@@ -336,6 +358,11 @@ def create_feedback_router(
                     impression_uuid=receipt.impression_uuid,
                     status=status,
                     is_valid_exposure=receipt.is_valid_exposure,
+                    agent_action=feedback_learning_decision(
+                        event_type=BehaviorEventType.RECOMMENDATION_IMPRESSION.value,
+                        replayed=receipt.replayed,
+                        profile_update_pending=False,
+                    ),
                 )
             )
         response.headers["Idempotency-Replayed"] = (
@@ -424,6 +451,16 @@ def create_feedback_router(
             profile_update_status="PENDING" if receipt.outbox_id is not None else "NOT_REQUIRED",
             profile_version_before=None,
             profile_version_after=None,
+            agent_action=feedback_learning_decision(
+                event_type=_feedback_event_type(request.feedback_type, request.rating),
+                replayed=receipt.replayed,
+                profile_update_pending=receipt.outbox_id is not None,
+                state_type=(
+                    str(receipt.resource_state.get("state_type"))
+                    if receipt.resource_state is not None
+                    else None
+                ),
+            ),
         )
 
     @router.post(
@@ -508,6 +545,11 @@ def create_feedback_router(
             event_id=receipt.event_id,
             status="REPLAYED" if receipt.replayed else "ACCEPTED",
             profile_update_status="PENDING" if receipt.outbox_id is not None else "NOT_REQUIRED",
+            agent_action=feedback_learning_decision(
+                event_type=request.event_type.value,
+                replayed=receipt.replayed,
+                profile_update_pending=receipt.outbox_id is not None,
+            ),
         )
 
     return router

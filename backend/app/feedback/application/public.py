@@ -4,6 +4,7 @@ from backend.app.feedback.application.service import (
     BehaviorApplicationService,
     FeedbackApplicationService,
 )
+from backend.app.feedback.application.autonomy import feedback_learning_decision
 from backend.app.feedback.domain.public import (
     BehaviorAppendCommand,
     BehaviorReceipt,
@@ -11,6 +12,7 @@ from backend.app.feedback.domain.public import (
     FeedbackReceipt,
     ImpressionCommand,
     ImpressionReceipt,
+    feedback_event_type,
 )
 
 __all__ = [
@@ -22,4 +24,6 @@ __all__ = [
     "FeedbackReceipt",
     "ImpressionCommand",
     "ImpressionReceipt",
+    "feedback_learning_decision",
+    "feedback_event_type",
 ]

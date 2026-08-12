@@ -545,7 +545,7 @@ Query：
 |---|---:|---|
 | `include_unavailable_now` | false | true 时仅增加“当前已不可用”标记，不改变历史入选事实 |
 
-成功 `200` 使用 5.1 的完成响应中 `record_id`、`decision`、`groups`、`items`、`warnings` 和 `versions` 结构。
+成功 `200` 使用 5.1 的完成响应中 `record_id`、`decision`、`groups`、`items`、`warnings`、`agent_actions` 和 `versions` 结构。`agent_actions` 是经过角色白名单校验的局部动作快照，只描述 Agent 建议，不代表客户端可直接推进状态。
 
 ## 6. 推荐解释
 
@@ -650,7 +650,17 @@ Query：
       "impression_uuid": "e141c1ef-b331-452c-b3ad-ec5d118afda2",
       "status": "ACCEPTED",
       "is_valid_exposure": true,
-      "error_code": null
+      "error_code": null,
+      "agent_action": {
+        "agent_name": "FeedbackLearningAgent",
+        "agent_version": "feedback-edge-v1",
+        "action": "RETURN_RESULT",
+        "target": "RecommendationOrchestrator",
+        "reason_code": "NO_PROFILE_DELTA_REQUIRED",
+        "confidence": 0.82,
+        "parameters": {"event_type": "RECOMMENDATION_IMPRESSION"},
+        "evidence_refs": []
+      }
     }
   ]
 }
@@ -708,7 +718,21 @@ Query：
   },
   "profile_update_status": "PENDING",
   "profile_version_before": 7,
-  "profile_version_after": null
+  "profile_version_after": null,
+  "agent_action": {
+    "agent_name": "FeedbackLearningAgent",
+    "agent_version": "feedback-edge-v1",
+    "action": "PROPOSE_PROFILE_DELTA",
+    "target": "UserProfileAgent",
+    "reason_code": "PROFILE_DELTA_QUEUED",
+    "confidence": 0.84,
+    "parameters": {
+      "event_type": "NOT_INTERESTED",
+      "profile_update": "PENDING",
+      "adjustment": "NEGATIVE_SIGNAL"
+    },
+    "evidence_refs": []
+  }
 }
 ```
 

@@ -14,6 +14,7 @@ from backend.app.observability.application.public import (
     ServiceReadinessStatus,
 )
 from backend.app.shared_kernel.contracts.errors import ErrorCode
+from backend.app.shared_kernel.contracts.enums import AgentActionType
 
 
 class StrictModel(BaseModel):
@@ -54,3 +55,18 @@ class ErrorResponse(StrictModel):
     error: ErrorBody
     request_id: UUID
     trace_id: UUID
+
+
+class AgentActionResponse(StrictModel):
+    """Public, bounded view of one Agent's local action proposal."""
+
+    step_no: int | None = Field(default=None, ge=1)
+    agent_name: str = Field(min_length=1)
+    agent_version: str = Field(min_length=1)
+    message_type: str | None = Field(default=None, min_length=1)
+    action: AgentActionType
+    target: str = Field(min_length=1)
+    reason_code: str = Field(min_length=1)
+    confidence: float = Field(ge=0, le=1)
+    parameters: dict[str, Any] = Field(default_factory=dict)
+    evidence_refs: list[str] = Field(default_factory=list)
