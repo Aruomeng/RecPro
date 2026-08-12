@@ -1,0 +1,157 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-final-revalidation-plan.schema.json",
+  "title": "LibraMAS G8 final revalidation plan",
+  "description": "Append-only, read-only plan for final A01-A25 runtime revalidation. The plan authorizes no database, index, Outbox, browser business, or external LLM operation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "run_id",
+    "created_at",
+    "git_commit",
+    "matrix",
+    "mode",
+    "cases",
+    "browser_scenarios",
+    "safety_assertions",
+    "blockers",
+    "plan_hash"
+  ],
+  "properties": {
+    "schema_version": {"type": "string", "const": "g8-final-revalidation-plan-v1"},
+    "status": {"type": "string", "const": "PLAN_READY_WITH_BLOCKERS"},
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:[zZ]|[+-][0-9]{2}:[0-9]{2})$"
+    },
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "case_ids"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "case_ids": {
+          "type": "array",
+          "minItems": 25,
+          "maxItems": 25,
+          "uniqueItems": true,
+          "items": {"type": "string", "pattern": "^A(0[1-9]|1[0-9]|2[0-5])$"}
+        }
+      }
+    },
+    "mode": {"type": "string", "const": "READ_ONLY"},
+    "cases": {
+      "type": "array",
+      "minItems": 25,
+      "maxItems": 25,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "case_id",
+          "first_gate",
+          "final_gate",
+          "semantics",
+          "evidence_type",
+          "offline_test_refs",
+          "runtime_verifier_refs",
+          "runtime_artifact_globs",
+          "required_evidence"
+        ],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^A(0[1-9]|1[0-9]|2[0-5])$"},
+          "first_gate": {"type": "string", "minLength": 1},
+          "final_gate": {"type": "string", "minLength": 1},
+          "semantics": {"type": "string", "minLength": 1},
+          "evidence_type": {"type": "string", "minLength": 1},
+          "offline_test_refs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "runtime_verifier_refs": {
+            "type": "array",
+            "items": {"type": "string", "minLength": 1}
+          },
+          "runtime_artifact_globs": {
+            "type": "array",
+            "minItems": 1,
+            "items": {"type": "string", "minLength": 1}
+          },
+          "required_evidence": {
+            "type": "array",
+            "minItems": 3,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "browser_scenarios": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scenario_id", "fixture_user", "state", "write_policy", "required_evidence"],
+        "properties": {
+          "scenario_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+          "fixture_user": {"type": "string", "pattern": "^demo_[a-z]+$"},
+          "state": {"type": "string", "const": "PENDING"},
+          "write_policy": {
+            "type": "string",
+            "enum": ["REQUIRES_SEPARATE_CHANGE_PLAN"]
+          },
+          "required_evidence": {
+            "type": "array",
+            "minItems": 3,
+            "uniqueItems": true,
+            "items": {"type": "string", "minLength": 1}
+          }
+        }
+      }
+    },
+    "safety_assertions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "database_writes",
+        "neo4j_writes",
+        "chroma_writes",
+        "outbox_claims",
+        "external_llm_requests",
+        "file_deletions",
+        "database_physical_deletions",
+        "artifact_overwrites",
+        "business_post_authorization"
+      ],
+      "properties": {
+        "database_writes": {"const": 0},
+        "neo4j_writes": {"const": 0},
+        "chroma_writes": {"const": 0},
+        "outbox_claims": {"const": 0},
+        "external_llm_requests": {"const": 0},
+        "file_deletions": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0},
+        "business_post_authorization": {"const": false}
+      }
+    },
+    "blockers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
