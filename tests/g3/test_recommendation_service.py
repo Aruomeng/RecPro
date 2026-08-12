@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from math import isfinite
 import unittest
 from datetime import datetime
 
@@ -94,6 +95,48 @@ class G3RecommendationServiceTests(unittest.TestCase):
                 resources=(),
                 tags=(),
             )
+
+    def test_missing_optional_features_keep_all_scores_finite_and_bounded(self) -> None:
+        resources = (resource(1, "多智能体系统"), resource(2, "智慧图书馆"))
+        imported_tags = tuple(
+            ResourceTagEvidence(item.id, item.id, item.title, 0.8, 0.9, "IMPORT")
+            for item in resources
+        )
+        cases = (
+            (resources, (), (), ()),
+            (resources, imported_tags, (), ()),
+            (resources, (), (ProfileSignal(1, 0.8),), ((1, "VIEW_RESOURCE"),)),
+            (resources, imported_tags, (ProfileSignal(1, 0.8, negative=True),), ()),
+            ((), (), (), ()),
+        )
+        for case_no, (case_resources, case_tags, profile, behavior) in enumerate(cases, start=1):
+            with self.subTest(case_no=case_no):
+                result = execute_recommendation(
+                    RecommendationRequest(
+                        1001,
+                        "多智能体",
+                        ("BOOK", "PAPER"),
+                        2,
+                        datetime(2026, 1, 1),
+                    ),
+                    resources=case_resources,
+                    tags=case_tags,
+                    profile_signals=profile,
+                    behavior_events=behavior,
+                )
+                for item in result.items:
+                    feature = item.feature
+                    for value in (
+                        feature.rrf_score,
+                        feature.final_score,
+                        feature.negative_penalty,
+                        feature.evidence_confidence,
+                    ):
+                        self.assertTrue(isfinite(value))
+                        self.assertGreaterEqual(value, 0.0)
+                        self.assertLessEqual(value, 1.0)
+                    self.assertTrue(all(isfinite(score) for score in feature.channel_scores.values()))
+                    self.assertTrue(item.evidence_refs)
 
 
 if __name__ == "__main__":

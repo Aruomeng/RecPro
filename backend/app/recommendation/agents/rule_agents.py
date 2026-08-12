@@ -143,6 +143,26 @@ class RuleRecommendationPolicyAgent:
     name = "RecommendationPolicyAgent"
     version = "policy-rule-v1"
 
+    @staticmethod
+    def _difficulty_level_count(constraints: dict[str, object]) -> int | None:
+        """Read only an explicit coverage summary; never invent stages."""
+
+        value = constraints.get("covered_difficulty_levels")
+        if value is None:
+            value = constraints.get("difficulty_levels")
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, int):
+            return value if value >= 0 else None
+        if isinstance(value, (list, tuple)):
+            normalized = {
+                str(item).strip().upper()
+                for item in value
+                if isinstance(item, str) and item.strip()
+            }
+            return len(normalized)
+        return None
+
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
         intent = message.payload.get("intent", {})
         profile = message.payload.get("profile", {})
@@ -180,9 +200,31 @@ class RuleRecommendationPolicyAgent:
                 "min_output_type_rounds", DEFAULT_MIN_OUTPUT_TYPE_ROUNDS
             ),
         )
-        degraded = (
+        covered_difficulty_levels = self._difficulty_level_count(constraint_map)
+        reading_path_single_level = (
+            stability.output_type == "READING_PATH"
+            and covered_difficulty_levels is not None
+            and covered_difficulty_levels < 2
+        )
+        dependency_degraded = (
             bool(constraint_map.get("force_degraded"))
         ) or float(probe.get("metadata_coverage", 1.0) if isinstance(probe, dict) else 1.0) < 0.5
+        degraded = dependency_degraded or reading_path_single_level
+        policy_warnings: list[str] = []
+        if dependency_degraded:
+            policy_warnings.extend(("VECTOR_CHANNEL_UNAVAILABLE", "KG_CHANNEL_UNAVAILABLE"))
+        if reading_path_single_level:
+            policy_warnings.append("READING_PATH_SINGLE_DIFFICULTY")
+        reason_codes = [stability.reason_code]
+        if reading_path_single_level:
+            reason_codes.append("READING_PATH_SINGLE_DIFFICULTY")
+        reason_codes.append(
+            "MYSQL_ONLY_FALLBACK"
+            if dependency_degraded
+            else "READING_PATH_DEGRADED"
+            if reading_path_single_level
+            else "DIRECT_PATH"
+        )
         if unclear:
             return _result(
                 message,
@@ -230,11 +272,14 @@ class RuleRecommendationPolicyAgent:
                 "delivery_strategy": delivery,
                 "explanation_level": "LIMITED" if degraded else "EVIDENCE",
                 "adaptation_state": "NORMAL",
-                "decision_reason_codes": [
-                    stability.reason_code,
-                    "MYSQL_ONLY_FALLBACK" if degraded else "DIRECT_PATH",
-                ],
-                "decision_reason": "可选检索通道不可用，使用 MySQL 可复现降级路径。" if degraded else "输入和资源覆盖满足直接推荐条件。",
+                "decision_reason_codes": reason_codes,
+                "decision_reason": (
+                    "阅读路径仅覆盖一个难度层，降级返回，不伪造其他学习阶段。"
+                    if reading_path_single_level
+                    else "可选检索通道不可用，使用 MySQL 可复现降级路径。"
+                    if degraded
+                    else "输入和资源覆盖满足直接推荐条件。"
+                ),
                 "policy_version": self.version,
                 "output_type_rounds": stability.rounds,
                 "output_type_changed": stability.changed,
@@ -248,7 +293,7 @@ class RuleRecommendationPolicyAgent:
                 "clarification_questions": [],
             },
             confidence=0.62 if degraded else 0.88,
-            warnings=("VECTOR_CHANNEL_UNAVAILABLE", "KG_CHANNEL_UNAVAILABLE") if degraded else (),
+            warnings=tuple(policy_warnings),
             fallback_used=degraded,
         )
 

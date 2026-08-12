@@ -18,6 +18,7 @@ class G4OrchestratorTest(unittest.TestCase):
         *,
         input_text: str | None = "多智能体推荐",
         resource_types=("BOOK", "PAPER"),
+        output_type: str | None = None,
         constraints=None,
         context_version: int = 1,
         initial_status: TaskStatus = TaskStatus.CREATED,
@@ -29,6 +30,7 @@ class G4OrchestratorTest(unittest.TestCase):
             user_id=1001,
             input_text=input_text,
             resource_types=resource_types,
+            output_type=output_type,
             constraints=constraints,
             context_version=context_version,
             deadline_at=datetime.now(UTC) + timedelta(seconds=30),
@@ -80,6 +82,27 @@ class G4OrchestratorTest(unittest.TestCase):
         self.assertIn("VECTOR_CHANNEL_UNAVAILABLE", result.payload["warnings"])
         self.assertGreaterEqual(len(result.payload["items"]), 1)
         self.assertTrue(result.payload["agent_results"]["CandidateRecallAgent"]["fallback_used"])
+
+    def test_reading_path_with_one_difficulty_level_is_degraded_without_fake_stages(self) -> None:
+        result = self.execute(
+            self.request(
+                input_text="系统学习多智能体",
+                resource_types=("BOOK",),
+                output_type="READING_PATH",
+                constraints={"covered_difficulty_levels": 1},
+            )
+        )
+        self.assertEqual(TaskStatus.DEGRADED_COMPLETED, result.status)
+        decision = result.payload["decision"]
+        self.assertEqual("READING_PATH", decision["output_type"])
+        self.assertEqual("DEGRADED", decision["delivery_strategy"])
+        self.assertIn("READING_PATH_SINGLE_DIFFICULTY", decision["decision_reason_codes"])
+        self.assertIn("READING_PATH_SINGLE_DIFFICULTY", result.payload["warnings"])
+        self.assertNotIn("VECTOR_CHANNEL_UNAVAILABLE", result.payload["warnings"])
+        self.assertNotIn("KG_CHANNEL_UNAVAILABLE", result.payload["warnings"])
+        self.assertIn("READING_PATH_DEGRADED", decision["decision_reason_codes"])
+        self.assertIn("不伪造", decision["decision_reason"])
+        self.assertTrue(all("reading_stage" not in item for item in result.payload["items"]))
 
     def test_replanning_is_bounded_to_one_and_has_distinct_trace(self) -> None:
         result = self.execute(self.request(constraints={"force_replan": True}))
