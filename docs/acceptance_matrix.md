@@ -83,6 +83,6 @@ manifest.json 至少记录 Git commit、配置 Bundle、数据快照、索引版
 |---|---|---|
 | A01—A25 语义和 Gate 映射 | FROZEN_V1 | 本文件完成 |
 | G0 契约与安全门禁 | COMPLETED | `make verify-g0`：125 tests，四类门禁 PASS |
-| A01—A25 业务实现 | OFFLINE_AUDITED_WITH_BLOCKERS | 已完成逐项离线覆盖盘点；7 项有直接离线覆盖、14 项为相关覆盖、4 项缺少直接测试；最终 G8/G9 复验仍未运行 |
+| A01—A25 业务实现 | OFFLINE_AUDITED_WITH_BLOCKERS | 已完成逐项离线覆盖盘点；9 项有直接离线覆盖、14 项为相关覆盖、2 项缺少直接测试；最终 G8/G9 复验仍未运行 |
 
 在业务代码、真实数据和依赖尚未出现前，不得把 FROZEN_V1 解释为验收用例已通过。
