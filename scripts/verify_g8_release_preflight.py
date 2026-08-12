@@ -496,17 +496,37 @@ def main(argv: Sequence[str] | None = None) -> int:
         ("docs", [python, "-m", "scripts.validate_docs", "--root", "."]),
         ("architecture", [python, "scripts/architecture_guard.py", "--root", "."]),
         ("safety", [python, "scripts/safety_scan.py", "--root", "."]),
+        ("g0_contract_tests", [python, "-m", "unittest", "discover", "-s", "tests/contracts", "-p", "test_*.py"]),
+        ("g0_architecture_tests", [python, "-m", "unittest", "discover", "-s", "tests/architecture", "-p", "test_*.py"]),
+        ("g0_safety_tests", [python, "-m", "unittest", "discover", "-s", "tests/safety", "-p", "test_*.py"]),
         ("g1_tests", [python, "-m", "unittest", "discover", "-s", "tests/g1", "-t", "tests", "-p", "test_*.py"]),
+        ("g2_tests", [python, "-m", "unittest", "discover", "-s", "tests/g2", "-t", "tests", "-p", "test_*.py"]),
+        ("g3_tests", [python, "-m", "unittest", "discover", "-s", "tests/g3", "-t", "tests", "-p", "test_*.py"]),
         ("g4_tests", [python, "-m", "unittest", "discover", "-s", "tests/g4", "-t", "tests", "-p", "test_*.py"]),
         ("g5_tests", [python, "-m", "unittest", "discover", "-s", "tests/g5", "-t", "tests", "-p", "test_*.py"]),
+        ("g6_tests", [python, "-m", "unittest", "discover", "-s", "tests/g6", "-t", "tests", "-p", "test_*.py"]),
         ("g7_tests", [python, "-m", "unittest", "discover", "-s", "tests/g7", "-t", "tests", "-p", "test_*.py"]),
         ("g8_tests", [python, "-m", "unittest", "discover", "-s", "tests/g8", "-t", "tests", "-p", "test_*.py"]),
+        ("g9_tests", [python, "-m", "unittest", "discover", "-s", "tests/g9", "-t", "tests", "-p", "test_*.py"]),
         ("frontend_tests", [args.npm, "--prefix", "frontend", "test"]),
     ]
     for label, command in static_commands:
         command_results.append(
             run_command(label=label, command=command, timeout_seconds=args.timeout_seconds)
         )
+    command_results.append(
+        run_command(
+            label="compose_config",
+            command=[args.docker_cli, "compose", "--env-file", ".env.compose.example", "config", "--quiet"],
+            environment={
+                "RECPRO_MYSQL_PASSWORD": "validation-runtime-001",
+                "RECPRO_MYSQL_MIGRATION_PASSWORD": "validation-migration-004",
+                "RECPRO_MYSQL_ROOT_PASSWORD": "validation-bootstrap-002",
+                "RECPRO_NEO4J_PASSWORD": "validation-graph-003",
+            },
+            timeout_seconds=args.timeout_seconds,
+        )
+    )
     command_results.append(
         run_command(
             label="frontend_build",
