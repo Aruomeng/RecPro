@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-readonly-fault-matrix.schema.json",
+  "title": "LibraMAS G8 read-only fault matrix",
+  "description": "Append-only evidence produced by the isolated G8 read-only and fault-injection suite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "run_id", "plan_run_id", "plan_hash", "git_commit", "executed_at", "runner", "cases", "safety"],
+  "properties": {
+    "schema_version": {"type": "string", "const": "g8-readonly-fault-matrix-v1"},
+    "status": {"type": "string", "enum": ["PASS", "FAIL"]},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "executed_at": {"type": "string", "format": "date-time"},
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["python", "module_count", "test_count", "exit_code", "output_sha256"],
+      "properties": {
+        "python": {"type": "string", "minLength": 1},
+        "module_count": {"type": "integer", "minimum": 1},
+        "test_count": {"type": "integer", "minimum": 1},
+        "exit_code": {"type": "integer"},
+        "output_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 17,
+      "maxItems": 17,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["case_id", "status", "semantics", "test_refs", "modules", "verification_mode"],
+        "properties": {
+          "case_id": {"type": "string", "pattern": "^A(0[1-9]|1[0-9]|2[0-5])$"},
+          "status": {"type": "string", "enum": ["PASS", "FAIL"]},
+          "semantics": {"type": "string", "minLength": 1},
+          "test_refs": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "modules": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "verification_mode": {"type": "string", "const": "ISOLATED_IN_PROCESS_AND_FAULT_INJECTION"}
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["network_requests", "external_llm_requests", "database_reads", "database_writes", "neo4j_reads", "neo4j_writes", "chroma_reads", "chroma_writes", "outbox_claims", "files_deleted", "database_physical_deletions", "artifact_overwrites"],
+      "properties": {
+        "network_requests": {"const": 0},
+        "external_llm_requests": {"const": 0},
+        "database_reads": {"const": 0},
+        "database_writes": {"const": 0},
+        "neo4j_reads": {"const": 0},
+        "neo4j_writes": {"const": 0},
+        "chroma_reads": {"const": 0},
+        "chroma_writes": {"const": 0},
+        "outbox_claims": {"const": 0},
+        "files_deleted": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0}
+      }
+    }
+  }
+}

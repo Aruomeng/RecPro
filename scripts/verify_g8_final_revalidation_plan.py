@@ -37,6 +37,11 @@ from scripts.verify_g8_acceptance_coverage import (
 
 AUDIT_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "verification" / "g8-final-revalidation-audit.schema.json"
 RUNTIME_EVIDENCE_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "verification" / "g8-final-runtime-evidence.schema.json"
+RUNTIME_ARTIFACT_SCHEMAS = {
+    "g8-readonly-fault-matrix-v1": (
+        PROJECT_ROOT / "contracts" / "verification" / "g8-readonly-fault-matrix.schema.json"
+    ),
+}
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 
 
@@ -131,11 +136,22 @@ def _load_runtime_evidence(path: Path, plan: Mapping[str, Any]) -> tuple[dict[st
         return None, [f"runtime evidence unreadable: {type(exc).__name__}: {exc}"]
     if not isinstance(payload, dict):
         return None, ["runtime evidence root must be an object"]
+    return payload, _validate_runtime_evidence_payload(payload, plan)
+
+
+def _validate_runtime_evidence_payload(
+    payload: Mapping[str, Any],
+    plan: Mapping[str, Any],
+) -> list[str]:
+    """Validate evidence content and every artifact reference without mutation."""
+
     issues = _validate_instance(RUNTIME_EVIDENCE_SCHEMA_PATH, payload)
     if payload.get("plan_run_id") != plan.get("run_id"):
         issues.append("runtime evidence plan_run_id does not match the selected plan")
     if payload.get("plan_hash") != plan.get("plan_hash"):
         issues.append("runtime evidence plan_hash does not match the selected plan")
+    if payload.get("git_commit") != plan.get("git_commit"):
+        issues.append("runtime evidence git_commit does not match the selected plan")
     case_ids = [item.get("case_id") for item in payload.get("cases", []) if isinstance(item, dict)]
     expected = [f"A{index:02d}" for index in range(1, 26)]
     if case_ids != expected:
@@ -152,7 +168,87 @@ def _load_runtime_evidence(path: Path, plan: Mapping[str, Any]) -> tuple[dict[st
     ):
         if safety.get(key) != 0:
             issues.append(f"runtime evidence safety.{key} must be 0")
-    return payload, issues
+    plan_by_case = {
+        str(item["case_id"]): item
+        for item in plan.get("cases", [])
+        if isinstance(item, dict) and "case_id" in item
+    }
+    passed_count = 0
+    failed_count = 0
+    for case in payload.get("cases", []):
+        if not isinstance(case, dict):
+            continue
+        case_id = str(case.get("case_id", "<unknown>"))
+        status = case.get("status")
+        change_plan = case.get("change_plan")
+        selected_plan_case = plan_by_case.get(case_id, {})
+        if status == "PASS":
+            passed_count += 1
+            artifacts = case.get("artifacts", [])
+            if not artifacts:
+                issues.append(f"{case_id} PASS requires at least one artifact")
+            if (
+                selected_plan_case.get("authorization") == "SEPARATE_EXACT_CHANGE_PLAN"
+                and change_plan is None
+            ):
+                issues.append(f"{case_id} PASS requires its exact ChangePlan reference")
+        elif status == "FAIL":
+            failed_count += 1
+        if selected_plan_case.get("authorization") == "NONE" and change_plan is not None:
+            issues.append(f"{case_id} read-only evidence must not attach a ChangePlan")
+        for artifact in case.get("artifacts", []):
+            if not isinstance(artifact, dict):
+                continue
+            try:
+                artifact_path = resolve_inside_project(
+                    str(artifact.get("path", "")),
+                    label=f"{case_id} artifact",
+                )
+            except ValueError as exc:
+                issues.append(str(exc))
+                continue
+            if not artifact_path.is_file():
+                issues.append(f"{case_id} artifact does not exist: {artifact.get('path')}")
+                continue
+            if sha256_file(artifact_path) != artifact.get("sha256"):
+                issues.append(f"{case_id} artifact SHA-256 does not match: {artifact.get('path')}")
+            try:
+                artifact_payload = json.loads(artifact_path.read_text(encoding="utf-8"))
+            except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+                issues.append(f"{case_id} artifact is not readable JSON: {artifact.get('path')}")
+                continue
+            if not isinstance(artifact_payload, dict) or artifact_payload.get("schema_version") != artifact.get("schema_version"):
+                issues.append(f"{case_id} artifact schema_version does not match: {artifact.get('path')}")
+                continue
+            artifact_schema_path = RUNTIME_ARTIFACT_SCHEMAS.get(str(artifact.get("schema_version")))
+            if artifact_schema_path is not None:
+                for issue in _validate_instance(artifact_schema_path, artifact_payload):
+                    issues.append(f"{case_id} artifact contract: {issue}")
+            for binding_key, evidence_key in (
+                ("plan_run_id", "plan_run_id"),
+                ("plan_hash", "plan_hash"),
+                ("git_commit", "git_commit"),
+            ):
+                if binding_key in artifact_payload and artifact_payload.get(binding_key) != payload.get(evidence_key):
+                    issues.append(
+                        f"{case_id} artifact {binding_key} does not match runtime evidence"
+                    )
+    expected_status = "FAIL" if failed_count else ("PASS" if passed_count == 25 else "PENDING")
+    if payload.get("status") != expected_status:
+        issues.append(
+            f"runtime evidence status must be {expected_status} for the supplied case results"
+        )
+    if passed_count and not any(
+        case.get("status") == "PASS"
+        and plan_by_case.get(str(case.get("case_id")), {}).get("authorization")
+        == "SEPARATE_EXACT_CHANGE_PLAN"
+        for case in payload.get("cases", [])
+        if isinstance(case, dict)
+    ):
+        for key in ("database_writes", "neo4j_writes", "chroma_writes", "outbox_claims"):
+            if safety.get(key) != 0:
+                issues.append(f"read-only-only runtime evidence safety.{key} must be 0")
+    return issues
 
 
 def _case_results(

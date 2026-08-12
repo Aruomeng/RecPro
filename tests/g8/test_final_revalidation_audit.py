@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+from pathlib import Path
 import unittest
 
 from scripts.build_g8_final_revalidation_plan import build_plan, validate_plan
 from scripts.verify_g8_final_revalidation_plan import (
     _case_results,
+    _validate_runtime_evidence_payload,
     _validate_instance,
     AUDIT_SCHEMA_PATH,
     RUNTIME_EVIDENCE_SCHEMA_PATH,
@@ -145,6 +148,88 @@ class FinalRevalidationAuditTest(unittest.TestCase):
         self.assertEqual("g8-final-revalidation-audit-20260812-001", validate_run_id("g8-final-revalidation-audit-20260812-001"))
         with self.assertRaises(ValueError):
             validate_run_id("../overwrite")
+
+    def test_runtime_loader_rejects_pass_without_verifiable_artifact(self) -> None:
+        plan = build_plan(
+            run_id="g8-final-revalidation-audit-test-003",
+            git_commit="c" * 40,
+        )
+        payload = {
+            "schema_version": "g8-final-runtime-evidence-v1",
+            "plan_run_id": plan["run_id"],
+            "plan_hash": plan["plan_hash"],
+            "git_commit": plan["git_commit"],
+            "status": "PENDING",
+            "safety": {
+                "database_reads": 0,
+                "database_writes": 0,
+                "neo4j_reads": 0,
+                "neo4j_writes": 0,
+                "chroma_reads": 0,
+                "chroma_writes": 0,
+                "outbox_claims": 0,
+                "external_llm_requests": 0,
+                "files_deleted": 0,
+                "database_physical_deletions": 0,
+                "artifact_overwrites": 0,
+            },
+            "cases": [
+                {
+                    "case_id": f"A{index:02d}",
+                    "status": "PASS" if index == 1 else "PENDING",
+                    "artifacts": [],
+                    "observations": {},
+                    "change_plan": None,
+                }
+                for index in range(1, 26)
+            ],
+        }
+        issues = _validate_runtime_evidence_payload(payload, plan)
+        self.assertIn("A01 PASS requires at least one artifact", issues)
+
+    def test_runtime_loader_verifies_artifact_hash_and_schema(self) -> None:
+        plan = build_plan(
+            run_id="g8-final-revalidation-audit-test-004",
+            git_commit="d" * 40,
+        )
+        artifact_path = Path("tests/fixtures/g8/runtime-artifact.json")
+        artifact_bytes = artifact_path.read_bytes()
+        payload = {
+            "schema_version": "g8-final-runtime-evidence-v1",
+            "plan_run_id": plan["run_id"],
+            "plan_hash": plan["plan_hash"],
+            "git_commit": plan["git_commit"],
+            "status": "PENDING",
+            "safety": {
+                "database_reads": 0,
+                "database_writes": 0,
+                "neo4j_reads": 0,
+                "neo4j_writes": 0,
+                "chroma_reads": 0,
+                "chroma_writes": 0,
+                "outbox_claims": 0,
+                "external_llm_requests": 0,
+                "files_deleted": 0,
+                "database_physical_deletions": 0,
+                "artifact_overwrites": 0,
+            },
+            "cases": [
+                {
+                    "case_id": f"A{index:02d}",
+                    "status": "PASS" if index == 1 else "PENDING",
+                    "artifacts": ([{
+                        "path": artifact_path.as_posix(),
+                        "schema_version": "test-artifact-v1",
+                        "sha256": hashlib.sha256(artifact_bytes).hexdigest(),
+                    }] if index == 1 else []),
+                    "observations": {},
+                    "change_plan": None,
+                }
+                for index in range(1, 26)
+            ],
+        }
+        issues = _validate_runtime_evidence_payload(payload, plan)
+        self.assertEqual([], issues)
 
 
 if __name__ == "__main__":

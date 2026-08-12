@@ -153,6 +153,8 @@ G4_REAL_LLM_READONLY_CHROMA_PATH ?= data/chroma
 G4_REAL_LLM_READONLY_CHROMA_SITE_PACKAGES ?= .venv-chroma-g6-20260811/lib/python3.11/site-packages
 G4_AGENT_AUTONOMY_RUN_ID ?=
 G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID ?=
+G8_READONLY_FAULT_MATRIX_RUN_ID ?=
+G8_READONLY_FAULT_MATRIX_PLAN ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -164,7 +166,7 @@ G4_HTTP_FEEDBACK_AUTONOMY_RUN_ID ?=
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
-	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy \
+	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy verify-g8-readonly-fault-matrix \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -271,6 +273,11 @@ verify-g8-final-revalidation-plan:
 	@test -n "$(G8_FINAL_REVALIDATION_AUDIT_RUN_ID)" || { echo "G8_FINAL_REVALIDATION_AUDIT_RUN_ID is required and must name a new evidence run"; exit 2; }
 	@test -n "$(G8_FINAL_REVALIDATION_PLAN)" || { echo "G8_FINAL_REVALIDATION_PLAN is required and must point to an existing plan"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_final_revalidation_plan --run-id "$(G8_FINAL_REVALIDATION_AUDIT_RUN_ID)" --plan "$(G8_FINAL_REVALIDATION_PLAN)" $(if $(G8_FINAL_RUNTIME_EVIDENCE),--runtime-evidence "$(G8_FINAL_RUNTIME_EVIDENCE)",)
+
+verify-g8-readonly-fault-matrix:
+	@test -n "$(G8_READONLY_FAULT_MATRIX_RUN_ID)" || { echo "G8_READONLY_FAULT_MATRIX_RUN_ID is required and must name a new evidence run"; exit 2; }
+	@test -n "$(G8_READONLY_FAULT_MATRIX_PLAN)" || { echo "G8_READONLY_FAULT_MATRIX_PLAN is required and must point to the current clean-commit plan"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_readonly_fault_matrix --run-id "$(G8_READONLY_FAULT_MATRIX_RUN_ID)" --plan "$(G8_READONLY_FAULT_MATRIX_PLAN)" --python "$(PYTHON)"
 
 verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 

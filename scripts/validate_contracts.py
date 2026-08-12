@@ -67,6 +67,7 @@ REQUIRED_DOCUMENTS = {
     "contracts/prompts/prompt-bundle.schema.json",
     "contracts/prompts/rec-prompts-v1.0.0.json",
     "contracts/openapi/openapi-v1.json",
+    "contracts/verification/g8-readonly-fault-matrix.schema.json",
     "contracts/verification/g8-final-revalidation-audit.schema.json",
     "contracts/verification/g8-final-runtime-evidence.schema.json",
     "contracts/verification/g8-final-revalidation-plan.schema.json",
