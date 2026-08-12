@@ -106,6 +106,7 @@
   - 已完成 G8 发布候选前置扩展运行：`artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；G0 合约/架构/安全测试、G1—G9 测试、契约/文档/架构/安全脚本、Compose config、前端测试/构建、默认 fail-closed 配置和后端镜像检查共 20 项技术检查全部 PASS；源码清单 402 个文件，root_sha256=`1c4ed1df042989fbacae81c09e1f7949155e7e72320fe516e5c7fa312815b0b5`。
   - 已完成 A01—A25 离线覆盖审计：新增 `scripts/verify_g8_acceptance_coverage.py`、`tests/g8/test_acceptance_coverage.py` 和 `make verify-g8-acceptance-coverage`；`artifacts/verification/g8/g8-acceptance-coverage-20260812-003/acceptance-coverage.json` 为 `PASS_WITH_BLOCKERS`，25 项映射全部有效，9 项直接覆盖、14 项相关覆盖、2 项缺少直接测试（A12、A24），25 项最终 G8/G9 复验仍为 `PENDING`。审计只读源码/测试/既有 artifact，数据库、Neo4j、Chroma、外部 LLM、删除和覆盖计数均为 0。
   - 已补齐 A12/A24 直接离线覆盖：`CatalogCandidateRecallAgent` 在 Neo4j 有界超时后输出 `kg_score=null`、无虚构图路径且保留故障尝试证据；新增纯领域输出类型稳定策略，自动类型在最小两轮/滞回区间内保持，显式输出类型可立即覆盖，并由规则 Policy Agent 输出稳定性原因码。新增测试 `tests/g6/test_retrieval_fusion.py::test_graph_timeout_is_null_and_explanation_cannot_invent_graph_path` 与 `tests/g4/test_output_type_stability.py`；本阶段不连接或写入任何数据存储。
+  - 已完成新的追加式 A01—A25 覆盖审计：`artifacts/verification/g8/g8-acceptance-coverage-20260812-004/acceptance-coverage.json` 为 `PASS_WITH_BLOCKERS`，25 项映射全部有效，11 项直接覆盖、14 项相关覆盖、0 项缺少直接测试，最终 G8/G9 复验 25 项仍为 `PENDING`；报告绑定提交 `e066b990c3d2baed777b5e98fd18759c428d40af`，生成前工作区 clean，所有安全计数为 0。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -123,7 +124,7 @@
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
-- `next_step`：完成 A12/A24 代码提交后的全量离线门禁并生成新的追加式覆盖审计；随后为 A01—A25 设计最终 G8/G9 复验运行。在新的精确 plan_id/hash 获得批准前，不执行真实 G5 浏览器写入或非空 Worker 消费。
+- `next_step`：基于 `g8-acceptance-coverage-20260812-004` 进入 A01—A25 最终 G8/G9 复验设计，并先补齐六场景浏览器 E2E/故障矩阵的只读或隔离验证计划。在新的精确 plan_id/hash 获得批准前，不执行真实 G5 浏览器写入或非空 Worker 消费。
 
 ---
 
@@ -140,7 +141,7 @@
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
-| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；A12/A24 直接离线测试已补齐，待新覆盖审计报告 | 当前代码覆盖目标为 11 项直接、14 项相关、0 项缺失；最终 A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
+| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；`artifacts/verification/g8/g8-acceptance-coverage-20260812-004/acceptance-coverage.json` 完成 A01—A25 映射 | 25 项映射无陈旧引用；11 项直接覆盖、14 项相关覆盖、0 项缺失；最终 A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
@@ -150,7 +151,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 发布候选只读/构建前置已通过，扩展报告 `g8-release-preflight-20260812-002` 为 `PASS_WITH_BLOCKERS`；A12/A24 直接离线覆盖已补齐，待生成新的追加式 `g8-acceptance-coverage` 报告，目标为 11 项直接、14 项相关、0 项缺失。数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步运行全量离线门禁并规划最终 A01—A25/六场景 E2E 与故障矩阵，仍不能替代真实 G5 ChangePlan。
+- `current_subtask`：G8 发布候选只读/构建前置已通过，扩展报告 `g8-release-preflight-20260812-002` 为 `PASS_WITH_BLOCKERS`；A01—A25 覆盖审计 `g8-acceptance-coverage-20260812-004` 已生成，11 项直接、14 项相关、0 项缺失，映射无陈旧引用。数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步规划最终 A01—A25/六场景 E2E 与故障矩阵，仍不能替代真实 G5 ChangePlan。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -1710,7 +1711,7 @@ A12 结果：Neo4j 依赖使用最多两次有界重试；超时后依赖状态�
 A24 结果：自动输出类型通过纯领域状态机执行最小两轮保持与 `0.05` 滞回区间；连续近阈值序列保持原类型，信号明显离开区间后才切换；`output_type` 显式值返回 `EXPLICIT_OUTPUT_TYPE_OVERRIDE` 并立即覆盖。
 测试结果：A12/A24 新增定向测试 4 项 PASS；G4 全套 97 项 PASS；G6 全套 38 项 PASS；不连接 MySQL、Neo4j、Chroma，不调用 DeepSeek。
 安全计数：database_reads=0、database_writes=0、neo4j_reads=0、neo4j_writes=0、chroma_reads=0、chroma_writes=0、external_llm_requests=0、files_deleted=0、database_physical_deletes=0、artifacts_overwritten=0。
-覆盖审计：映射已更新为 A12/A24 `DIRECT`；提交后使用新 run_id 生成追加式报告，预期 11 项直接、14 项相关、0 项缺失；最终 A01—A25 G8/G9 复验仍为 `PENDING`。
+覆盖审计：映射已更新为 A12/A24 `DIRECT`；`artifacts/verification/g8/g8-acceptance-coverage-20260812-004/acceptance-coverage.json` 已生成，11 项直接、14 项相关、0 项缺失、mapping_stale=0，绑定 commit=`e066b990c3d2baed777b5e98fd18759c428d40af` 且生成前工作区 clean；最终 A01—A25 G8/G9 复验仍为 `PENDING`。
 未解决风险：六场景浏览器 E2E、故障矩阵、生产 OIDC/JWKS、真实 G5 非空 Worker/浏览器写入和 G9 正式输入仍未完成；任何数据库写入仍需新的精确 ChangePlan、plan_id/hash 与用户批准。
 下一步唯一动作：运行全量 G0—G9 离线门禁、静态门禁和新的 `g8-acceptance-coverage` 报告，然后提交并推送本阶段变更。
 ```
