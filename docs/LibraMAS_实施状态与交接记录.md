@@ -113,6 +113,8 @@
   - 已完成新的追加式 A01—A25 覆盖审计：`artifacts/verification/g8/g8-acceptance-coverage-20260812-006/acceptance-coverage.json` 为 `PASS_WITH_BLOCKERS`，25 项映射全部有效，15 项直接覆盖、10 项相关覆盖、0 项缺少直接测试，最终 G8/G9 复验 25 项仍为 `PENDING`；报告绑定提交 `5cd6aa48be419fc9602cf00256cdce808013c646`，生成前工作区 clean，所有安全计数为 0。
   - 已补齐 A19/A23/A25 直接离线覆盖：越权 Evidence Ref 经 `LLMExplanationAgent` 校验失败后回退有界模板；反馈→Outbox→Worker 链路断言画像版本增长、Outbox=`DONE` 和 `profile_change_log` 追加；历史重放选择器按 `evaluation_at` 同时冻结资源、行为、资源状态和热度，未来事实不改变快照内容哈希。新增测试分别位于 `tests/g6/test_evidence_bounded_explanation.py`、`tests/g5/test_feedback_profile_version_change_log.py`、`tests/g9/test_historical_replay_boundary.py`。
   - 已完成新的追加式 A01—A25 覆盖审计：`artifacts/verification/g8/g8-acceptance-coverage-20260812-007/acceptance-coverage.json` 为 `PASS_WITH_BLOCKERS`，25 项映射全部有效，18 项直接覆盖、7 项相关覆盖、0 项缺少直接测试，最终 G8/G9 复验 25 项仍为 `PENDING`；报告绑定提交 `eea67d88beb8eff58b47e5696e33aa72e2ea8e5c`，生成前工作区 clean，所有安全计数为 0。
+  - 已补齐 A01/A02/A03/A08/A09/A10/A16 的直接离线证据：画像快照内容哈希重放稳定、同一 request_id 只保留一个推荐记录、同一 behavior event_uuid 只保留一个行为事实、主题负反馈反事实严格降分、曝光 `visible_ms=1000` 与 `max_visible_ratio=0.5` 闭区间边界、固定配置/数据集/seed/evaluation_at 的推荐输出指纹均有独立测试；A09/A10 的阈值由纯领域函数复用到 MySQL 适配器，A16 指纹模块不依赖存储或外部服务。
+  - 已完成新的追加式 A01—A25 覆盖审计：`artifacts/verification/g8/g8-acceptance-coverage-20260812-008/acceptance-coverage.json` 为 `PASS_WITH_BLOCKERS`，25 项映射全部有效，25 项直接覆盖、0 项相关覆盖、0 项缺少直接测试，最终 G8/G9 复验 25 项仍为 `PENDING`；报告绑定提交 `78bfc451300a3e24347323d3d1fb296826ef16ff`，生成前工作区 clean，所有安全计数为 0。
 - `open_issues`：
   - G1 已关闭，但推荐链路仍按设计保持 `can_recommend=false`；必须完成 G2/G3 后才能声称推荐系统可用。
   - 演示数据和论文评价数据来源、许可证仍需在G2前确认并形成版本化清单。
@@ -130,7 +132,7 @@
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
-- `next_step`：基于 `g8-acceptance-coverage-20260812-007` 进入 A01—A25 最终 G8/G9 复验设计，剩余离线相关项为 A01/A02/A03/A08/A09/A10/A16；同时规划六场景浏览器 E2E、故障矩阵、生产认证和运行态证据。在新的精确 plan_id/hash 获得批准前，不执行真实 G5 浏览器写入或非空 Worker 消费。
+- `next_step`：基于 `g8-acceptance-coverage-20260812-008` 进入 A01—A25 最终 G8/G9 运行态复验设计；离线映射已全部为 DIRECT，但 25 项 final_revalidation 仍为 `PENDING`。随后完成六场景浏览器 E2E、故障矩阵、生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。在新的精确 plan_id/hash 获得批准前，不执行真实 G5 浏览器写入或非空 Worker 消费。
 
 ---
 
@@ -147,7 +149,7 @@
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py` | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；DeepSeek 外部调用仍为 0 |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
-| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；`artifacts/verification/g8/g8-acceptance-coverage-20260812-007/acceptance-coverage.json` 完成 A01—A25 映射 | 25 项映射无陈旧引用；18 项直接覆盖、7 项相关覆盖、0 项缺失；最终 A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
+| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；`artifacts/verification/g8/g8-acceptance-coverage-20260812-008/acceptance-coverage.json` 完成 A01—A25 映射 | 25 项映射无陈旧引用；25 项直接覆盖、0 项相关覆盖、0 项缺失；最终 A01—A25、六场景浏览器 E2E、故障矩阵、生产认证和发布凭据仍未完成 |
 | G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
@@ -157,7 +159,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 发布候选只读/构建前置已通过，A15/A18/A19/A23/A25 已补齐直接离线证据；A01—A25 覆盖审计 `g8-acceptance-coverage-20260812-007` 已生成，18 项直接、7 项相关、0 项缺失，映射无陈旧引用。数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步规划 A01/A02/A03/A08/A09/A10/A16、最终 A01—A25/六场景 E2E、剩余故障矩阵与运行态证据，仍不能替代真实 G5 ChangePlan。
+- `current_subtask`：G8 发布候选只读/构建前置已通过，A01/A02/A03/A08/A09/A10/A16 已补齐直接离线证据；A01—A25 覆盖审计 `g8-acceptance-coverage-20260812-008` 已生成，25 项直接、0 项相关、0 项缺失，映射无陈旧引用。数据库读取/写入、Outbox claim、Neo4j/Chroma 访问和 DeepSeek 请求均为 `0`；下一步是设计并执行 A01—A25 final runtime revalidation、六场景 E2E、故障矩阵、生产认证和 G9 输入冻结，离线 DIRECT 不能替代真实 G5 ChangePlan。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -1776,6 +1778,30 @@ A25 结果：新增 storage-independent historical replay selector，按 `evalua
 安全计数：database_reads=0、database_writes=0、neo4j_reads=0、neo4j_writes=0、chroma_reads=0、chroma_writes=0、external_llm_requests=0、files_deleted=0、database_physical_deletes=0、artifacts_overwritten=0。
 未解决风险：离线相关项仍为 A01/A02/A03/A08/A09/A10/A16；A01—A25 最终运行态复验、六场景浏览器 E2E、生产 OIDC/JWKS、真实非空 Worker/浏览器写入、DeepSeek 外部调用审查和 G9 正式输入仍未完成。
 下一步唯一动作：继续为上述七项设计直接离线测试和最终只读运行态复验；任何真实数据库、Worker 或浏览器业务写入仍须新的精确 ChangePlan、plan_id/hash 和用户批准。
+```
+
+## A01/A02/A03/A08/A09/A10/A16 幂等、曝光、反事实与指纹补齐
+
+```text
+交接ID：G8-A01-A02-A03-A08-A09-A10-A16-DIRECT-20260812-008
+Gate：G8 A01—A25 离线直接覆盖收口
+状态：CODE_COMPLETE / FULL_OFFLINE_GATE_PASS / NO_DATABASE_ACCESS
+时间：2026-08-12（Asia/Shanghai）
+目标：将最后七项相关离线映射提升为可独立复现的 DIRECT 证据，同时保持领域逻辑纯函数化、适配器边界清晰和零删除约束。
+新增文件：`backend/app/recommendation/domain/fingerprint.py`、`tests/g5/test_exposure_boundaries.py`。
+修改文件：`backend/app/feedback/domain/models.py`、`backend/app/feedback/domain/public.py`、`backend/app/feedback/adapters/mysql.py`、`tests/g2/test_profile_replay.py`、`tests/g3/test_recommendation_api.py`、`tests/g3/test_recommendation_service.py`、`tests/g5/test_feedback_api.py`、`scripts/verify_g8_acceptance_coverage.py`。
+A01 结果：画像快照在相同 `as_of` 下对事件输入重排保持 `input_hash`、事件数和快照内容稳定，新增独立测试 `test_profile_snapshot_content_hash_is_replay_stable`。
+A02 结果：相同 `request_id` 的推荐任务重放返回同一任务身份、首写 201/重放 200，内存持久化边界的推荐记录数保持为 1。
+A03 结果：相同直接行为 `event_uuid` 重放返回 `Idempotency-Replayed=true`，行为事实边界只保留 1 条事实。
+A08 结果：固定候选集在加入 `TOPIC_NOT_INTERESTED` 负画像信号后，目标资源得到正惩罚且 `final_score` 严格低于基线。
+A09/A10 结果：纯领域 `is_valid_exposure` 固化闭区间 `visible_ms>=1000`、`max_visible_ratio>=0.5`，边界 `999/0.49` 失败、`1000/0.5` 通过；MySQL 适配器复用该函数，避免阈值漂移。
+A16 结果：新增纯领域 `execution_fingerprint`，将 `config_bundle_version`、`dataset_version`、`seed`、`evaluation_at`、意图、排序分数、负反馈、证据和警告纳入规范化 SHA-256；等价输入重排产生相同指纹，拒绝空版本和非有限分数。
+实际命令：`make PYTHON=.venv-g1-final-py311/bin/python test-g0 test-g1-python test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g8 test-g9 docs-check contracts-check architecture-check safety-check`；`make PYTHON=.venv-g1-final-py311/bin/python G8_ACCEPTANCE_COVERAGE_RUN_ID=g8-acceptance-coverage-20260812-008 verify-g8-acceptance-coverage`。
+测试结果：G0 合约 67、架构 28、安全 36、G1 128、G2 15、G3 33、G4 98、G5 30、G6 40、G7 9、G8 5、G9 9 全部 PASS；文档 18 个 Markdown/42 个结构化块、契约 24 个文档、架构扫描 125 个文件、静态安全扫描 350 个文件全部 PASS；`git diff --check` PASS。
+覆盖审计：`artifacts/verification/g8/g8-acceptance-coverage-20260812-008/acceptance-coverage.json`=`PASS_WITH_BLOCKERS`；A01—A25 共 25 项映射有效，25 项 DIRECT、0 项 RELATED、0 项缺失、mapping_stale=0；25 项 `final_revalidation` 仍为 `PENDING`；报告绑定 commit=`78bfc451300a3e24347323d3d1fb296826ef16ff`，报告生成前工作区 clean。
+安全计数：`database_reads=0`、`database_writes=0`、`neo4j_reads=0`、`neo4j_writes=0`、`chroma_reads=0`、`chroma_writes=0`、`external_llm_requests=0`、`files_deleted=0`、`database_physical_deletes=0`、`artifacts_overwritten=0`、`Outbox claim=0`。
+未解决风险：A01—A25 最终运行态复验仍未执行；六场景浏览器 E2E、生产 OIDC/JWKS、故障矩阵、真实非空 Worker/浏览器写入、DeepSeek 外部调用审查、G9 正式输入与发布凭据仍未完成。上述新增 A02/A03 直接证据使用内存 fake 持久化边界，不等同于真实 MySQL 运行态验收。
+下一步唯一动作：在新的独立 ChangePlan/plan_id/hash 获得批准后，先执行只读运行态基线，再逐项完成 A01—A25 final runtime revalidation；未获批准前不执行真实业务 POST、非空 Outbox claim、Neo4j/Chroma 写入或 DeepSeek 外部请求。
 ```
 
 ## 阶段交接模板
