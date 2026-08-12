@@ -126,3 +126,9 @@ make PYTHON=.venv-g1-final-py311/bin/python \
 ```
 
 `g4-real-llm-readonly-20260812-002` 已形成 PASS artifact：DeepSeek `deepseek-v4-flash` 实际处理一次 `intent.classify`，`attempts=1`、无 fallback，七 Agent 编排完成并返回 8 条三通道候选；MySQL/Neo4j/Chroma 写入、Outbox、删除和覆盖均为 0。G4 HTTP 入口已支持同一 Intent-only 注入，可通过 `make run-g4-deepseek-demo` 启动；Explanation、Feedback LLM 和 Worker 仍保持独立关闭。
+
+## 8. 真实 HTTP 持久化审批边界
+
+`build-g4-recommendation-projection-plan` 支持 `G4_PROJECTION_ENABLE_DEEPSEEK_INTENT=true`。生成器只读取 PASS 基线和本机配置，将 provider、模型、HTTPS origin、Prompt Bundle、超时、token 上限、最大两次尝试和 Intent-only 范围哈希到计划中；API key 不进入计划或日志，生成计划时不调用模型、不写数据库。
+
+获批后的执行器使用实际 FastAPI `/api/v1/recommendation-tasks` 路由：第一次 POST 必须返回 201 并在一个事务中追加 G4/G3 事实；相同 request_id 的第二次 POST 必须返回同一 task、`Idempotency-Replayed=true`、数据库零增量且不再次调用 DeepSeek；最后 GET 回读持久化任务。执行器还会回读 `IntentUnderstandingAgent` 结果，要求 `intent-llm-prompt-v1`、provider=`deepseek`、无 fallback、prompt=`intent.classify`、尝试次数在 1–2 以内。任何提交、基线、计数、模型策略或请求漂移都会在执行前阻断。

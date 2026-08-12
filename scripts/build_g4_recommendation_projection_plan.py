@@ -21,6 +21,10 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from jsonschema import Draft202012Validator, FormatChecker
 
 from scripts.g4_projection_contract import validate_g4_projection_query_spec
+from scripts.g4_llm_plan_policy import (
+    load_deepseek_intent_policy,
+    policy_hash,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -115,6 +119,8 @@ def build_plan(
     limit: int = 8,
     request_id: str | None = None,
     session_id: str | None = None,
+    enable_deepseek_intent: bool = False,
+    llm_env_file: Path = PROJECT_ROOT / ".env.host",
 ) -> dict[str, Any]:
     if RUN_ID_PATTERN.fullmatch(run_id) is None:
         raise ValueError("run id must use 3-64 safe characters")
@@ -220,6 +226,39 @@ def build_plan(
             }
         )
         max_changes += delta
+    llm_policy: dict[str, Any] | None = None
+    if enable_deepseek_intent:
+        _settings, llm_policy = load_deepseek_intent_policy(llm_env_file)
+    input_hashes = {
+        "mysql_baseline_readonly_evidence": sha256_bytes(mysql_raw),
+        "g4_baseline_readonly_evidence": sha256_bytes(g4_raw),
+        "config_bundle": config_hash,
+        "request_payload": request_hash,
+    }
+    if llm_policy is not None:
+        input_hashes["deepseek_intent_policy"] = policy_hash(llm_policy)
+
+    preconditions = [
+        "target Compose project/database identity and both PASS baselines match immediately before apply",
+        "all expected_before_count values are re-read immediately before apply",
+        "G4 graph/vector versions, exact query_spec and candidate enrichment remain unchanged",
+        "request_id and idempotency key are absent or replay-identical before apply",
+        "writer transaction must commit all G3 and G4 rows together or rollback all of them",
+        "no migration, seed, UPDATE, DELETE, graph write, or vector write is part of this plan",
+        "apply requires a separate explicit approval of this unchanged plan hash",
+    ]
+    if llm_policy is None:
+        preconditions.append("external LLM calls are disabled for this plan")
+    else:
+        preconditions.extend(
+            [
+                "DeepSeek is capability-scoped to IntentUnderstandingAgent; Explanation remains the evidence template",
+                "the only external payload is the frozen non-sensitive request input_text and bounded intent prompt",
+                "at most two DeepSeek attempts are authorized and raw provider responses are not persisted",
+                "same-request HTTP replay must add zero rows and must not call DeepSeek again",
+            ]
+        )
+
     plan: dict[str, Any] = {
         "schema_version": "1.0.0",
         "plan_id": str(uuid5(NAMESPACE_URL, f"g4-plan:{run_id}")),
@@ -228,7 +267,10 @@ def build_plan(
         "classification": "S1_APPEND",
         "mode": "DRY_RUN",
         "intent": (
-            "Prepare one bounded G4 RecommendationTaskService projection for explicit review; "
+            "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
+            "Intent classification for explicit review; no apply is authorized by this plan."
+            if llm_policy is not None
+            else "Prepare one bounded G4 RecommendationTaskService projection for explicit review; "
             "no apply is authorized by this plan."
         ),
         "environment": {
@@ -239,25 +281,12 @@ def build_plan(
             "index_namespace": "library_resources__hash_char_ngram_v1",
         },
         "targets": targets,
-        "input_hashes": {
-            "mysql_baseline_readonly_evidence": sha256_bytes(mysql_raw),
-            "g4_baseline_readonly_evidence": sha256_bytes(g4_raw),
-            "config_bundle": config_hash,
-            "request_payload": request_hash,
-        },
+        "input_hashes": input_hashes,
         "idempotency_key": str(request_uuid),
         "request_run_id": run_id,
         "request_payload": request_payload,
         "max_changes": max_changes,
-        "preconditions": [
-            "target Compose project/database identity and both PASS baselines match immediately before apply",
-            "all expected_before_count values are re-read immediately before apply",
-            "G4 graph/vector versions, exact query_spec and candidate enrichment remain unchanged",
-            "request_id and idempotency key are absent or replay-identical before apply",
-            "writer transaction must commit all G3 and G4 rows together or rollback all of them",
-            "no migration, seed, UPDATE, DELETE, graph write, vector write, or external LLM call is part of this plan",
-            "apply requires a separate explicit approval of this unchanged plan hash",
-        ],
+        "preconditions": preconditions,
         "safety_assertions": {
             "file_deletions": 0,
             "database_physical_deletions": 0,
@@ -289,6 +318,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--limit", type=int, default=8)
     parser.add_argument("--request-id")
     parser.add_argument("--session-id")
+    parser.add_argument("--enable-deepseek-intent", action="store_true")
+    parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     args = parser.parse_args(argv)
     try:
         plan = build_plan(
@@ -300,6 +331,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             limit=args.limit,
             request_id=args.request_id,
             session_id=args.session_id,
+            enable_deepseek_intent=args.enable_deepseek_intent,
+            llm_env_file=args.llm_env_file,
         )
         output_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / args.run_id
         if output_dir.exists():

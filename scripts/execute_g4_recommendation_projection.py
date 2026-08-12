@@ -7,8 +7,9 @@ and hash.  It verifies the reviewed Git commit, both read-only evidence
 hashes, the isolated MySQL identity/least-privilege grants, and all table
 counts immediately before invoking the opt-in G4 service.  The service owns
 one MySQL transaction for the task, Agent facts, candidates, record, items,
-policy and trace.  This command never migrates, seeds, updates, deletes,
-writes Neo4j/Chroma, or enables an external LLM provider.
+policy and trace.  This command never migrates, seeds, updates, deletes, or
+writes Neo4j/Chroma.  An external DeepSeek Intent call is possible only when
+the reviewed plan binds the secret-free policy and both gates are explicit.
 """
 
 from __future__ import annotations
@@ -26,9 +27,14 @@ from typing import Any, Mapping, Sequence
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import asyncmy
+from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
 from scripts.g4_projection_contract import validate_g4_projection_query_spec
+from scripts.g4_llm_plan_policy import (
+    load_deepseek_intent_policy,
+    policy_hash,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +71,17 @@ EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
 CHROMA_DIMENSION = 384
+EXTERNAL_LLM_CONFIRMATION = "YES_REAL_EXTERNAL_LLM"
+DEEPSEEK_PLAN_INTENT = (
+    "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash "
+    "Intent classification for explicit review; no apply is authorized by this plan."
+)
+DEEPSEEK_PRECONDITIONS = {
+    "DeepSeek is capability-scoped to IntentUnderstandingAgent; Explanation remains the evidence template",
+    "the only external payload is the frozen non-sensitive request input_text and bounded intent prompt",
+    "at most two DeepSeek attempts are authorized and raw provider responses are not persisted",
+    "same-request HTTP replay must add zero rows and must not call DeepSeek again",
+}
 
 
 def canonical(value: object) -> bytes:
@@ -177,7 +194,16 @@ def validate_plan(
         raise ValueError(
             "G4 projection ChangePlan max_changes must equal its bounded target deltas"
         )
+    if plan_enables_deepseek_intent(plan):
+        if plan.get("intent") != DEEPSEEK_PLAN_INTENT:
+            raise ValueError("DeepSeek G4 plan intent is not the exact bounded policy")
+        if not DEEPSEEK_PRECONDITIONS.issubset(set(plan.get("preconditions", []))):
+            raise ValueError("DeepSeek G4 plan is missing external-call preconditions")
     return plan, raw
+
+
+def plan_enables_deepseek_intent(plan: Mapping[str, Any]) -> bool:
+    return "deepseek_intent_policy" in plan.get("input_hashes", {})
 
 
 def validate_git_boundary(plan: Mapping[str, Any]) -> str:
@@ -441,7 +467,12 @@ def validate_post_counts(
     return {table: deltas[table] for table in TARGET_TABLES}
 
 
-def build_settings(values: Mapping[str, str]):
+def build_settings(
+    values: Mapping[str, str],
+    *,
+    enable_deepseek_intent: bool,
+    llm_settings: Any | None = None,
+):
     from backend.app.config import AppSettings
 
     return AppSettings(
@@ -467,9 +498,72 @@ def build_settings(values: Mapping[str, str]):
             values.get("RECPRO_MYSQL_CONNECT_TIMEOUT_SECONDS", "3")
         ),
         persistence_probe_id=values["RECPRO_PERSISTENCE_PROBE_ID"],
-        llm_provider="mock",
-        llm_api_key=None,
+        llm_provider=(llm_settings.llm_provider if enable_deepseek_intent else "mock"),
+        llm_base_url=(
+            llm_settings.llm_base_url
+            if enable_deepseek_intent
+            else "https://api.deepseek.com"
+        ),
+        llm_model=(
+            llm_settings.llm_model if enable_deepseek_intent else "deepseek-v4-flash"
+        ),
+        llm_api_key=(llm_settings.llm_api_key if enable_deepseek_intent else None),
+        llm_timeout_seconds=(
+            llm_settings.llm_timeout_seconds if enable_deepseek_intent else 20.0
+        ),
+        llm_max_output_tokens=(
+            llm_settings.llm_max_output_tokens if enable_deepseek_intent else 512
+        ),
+        g4_http_enabled=True,
+        g4_llm_intent_enabled=enable_deepseek_intent,
     )
+
+
+async def read_intent_llm_receipt(
+    values: Mapping[str, str], *, task_id: str
+) -> dict[str, Any]:
+    connection = await asyncmy.connect(
+        host="127.0.0.1",
+        port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+        user=values["RECPRO_MYSQL_USER"],
+        password=values["RECPRO_MYSQL_PASSWORD"],
+        db=values["RECPRO_MYSQL_DATABASE"],
+        connect_timeout=10,
+        read_timeout=30,
+        charset="utf8mb4",
+        autocommit=True,
+    )
+    try:
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT agent_version, fallback_used, payload_json "
+                "FROM recommendation_agent_result "
+                "WHERE task_id = %s AND context_version = 1 "
+                "AND agent_name = 'IntentUnderstandingAgent'",
+                (task_id,),
+            )
+            rows = await cursor.fetchall()
+        if len(rows) != 1:
+            raise RuntimeError("persisted task does not have exactly one Intent Agent result")
+        payload = rows[0][2]
+        if isinstance(payload, (bytes, bytearray)):
+            payload = payload.decode("utf-8")
+        if isinstance(payload, str):
+            payload = json.loads(payload)
+        if not isinstance(payload, dict):
+            raise RuntimeError("persisted Intent Agent payload is invalid")
+        return {
+            "agent_version": str(rows[0][0]),
+            "fallback_used": bool(rows[0][1]),
+            "llm_provider": payload.get("llm_provider"),
+            "prompt_version": payload.get("prompt_version"),
+            "prompt_id": payload.get("prompt_id"),
+            "prompt_sha256": payload.get("prompt_sha256"),
+            "llm_attempts": int(payload.get("llm_attempts", 0)),
+            "intent_type": payload.get("intent_type"),
+        }
+    finally:
+        connection.close()
 
 
 def load_chroma(site_packages: Path):
@@ -494,6 +588,19 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         approved_plan_id=args.plan_id,
         approved_hash=args.approved_plan_hash,
     )
+    enable_deepseek_intent = plan_enables_deepseek_intent(plan)
+    if enable_deepseek_intent != bool(args.enable_deepseek_intent):
+        raise ValueError("CLI DeepSeek Intent gate does not match the approved plan")
+    if enable_deepseek_intent and args.confirm_external_llm != EXTERNAL_LLM_CONFIRMATION:
+        raise ValueError("exact external LLM confirmation is required")
+    if not enable_deepseek_intent and args.confirm_external_llm:
+        raise ValueError("external LLM confirmation was supplied for a Mock-only plan")
+    llm_settings = None
+    llm_policy = None
+    if enable_deepseek_intent:
+        llm_settings, llm_policy = load_deepseek_intent_policy(args.llm_env_file)
+        if policy_hash(llm_policy) != plan["input_hashes"]["deepseek_intent_policy"]:
+            raise ValueError("local DeepSeek Intent policy differs from the approved plan")
     current_commit = validate_git_boundary(plan)
     mysql_baseline, mysql_baseline_raw = load_pass_evidence(
         args.mysql_baseline,
@@ -546,9 +653,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required runtime keys: {missing}")
-    configured_llm_provider = values.get("RECPRO_LLM_PROVIDER", "mock")
-    if configured_llm_provider not in {"mock", "deepseek"}:
-        raise ValueError("RECPRO_LLM_PROVIDER must be mock or deepseek")
+    configured_llm_provider = (
+        llm_settings.llm_provider if enable_deepseek_intent else "mock"
+    )
     if values["COMPOSE_PROJECT_NAME"] != plan["environment"]["environment_id"]:
         raise ValueError("Compose project does not match the approved plan")
     database_identity = (
@@ -592,8 +699,10 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     from backend.app.catalog.adapters.chroma import ChromaVectorReader
     from backend.app.catalog.adapters.embedding import HashCharNgramQueryEmbedder
     from backend.app.catalog.adapters.neo4j import Neo4jGraphReader
-    from backend.app.composition import build_research_g4_recommendation_service
-    from backend.app.recommendation.domain.public import RecommendationTaskCommand
+    from backend.app.composition import (
+        build_research_g4_http_app,
+        build_research_g4_recommendation_service,
+    )
 
     graph = Neo4jGraphReader(
         endpoint=(
@@ -612,7 +721,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         dimension=CHROMA_DIMENSION,
         timeout=8,
     )
-    settings = build_settings(values)
+    settings = build_settings(
+        values,
+        enable_deepseek_intent=enable_deepseek_intent,
+        llm_settings=llm_settings,
+    )
     service = build_research_g4_recommendation_service(
         settings,
         dataset_version="lib-books-v1-20260810",
@@ -623,33 +736,74 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         embedding_version=EMBEDDING_VERSION,
         index_version=INDEX_VERSION,
         enable_llm_provider=False,
-        deadline_seconds=90.0,
+        enable_llm_intent_provider=enable_deepseek_intent,
+        deadline_seconds=120.0,
     )
-    command = RecommendationTaskCommand(
-        request_id=request_id,
-        session_id=UUID(str(request_payload["session_id"])),
-        user_id=user_id,
-        scene=str(request_payload["scene"]),
-        input_text=(
-            str(request_payload["input_text"])
-            if request_payload["input_text"] is not None
-            else None
-        ),
-        resource_types=tuple(str(value) for value in request_payload["requested_resource_types"]),
-        output_type=str(request_payload["requested_output_type"]),
-        source_resource_id=None,
-        source_item_id=None,
-        evaluation_at=None,
-        constraints={},
-        limit=int(request_payload["limit"]),
+    application = build_research_g4_http_app(
+        settings,
+        recommendation_service=service,
     )
-    result = await service.create_task(command, idempotency_key=str(request_id))
-    if result.status_code != 201 or result.replayed:
-        raise RuntimeError(
-            f"approved G4 projection did not create a new task: "
-            f"status_code={result.status_code}, replayed={result.replayed}"
+    http_payload = {
+        "request_id": str(request_id),
+        "session_id": str(request_payload["session_id"]),
+        "user_id": user_id,
+        "scene": str(request_payload["scene"]),
+        "input_text": str(request_payload["input_text"]),
+        "requested_resource_types": list(request_payload["requested_resource_types"]),
+        "requested_output_type": str(request_payload["requested_output_type"]),
+        "source_resource_id": None,
+        "source_item_id": None,
+        "as_of_time": None,
+        "constraints": {},
+        "limit": int(request_payload["limit"]),
+    }
+    headers = {
+        "Accept": "application/json",
+        "Content-Type": "application/json",
+        "Idempotency-Key": str(request_id),
+        "X-Demo-User-Id": str(user_id),
+    }
+    with TestClient(application) as client:
+        live = client.get("/api/v1/health/live")
+        ready = client.get("/api/v1/health/ready")
+        if live.status_code != 200 or ready.status_code != 200:
+            raise RuntimeError(
+                f"G4 HTTP health gate failed: live={live.status_code}, ready={ready.status_code}"
+            )
+        if ready.json().get("can_recommend") is not True:
+            raise RuntimeError("G4 HTTP health gate did not enable recommendation")
+        response = client.post(
+            "/api/v1/recommendation-tasks", json=http_payload, headers=headers
         )
-    payload = dict(result.payload)
+        if response.status_code != 201:
+            raise RuntimeError(
+                f"approved G4 HTTP POST returned {response.status_code}: {response.text[:400]}"
+            )
+        if response.headers.get("Idempotency-Replayed") != "false":
+            raise RuntimeError("approved G4 HTTP POST was unexpectedly replayed")
+        payload = dict(response.json())
+        after_first_table_names, after_first_counts = await read_table_counts(values)
+        replay = client.post(
+            "/api/v1/recommendation-tasks", json=http_payload, headers=headers
+        )
+        after_replay_table_names, after_replay_counts = await read_table_counts(values)
+        if replay.status_code != 200:
+            raise RuntimeError(f"G4 HTTP replay returned {replay.status_code}")
+        if replay.headers.get("Idempotency-Replayed") != "true":
+            raise RuntimeError("G4 HTTP replay was not marked as replayed")
+        if replay.json().get("task_id") != payload.get("task_id"):
+            raise RuntimeError("G4 HTTP replay returned a different task")
+        if (
+            after_replay_table_names != after_first_table_names
+            or after_replay_counts != after_first_counts
+        ):
+            raise RuntimeError("G4 HTTP replay changed database counts")
+        persisted = client.get(
+            f"/api/v1/recommendation-tasks/{payload.get('task_id')}",
+            headers={"X-Demo-User-Id": str(user_id)},
+        )
+        if persisted.status_code != 200:
+            raise RuntimeError(f"G4 persisted task GET returned {persisted.status_code}")
     if payload.get("status") not in {"COMPLETED", "DEGRADED_COMPLETED"}:
         raise RuntimeError(f"approved G4 projection did not complete: {payload.get('status')!r}")
     if not payload.get("record_id"):
@@ -665,6 +819,20 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     chroma_after = int(collection.count())
     if chroma_after != chroma_before:
         raise RuntimeError("Chroma count changed during G4 projection")
+    intent_receipt = await read_intent_llm_receipt(
+        values, task_id=str(payload["task_id"])
+    )
+    if enable_deepseek_intent:
+        if intent_receipt["agent_version"] != "intent-llm-prompt-v1":
+            raise RuntimeError("G4 HTTP task did not persist the LLM Intent Agent")
+        if intent_receipt["fallback_used"]:
+            raise RuntimeError("G4 HTTP DeepSeek Intent unexpectedly fell back")
+        if intent_receipt["llm_provider"] != "deepseek":
+            raise RuntimeError("G4 HTTP Intent receipt is not from DeepSeek")
+        if intent_receipt["prompt_id"] != "intent.classify":
+            raise RuntimeError("G4 HTTP Intent receipt has the wrong prompt")
+        if not 1 <= intent_receipt["llm_attempts"] <= 2:
+            raise RuntimeError("G4 HTTP Intent attempts exceed the approved bound")
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -688,7 +856,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "mysql_host": "127.0.0.1",
         "mysql_port": int(values["RECPRO_MYSQL_HOST_PORT"]),
         "request_id": str(request_id),
-        "session_id": str(command.session_id),
+        "session_id": str(request_payload["session_id"]),
         "user_id": user_id,
         "database_guard": guard,
         "before_counts": before_counts,
@@ -697,8 +865,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "chroma_count_before": chroma_before,
         "chroma_count_after": chroma_after,
         "response_summary": {
-            "status_code": result.status_code,
-            "replayed": result.replayed,
+            "status_code": response.status_code,
+            "replayed": response.headers.get("Idempotency-Replayed") == "true",
             "task_id": payload.get("task_id"),
             "trace_id": payload.get("trace_id"),
             "status": payload.get("status"),
@@ -706,13 +874,27 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "record_id": payload.get("record_id"),
             "item_count": len(payload.get("items", []))
             if isinstance(payload.get("items"), list)
-            else None,
+                else None,
         },
-        "mode": "APPLY_ONE_BOUNDED_APPEND",
+        "replay_summary": {
+            "status_code": replay.status_code,
+            "idempotency_replayed": replay.headers.get("Idempotency-Replayed"),
+            "same_task_identity": replay.json().get("task_id") == payload.get("task_id"),
+            "zero_additional_row_delta": True,
+        },
+        "http": {
+            "business_posts": 2,
+            "business_gets": 1,
+            "live_status_code": live.status_code,
+            "ready_status_code": ready.status_code,
+            "can_recommend": ready.json().get("can_recommend"),
+        },
+        "intent_agent": intent_receipt,
+        "mode": "APPLY_ONE_BOUNDED_HTTP_APPEND_AND_EXACT_REPLAY",
         "database_write_rows": sum(deltas.values()),
         "database_writes": sum(deltas.values()),
-        "external_requests": 0,
-        "external_llm_requests": 0,
+        "external_requests": intent_receipt["llm_attempts"],
+        "external_llm_requests": intent_receipt["llm_attempts"],
         "configured_llm_provider": configured_llm_provider,
         "neo4j_writes": 0,
         "chroma_writes": 0,
@@ -742,6 +924,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
+    parser.add_argument("--enable-deepseek-intent", action="store_true")
+    parser.add_argument("--confirm-external-llm")
+    parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")
     parser.add_argument(
         "--chroma-site-packages",
