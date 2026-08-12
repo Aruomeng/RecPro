@@ -1522,6 +1522,24 @@ Gate：G5 反馈、行为与画像 Outbox Worker 的受控追加计划生成
 下一步唯一动作：代码与门禁提交并推送后生成新的 DRY_RUN 文件，报告精确 `plan_id`/`plan_hash`；只有用户明确批准同一 hash，才可执行一次受控追加和独立只读回读。
 ```
 
+## G5 feedback + behavior + Outbox Worker 受控追加闭环记录
+
+```text
+交接ID：G5-FEEDBACK-WORKER-APPLY-20260812-001
+Gate：G5 反馈事实、行为事实、画像 Outbox Worker 与幂等回读
+状态：APPROVED_APPEND_PASS / WORKER_PASS / IDEMPOTENCY_PASS / READONLY_RECONCILIATION_PASS
+时间：2026-08-12（Asia/Shanghai）
+批准范围：用户批准 plan_id=`afec54a6-94e8-580e-b896-0ff02c5a33de`、plan_hash=`77d54f90f913f6723595fae89229e7df25436eeb86aff795cef2370c105da99d`；执行绑定 Git=`f4b241db4b2d05f014f43ceac169dbc81e1ecb50`，隔离 Compose=`recpro-g2-tianyuhang-20260809a`、MySQL=`recpro`。
+目标与事实：task=`b476b901-b78e-5c3e-afd9-6fc880f20623`、record=`24`、item=`128`、resource=`6452`、user=`1001`；图书《智慧图书馆服务模式与阅读推广研究》，BOOK；新增 impression UUID=`762b46fa-ccf3-5fe5-96d9-072319e2cb75`、feedback UUID=`11fdc777-a3cd-56cd-b0d3-60072fb3af4c`、behavior UUID=`adedc97f-c97f-59f3-9b46-1c29025c0d0a`。
+精确追加：recommendation_impression=`+1`（6→7）、recommendation_feedback=`+1`（5→6）、user_behavior_event=`+3`（29→32）、profile_update_outbox=`+2`（23→25）、user_resource_state=`+1`（3→4）；Worker 后 profile_replay_run=`+2`（26→28）、profile_change_log=`+3`（29→32）、user_interest_tag=`+2`（9→11）、user_negative_preference=`+2`（6→8）、domain_state_transition=`+9`（28→37），user_profile 行数保持 2。
+幂等与 Worker：同 UUID 的 impression/feedback/behavior 重放计数不变；Outbox=`29/30` 首轮均 DONE、attempts=`1`，Worker `limit=2` 首轮 receipts=`2`、二次 receipts=`0`，最终状态仅 `DONE=23、DEAD=2`，没有 PENDING/PROCESSING。
+受控投影：资源 `6452` 为 user `1001` 创建 HIDDEN，state_version=`1`、source_event_id=`43`；标签 `102/8463` 均写入正向与 TOPIC_NOT_INTERESTED 负向画像投影；当前 user_profile profile_version=`25`。资源、任务、推荐上下文、声明画像、标签字典和其他非目标事实计数均未变化。
+执行证据：`artifacts/verification/g5/g5-feedback-worker-apply-20260812-001/g5-feedback-worker-apply.json`；独立只读回读=`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-001/reconciliation.json`，task/item/资源标签/行为 UUID/Outbox/投影和全库计数均与 apply evidence 一致。
+安全边界：数据库写入按计划计数=`26`，Outbox claim=`2`；business_posts=`0`、external_llm_requests=`0`、Neo4j writes=`0`、Chroma writes=`0`、文件删除=`0`、数据库物理删除=`0`。执行期间首次 Worker 连接因本地虚拟环境缺少 `cryptography` 被阻断；首写和幂等重放已完成且未回滚或补偿删除，补齐本地依赖后仅从两条已批准 PENDING Outbox 继续，最终闭环通过。
+配置/版本：画像公式=`profile-g2-v1`；Worker=`g5-g5-feedback-worker-plan-20260812-001`；默认业务 API 与 DeepSeek 外部调用仍保持原有 fail-closed 边界。
+下一步唯一动作：进入 G5 运行态可复用 executor/部署接线评审；任何新的业务追加必须重新生成并批准新的 plan_id/hash。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
