@@ -42,6 +42,7 @@ describe("recommendationClient", () => {
       scene: "SEARCH_AFTER",
       input_text: "多智能体",
       requested_resource_types: ["BOOK"],
+      requested_output_type: "TOPIC_RESOURCES",
       limit: 6,
     })).resolves.toMatchObject({ status: "COMPLETED" });
 
@@ -53,6 +54,7 @@ describe("recommendationClient", () => {
           "Idempotency-Key": "00000000-0000-4000-8000-000000000003",
           "X-Demo-User-Id": "1001",
         }),
+        body: expect.stringContaining('"requested_output_type":"TOPIC_RESOURCES"'),
       }),
     );
   });
@@ -76,6 +78,7 @@ describe("recommendationClient", () => {
       scene: "SEARCH_AFTER",
       input_text: "多智能体",
       requested_resource_types: ["BOOK"],
+      requested_output_type: "TOPIC_RESOURCES",
       limit: 6,
     }).catch((reason: unknown) => reason);
 
@@ -94,6 +97,7 @@ describe("recommendationClient", () => {
       scene: "SEARCH_AFTER",
       input_text: "多智能体",
       requested_resource_types: ["BOOK"],
+      requested_output_type: "TOPIC_RESOURCES",
       limit: 6,
     })).rejects.toMatchObject({ code: "INVALID_RECOMMENDATION_RESPONSE" });
   });

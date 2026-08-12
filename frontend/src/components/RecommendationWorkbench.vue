@@ -172,6 +172,7 @@ async function submit(): Promise<void> {
       scene: "SEARCH_AFTER",
       input_text: input,
       requested_resource_types: [...selectedTypes.value],
+      requested_output_type: "TOPIC_RESOURCES",
       limit: limit.value,
     }, { signal: controller.signal });
     if (controller.signal.aborted) return;

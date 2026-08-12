@@ -1,4 +1,5 @@
 export type ResourceType = "BOOK" | "PAPER";
+export type RecommendationOutputType = "TOPIC_RESOURCES";
 export type TriggerScene = "HOME" | "SEARCH_AFTER" | "RESOURCE_DETAIL" | "FEEDBACK_REFRESH" | "EXPLANATION";
 export type TaskStatus =
   | "CREATED"
@@ -28,6 +29,7 @@ export interface RecommendationRequest {
   scene: "SEARCH_AFTER";
   input_text: string;
   requested_resource_types: ResourceType[];
+  requested_output_type: RecommendationOutputType;
   limit: number;
 }
 
