@@ -75,8 +75,9 @@ Bearer Secret、Recommendation/Feedback/Behavior 三个应用服务和完整 API
 G4 研究 HTTP 图只能由 `build_research_g4_http_app()` 创建，并要求
 `RECPRO_G4_HTTP_ENABLED=true`、非 production 环境和调用方显式注入
 `MySQLG4RecommendationTaskService`。该组合根只负责 API 与应用端口的组装，
-不会自行创建 Neo4j/Chroma 客户端或启用 DeepSeek；Graph/Vector 端口、版本
-和 LLM 策略必须在更上层的研究组合根中冻结并注入。默认模块级应用、Compose
+不会自行创建 Neo4j/Chroma 客户端；Graph/Vector 端口、版本和 LLM 策略必须
+在更上层的研究组合根中冻结并注入。`RECPRO_G4_LLM_INTENT_ENABLED=true`
+只允许 DeepSeek 替换 Intent Agent，Explanation 保持证据模板。默认模块级应用、Compose
 服务和 Worker 均不调用它。
 
 当调用方使用 `build_g4_readonly_runtime()` 构造版本锁定的只读端口后，应使用
@@ -88,7 +89,7 @@ collection 必须由 operator-only 运行层以只读方式取得，基础 backe
 G4 + G5 本地研究入口为 `backend.app.g4_feedback_demo_main:app`。它额外要求
 `RECPRO_G5_INTERACTION_HTTP_ENABLED=true` 与 `AppSettings` 校验后的同名布尔开关，随后才会
 把 `FeedbackApplicationService`、`BehaviorApplicationService` 和三个交互 POST
-路由挂到同一版本锁定的 G4 图上。该入口仍然不启用 DeepSeek；真实交互请求才会
+路由挂到同一版本锁定的 G4 图上。该入口复用独立的 Intent LLM 开关；真实交互请求才会
 进入 MySQL 事实/Outbox 事务，默认 Compose backend 不会加载它。前端的
 `VITE_G5_INTERACTION_ENABLED` 只是按钮开关，不能替代后端入口、身份授权或新的
 业务 `plan_id`/`plan_hash` 审批。

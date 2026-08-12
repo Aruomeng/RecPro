@@ -145,6 +145,25 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual("deepseek-v4-flash", settings.llm_model)
         self.assertIsNotNone(settings.llm_api_key)
 
+    def test_g4_llm_intent_requires_demo_http_and_deepseek(self) -> None:
+        common = {
+            "mysql_password": "isolated-test-password",
+            "g4_llm_intent_enabled": True,
+        }
+        with self.assertRaises(ValueError):
+            AppSettings(**common)
+        with self.assertRaises(ValueError):
+            AppSettings(**common, app_env="demo", g4_http_enabled=True)
+
+        settings = AppSettings(
+            **common,
+            app_env="demo",
+            g4_http_enabled=True,
+            llm_provider="deepseek",
+            llm_api_key="local-test-deepseek-key-001",
+        )
+        self.assertTrue(settings.g4_llm_intent_enabled)
+
     def test_external_llm_origin_must_be_https(self) -> None:
         with self.assertRaises(ValueError):
             AppSettings(

@@ -152,6 +152,7 @@ class ComposeContractTest(unittest.TestCase):
             self.assertEqual("mysql", environment["RECPRO_MYSQL_HOST"])
             self.assertIn("RECPRO_MYSQL_PASSWORD", environment)
             self.assertIn("RECPRO_LLM_PROVIDER", environment)
+            self.assertIn("RECPRO_G4_LLM_INTENT_ENABLED", environment)
             self.assertIn("RECPRO_LLM_API_KEY", environment)
             self.assertIn("RECPRO_PROMPT_BUNDLE_SHA256", environment)
             self.assertNotIn("MYSQL_ROOT_PASSWORD", environment)

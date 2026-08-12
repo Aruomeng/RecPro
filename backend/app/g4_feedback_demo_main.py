@@ -7,10 +7,10 @@ It requires two independent switches, a validated demo configuration, a
 version-pinned read-only Graph/Vector runtime, and an existing operator-owned
 Chroma collection before the FastAPI graph is even constructed.
 
-The entrypoint never enables the external LLM provider.  DeepSeek can be added
-only in a separately reviewed composition after its network, cost, prompt and
-data-handling controls are approved.  The profile Outbox Worker is also a
-separate process and remains inert unless its own double gate is enabled.
+DeepSeek may replace only the Intent Agent when its independent capability
+switch is enabled; Explanation remains evidence-bound and deterministic.  The
+profile Outbox Worker is a separate process and remains inert unless its own
+double gate is enabled.
 """
 
 from __future__ import annotations
@@ -141,6 +141,7 @@ def create_g4_feedback_app():
         settings,
         runtime=runtime,
         enable_llm_provider=False,
+        enable_llm_intent_provider=settings.g4_llm_intent_enabled,
         deadline_seconds=_bounded_deadline(),
         feedback_service=feedback_service,
         behavior_service=behavior_service,

@@ -4,8 +4,8 @@ The module-level ``backend.app.main:app`` and the Compose backend remain
 health-only.  This entrypoint is deliberately separate and fail-closed: it
 requires the demo environment, the G4 switch, an existing operator-validated
 Chroma collection, and the isolated library Neo4j credentials before it
-constructs the version-pinned Graph/Vector runtime.  The composition always
-keeps the external LLM provider disabled for local verification.
+constructs the version-pinned Graph/Vector runtime.  DeepSeek intent
+classification requires its own validated capability switch.
 """
 
 from __future__ import annotations
@@ -102,6 +102,7 @@ def create_g4_app():
         settings,
         runtime=runtime,
         enable_llm_provider=False,
+        enable_llm_intent_provider=settings.g4_llm_intent_enabled,
         deadline_seconds=_bounded_deadline(),
     )
 

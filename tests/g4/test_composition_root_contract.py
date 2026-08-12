@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from pydantic import SecretStr
 
@@ -77,6 +78,30 @@ class CompositionRootContractTests(unittest.TestCase):
     def test_g4_recommendation_root_rejects_production(self) -> None:
         with self.assertRaisesRegex(ValueError, "non-production"):
             build_research_g4_recommendation_service(settings(app_env="production"))
+
+    def test_g4_intent_opt_in_does_not_enable_llm_explanation(self) -> None:
+        provider = object()
+        orchestrator = object()
+        with patch(
+            "backend.app.composition.build_llm_provider", return_value=provider
+        ) as provider_builder, patch(
+            "backend.app.composition.build_port_orchestrator",
+            return_value=orchestrator,
+        ) as orchestrator_builder:
+            service = build_research_g4_recommendation_service(
+                settings(app_env="demo"),
+                connection_factory=lambda: _never(),
+                enable_llm_intent_provider=True,
+            )
+            observed = service._orchestrator_factory(object())
+
+        self.assertIs(orchestrator, observed)
+        provider_builder.assert_called_once()
+        self.assertIsNone(orchestrator_builder.call_args.kwargs["llm_provider"])
+        self.assertIs(
+            provider,
+            orchestrator_builder.call_args.kwargs["llm_intent_provider"],
+        )
 
     def test_g4_http_root_is_fail_closed_without_explicit_switch(self) -> None:
         with self.assertRaisesRegex(ValueError, "disabled by configuration"):

@@ -19,21 +19,21 @@ DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROV
 
 当前就绪证据：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。该检查只读取 `.env.host`、构造 DeepSeek provider 并验证 Prompt Bundle；`network_requests=0`、`external_llm_requests=0`、数据库读写=0。它证明“可以进入一次明确授权的真实调用”，不证明已经调用，也不会改变默认 Mock/关闭状态。
 
-要让一个研究组合根使用文本能力，还必须显式传入 `enable_llm_provider=True`。默认规则编排、默认 FastAPI 和 Worker 都不因设置文件存在而改变：
+要让 G4 HTTP 研究组合根使用真实 Intent 能力，还必须同时启用独立能力开关：
 
-```python
-service = build_research_orchestration_service(
-    settings,
-    enable_llm_provider=True,
-)
+```dotenv
+RECPRO_APP_ENV=demo
+RECPRO_G4_HTTP_ENABLED=true
+RECPRO_G4_LLM_INTENT_ENABLED=true
+RECPRO_LLM_PROVIDER=deepseek
 ```
 
-这一步只构造 provider 和 Agent；实际请求只会在编排运行到 Intent Agent 且输入非空时发生。
+入口把 provider 只注入 `IntentUnderstandingAgent`；实际请求只会在编排运行到 Intent Agent 且输入非空时发生。默认 `backend.app.main:app` 与 Worker 不读取该能力开关来挂载业务路径。
 
 因此，真实调用的最早时点是完成一次单独的外部调用审批之后，而不是配置文件写入之后。需要同时满足：
 
 1. 上述就绪检查仍为 `READY_FOR_EXPLICIT_OPT_IN`，且 Prompt Bundle/模型/目标环境未变；
-2. 使用显式研究组合根并传入 `enable_llm_provider=True`；默认 `backend.app.main:app`、Compose backend、Worker 和 G4/G5 默认入口不会自动启用；
+2. 使用显式 G4 入口并同时满足 demo、G4 HTTP、G4 LLM Intent 与 DeepSeek 四重配置；默认 `backend.app.main:app`、Compose backend 和 Worker不会自动启用；
 3. 本次请求先固定非敏感测试文本、允许发送的字段、预算/超时/重试上限、失败回退和审计字段；不发送完整用户画像、行为历史或数据库凭据；
 4. 用户明确批准这一次真实外部请求。批准前只能做本地构造、Prompt 校验和 fake/离线测试。
 
@@ -125,4 +125,4 @@ make PYTHON=.venv-g1-final-py311/bin/python \
   verify-g4-real-llm-readonly
 ```
 
-本次 `g4-real-llm-readonly-20260812-001` 运行未形成 PASS artifact，不能据此声称 G4 真实推荐链路已通过；失败只保留类型级状态，不保留原始响应。修正后的探针需要新的 run id 和新的外部请求授权。默认 HTTP、Compose backend、Worker、Explanation 和 Feedback 仍保持 Mock/关闭。
+`g4-real-llm-readonly-20260812-002` 已形成 PASS artifact：DeepSeek `deepseek-v4-flash` 实际处理一次 `intent.classify`，`attempts=1`、无 fallback，七 Agent 编排完成并返回 8 条三通道候选；MySQL/Neo4j/Chroma 写入、Outbox、删除和覆盖均为 0。G4 HTTP 入口已支持同一 Intent-only 注入，可通过 `make run-g4-deepseek-demo` 启动；Explanation、Feedback LLM 和 Worker 仍保持独立关闭。

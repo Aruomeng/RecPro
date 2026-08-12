@@ -174,6 +174,7 @@ G8_BOUNDARY_APPLY_BASELINE ?=
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy verify-g8-readonly-fault-matrix \
+	run-g4-deepseek-demo \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -397,6 +398,14 @@ verify-g4-real-llm-readonly:
 	@test -n "$(G4_REAL_LLM_READONLY_RUN_ID)" || { echo "G4_REAL_LLM_READONLY_RUN_ID is required and must identify a new evidence run"; exit 2; }
 	@test "$(G4_REAL_LLM_READONLY_CONFIRM)" = "YES_REAL_EXTERNAL_LLM" || { echo "G4_REAL_LLM_READONLY_CONFIRM=YES_REAL_EXTERNAL_LLM is required"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g4_real_llm_readonly --compose-env-file "$(G4_REAL_LLM_READONLY_COMPOSE_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --llm-env-file "$(G4_REAL_LLM_READONLY_LLM_ENV_FILE)" --chroma-path "$(G4_REAL_LLM_READONLY_CHROMA_PATH)" --chroma-site-packages "$(G4_REAL_LLM_READONLY_CHROMA_SITE_PACKAGES)" --run-id "$(G4_REAL_LLM_READONLY_RUN_ID)" --confirm "$(G4_REAL_LLM_READONLY_CONFIRM)"
+
+run-g4-deepseek-demo:
+	@set -a; . "$(DEMO_BACKEND_ENV_FILE)"; . "$(G4_REAL_LLM_READONLY_SECRETS_FILE)"; set +a; \
+		test "$${RECPRO_APP_ENV}" = "demo" || { echo "RECPRO_APP_ENV=demo is required"; exit 2; }; \
+		test "$${RECPRO_G4_HTTP_ENABLED}" = "true" || { echo "RECPRO_G4_HTTP_ENABLED=true is required"; exit 2; }; \
+		test "$${RECPRO_G4_LLM_INTENT_ENABLED}" = "true" || { echo "RECPRO_G4_LLM_INTENT_ENABLED=true is required"; exit 2; }; \
+		test "$${RECPRO_LLM_PROVIDER}" = "deepseek" || { echo "RECPRO_LLM_PROVIDER=deepseek is required"; exit 2; }; \
+		exec $(PYTHON) -m uvicorn backend.app.g4_demo_main:app --host 127.0.0.1 --port "$(DEMO_BACKEND_PORT)"
 
 verify-g4-agent-autonomy:
 	@test -n "$(G4_AGENT_AUTONOMY_RUN_ID)" || { echo "G4_AGENT_AUTONOMY_RUN_ID is required and must identify a new evidence run"; exit 2; }

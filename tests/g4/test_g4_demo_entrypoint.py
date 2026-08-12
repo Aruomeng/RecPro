@@ -39,10 +39,11 @@ class G4DemoEntrypointTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "RECPRO_APP_ENV=demo"):
                 importlib.import_module(MODULE)
 
-    def test_explicit_entrypoint_builds_versioned_runtime_without_llm(self) -> None:
+    def test_explicit_entrypoint_builds_versioned_runtime_with_intent_llm(self) -> None:
         environment = {
             "RECPRO_APP_ENV": "demo",
             "RECPRO_G4_HTTP_ENABLED": "true",
+            "RECPRO_G4_LLM_INTENT_ENABLED": "true",
             "RECPRO_G4_DEADLINE_SECONDS": "120",
             "RECPRO_MYSQL_PASSWORD": "demo-g4-entrypoint-password",
             "RECPRO_MYSQL_HOST": "127.0.0.1",
@@ -51,6 +52,8 @@ class G4DemoEntrypointTests(unittest.TestCase):
             "RECPRO_MYSQL_USER": "recpro_runtime",
             "RECPRO_PERSISTENCE_PROBE_ID": "recpro-g2-tianyuhang-20260809a",
             "RECPRO_CONFIG_BUNDLE_SHA256": "220b0fb30f38fef7ca148c43b1f2751715c7df7ecf7d47e7ddfce7ff2847a5c6",
+            "RECPRO_LLM_PROVIDER": "deepseek",
+            "RECPRO_LLM_API_KEY": "local-test-deepseek-key-001",
             "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT": "62688",
             "RECPRO_NEO4J_ADMIN_USER": "neo4j",
             "RECPRO_NEO4J_ADMIN_PASSWORD": "demo-g4-neo4j-password",
@@ -82,6 +85,7 @@ class G4DemoEntrypointTests(unittest.TestCase):
             app_builder.call_args.args[0],
             runtime=runtime,
             enable_llm_provider=False,
+            enable_llm_intent_provider=True,
             deadline_seconds=120.0,
         )
         self.assertIn("/api/v1/recommendation-tasks", module.app.openapi()["paths"])
