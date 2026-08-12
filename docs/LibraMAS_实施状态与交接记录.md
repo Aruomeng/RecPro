@@ -1505,6 +1505,23 @@ Gate：G5 feedback/behavior HTTP 契约、权限与只读健康边界
 下一步唯一动作：为一次受控 impression + feedback + direct behavior + outbox worker 幂等验证单独设计 DRY_RUN/append-only ChangePlan，重新读取基线并等待用户批准；不得把本只读证据当作新的写入授权。
 ```
 
+## G5 feedback + behavior + Outbox Worker DRY_RUN 计划前置记录
+
+```text
+交接ID：G5-FEEDBACK-WORKER-PLAN-PREFLIGHT-20260812-001
+Gate：G5 反馈、行为与画像 Outbox Worker 的受控追加计划生成
+状态：PLAN_BUILDER_READY / DRY_RUN_PENDING_APPROVAL / NO_DATABASE_WRITE
+时间：2026-08-12（Asia/Shanghai）
+目标：在既有 G5 只读基线不变的前提下，为一个真实推荐 item 冻结 impression + NOT_INTERESTED/TOPIC_NOT_INTERESTED feedback + CLICK_RECOMMENDATION behavior，并明确两条新 Outbox 由 limit=2 Worker 消费的精确前后计数。
+新增文件：`scripts/build_g5_feedback_http_plan.py`；Make 目标=`build-g5-feedback-http-plan`。
+修改文件及原版本保存位置：`contracts/safety/change-plan.schema.json` 增加严格 `interaction_payload`（三类事实 UUID、行为 session、固定时间/可见性、Worker 参数）；`Makefile` 增加 G5 计划参数；原版本由 Git 提交历史保留。
+只读目标：隔离 MySQL `recpro` 中 task=`b476b901-b78e-5c3e-afd9-6fc880f20623`、record=`24`、item=`128`、resource=`6452`、user=`1001`；图书标题为《智慧图书馆服务模式与阅读推广研究》，resource_type=`BOOK`，资源标签冻结为 `(102,0.8,0.95,IMPORT)` 与 `(8463,0.9,0.9,IMPORT)`，当前无该用户/资源的 HIDDEN 状态。
+计划边界：ChangePlan 分类为 `S2_CONTROLLED_UPDATE`、模式为 `DRY_RUN`；预计 `max_changes=26`（impression +1、feedback +1、behavior +3、outbox +2、resource_state +1、replay +2、change_log +3、interest +2、negative +2、state_transition +9；user_profile 行数不变）。计划生成只执行 SELECT/SHOW GRANTS 和本地 artifact 写入，不提交业务 POST、不 claim Worker、不迁移/seed、不写 Neo4j/Chroma、不调用 DeepSeek。
+幂等与安全：UUID 按 run_id 的 URL namespace 确定性生成；apply 前必须重读全库计数、任务/记录/item 所有权、资源标签、UUID 空缺、Outbox 无 PENDING/PROCESSING、运行用户 grants；仅允许 G5 明确白名单的状态/画像投影更新，禁止删除、DROP、TRUNCATE、迁移、补偿删除或受保护事实更新。
+当前证据：基线 `artifacts/verification/g5/g5-feedback-http-readonly-20260812-001/readonly.json` 为 PASS，G5 计数 impression=`6`、feedback=`5`、behavior=`29`、outbox=`23`、resource_state=`3`、replay=`26`、change_log=`29`、interest=`9`、negative=`6`、profile=`2`，全库 before/after 一致。
+下一步唯一动作：代码与门禁提交并推送后生成新的 DRY_RUN 文件，报告精确 `plan_id`/`plan_hash`；只有用户明确批准同一 hash，才可执行一次受控追加和独立只读回读。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
