@@ -17,6 +17,8 @@ DeepSeek 只有在本地被忽略的环境文件中显式设置 `RECPRO_LLM_PROV
 
 当前本机运行配置已由用户提供并写入被 Git 忽略的 `.env.host` 和 `.env.compose`，两个文件权限均为 `0600`。配置使用 `deepseek`、`deepseek-v4-flash`、HTTPS `https://api.deepseek.com`、20 秒超时、512 个最大输出 token，并绑定 `prompt-v1` 与固定 Prompt Bundle SHA-256。密钥值不会在文档、命令输出或提交中显示。已完成离线 provider 构造验证和 Compose 环境结构校验，尚未发起任何 DeepSeek 网络请求。
 
+当前就绪证据：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。该检查只读取 `.env.host`、构造 DeepSeek provider 并验证 Prompt Bundle；`network_requests=0`、`external_llm_requests=0`、数据库读写=0。它证明“可以进入一次明确授权的真实调用”，不证明已经调用，也不会改变默认 Mock/关闭状态。
+
 要让一个研究组合根使用文本能力，还必须显式传入 `enable_llm_provider=True`。默认规则编排、默认 FastAPI 和 Worker 都不因设置文件存在而改变：
 
 ```python
@@ -27,6 +29,13 @@ service = build_research_orchestration_service(
 ```
 
 这一步只构造 provider 和 Agent；实际请求只会在编排运行到 Intent Agent 且输入非空时发生。
+
+因此，真实调用的最早时点是完成一次单独的外部调用审批之后，而不是配置文件写入之后。需要同时满足：
+
+1. 上述就绪检查仍为 `READY_FOR_EXPLICIT_OPT_IN`，且 Prompt Bundle/模型/目标环境未变；
+2. 使用显式研究组合根并传入 `enable_llm_provider=True`；默认 `backend.app.main:app`、Compose backend、Worker 和 G4/G5 默认入口不会自动启用；
+3. 本次请求先固定非敏感测试文本、允许发送的字段、预算/超时/重试上限、失败回退和审计字段；不发送完整用户画像、行为历史或数据库凭据；
+4. 用户明确批准这一次真实外部请求。批准前只能做本地构造、Prompt 校验和 fake/离线测试。
 
 ## 2. Prompt Bundle 契约
 

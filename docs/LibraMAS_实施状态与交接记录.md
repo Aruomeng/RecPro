@@ -51,6 +51,7 @@
   - 已完成数据库无关的 Chroma collection ChangePlan 与独立校验器：冻结 `library_resources__hash_char_ngram_v1`、cosine、`hash-char-ngram-v1`、`lib-books-vector-v1-20260811`、14,983 条记录、metadata 版本过滤和 append-only/零破坏策略；客户端已锁定 `chromadb==1.5.9` 并仅用于隔离 operator venv。
   - 已在用户明确授权后创建正式 Chroma collection 并追加 14,983 条向量；全量回读验证、版本/元数据验证、数值容差验证、召回冒烟、幂等复跑和独立只读 verifier 均 PASS。首次验证因 Chroma 1.5.9 的 NumPy 返回类型兼容性阻断，现场和失败证据均保留，未执行任何清理或覆盖。
   - 已准备 DeepSeek OpenAI-compatible 适配器、HTTPS/密钥 fail-closed 配置、Mock 默认和适配器契约测试；用户提供的 DeepSeek 密钥已写入本机被 Git 忽略且权限为 `0600` 的 `.env.host`/`.env.compose`，未写入仓库，未发起外部请求。
+  - 已新增 `scripts/verify_llm_real_call_readiness.py`、`make verify-llm-real-call-readiness` 和 `tests/g1/backend/test_llm_real_call_readiness.py`；当前 `.env.host` 的 DeepSeek provider、`deepseek-v4-flash`、HTTPS、Prompt Bundle 和 key 存在性均通过本地预检，证据 `artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`。预检网络请求、外部 LLM 请求、数据库读写、Outbox claim、删除和覆盖均为 0；实际调用仍需要一次单独的用户明确批准和显式 `enable_llm_provider=True` 组合根。
   - 已完成版本化 Prompt Bundle：`contracts/prompts/rec-prompts-v1.0.0.json`（`prompt-v1`）及严格 Schema、变量白名单、上下文上限、输出 Schema、工具零授权和 SHA-256 绑定；新增只读 `verify_prompt_bundle` 门禁与 Prompt 配置文档。
   - 已完成 DeepSeek Prompt 接入：四个能力统一使用 Prompt Bundle，LLMResult 增加 `prompt_id/prompt_sha256/request_id/attempts` 审计字段；无效 JSON/结构输出最多一次重试，证据引用越权 fail-closed。
   - 已完成显式 LLM Intent Agent：`LLMIntentUnderstandingAgent` 只消费文本分类结果，主题词/资源类型仍由规则生成；外部 provider 异常、超时或空输入自动降级，默认规则编排和默认 HTTP/Worker 不改变。
@@ -136,6 +137,7 @@
   - Neo4j Community 版本只显示 `neo4j` 与 `system` 两个数据库，不能在同一实例中安全提供独立命名库；RecPro 的隔离边界是新的 `recpro-library-neo4j-20260810a` Compose 实例、容器和数据卷。已有 Homebrew Neo4j 的 `neo4j` 库视为受保护外部数据源，禁止复用。
   - Chroma 正式运行态位于本地忽略路径 `data/chroma`，仅包含计划 collection `library_resources__hash_char_ngram_v1`；此前 API 签名探查留下的空 collection `probe_signature_20260811` 位于独立路径 `data/chroma-probe-g6-20260811`，0 条向量，未删除、未合并、未纳入正式索引。
   - DeepSeek 密钥已在本机配置，但没有启用默认 HTTP/Worker，也没有发起真实外部 LLM 请求；MockLLM/规则路径仍是安全默认。外部 Provider、密钥、模型和 Base URL 必须在组合根通过被 `.gitignore` 保护的本地环境配置注入，不能写入 Git、Manifest、日志或 Agent 消息。Prompt Bundle 已有本地 SHA-256 绑定，真实请求仍需单独的数据脱敏、伦理、费用和调用范围评审。
+  - LLM 当前阻塞已从“配置缺失”收敛为“外部调用授权未发生”：就绪预检已通过，但真实请求前仍需固定非敏感输入、字段脱敏、费用/超时/重试预算、失败回退与审计方案，并由用户明确批准一次 opt-in 请求；默认 Compose/HTTP/Worker 继续 Mock/关闭。
   - G5 计划 `4bb3a297-1f93-58e8-a476-b82b32c50b50` 的原执行器返回最终计数失败，但已确认链路事实完整且无受保护表变化；该计划不得再次执行或重试。后续任何 G5 业务追加必须基于新的只读基线、新 Git 提交和新的 plan_id/hash。
   - G7 前端交互工作台已完成默认关闭浏览器验收；真实浏览器写入仍需显式启用新的 G4+G5 opt-in 后端、单独的用户/伦理范围和新的业务 ChangePlan，不得把 `VITE_G5_INTERACTION_ENABLED=true` 当作数据库写入授权。
   - `next_step`：依据与当前提交匹配的 `g8-final-revalidation-plan-20260812-004` 与 `g8-final-revalidation-audit-20260812-002`，补齐尚未有当前提交证据的只读/故障案例并保持追加式审计；A02/A03/A04/A07/A08/A09/A10/A23、任何浏览器业务流、非空 Worker claim、索引写入和 DeepSeek 请求必须另行生成精确 ChangePlan、plan_id/hash 并获批。25 项 final_revalidation 仍为 `PENDING`，随后再完成生产 OIDC/JWKS、G9 正式输入冻结与发布凭据复核。
@@ -1884,6 +1886,23 @@ Gate：G8 A01—A25 最终复验计划的当前提交一致性审计
 安全计数：database_reads=0、database_writes=0、neo4j_reads=0、neo4j_writes=0、chroma_reads=0、chroma_writes=0、outbox_claims=0、external_llm_requests=0、files_deleted=0、database_physical_deletions=0、artifact_overwrites=0。
 未解决风险：A01—A25 尚未形成完整 `g8-final-runtime-evidence-v1`；A02/A03/A04/A07/A08/A09/A10/A23、浏览器业务流、非空 Worker、索引写入、生产 OIDC/JWKS、G9 输入冻结和 DeepSeek 外部调用评审仍未完成。
 下一步唯一动作：继续补齐只读/故障案例；任何追加写入前先提交精确 ChangePlan、影响范围、回读和回滚边界，等待用户明确批准。
+```
+
+## LLM 真实调用就绪预检
+
+```text
+交接ID：LLM-REAL-CALL-READINESS-20260812-001
+Gate：DeepSeek 外部调用前置检查
+状态：READY_FOR_EXPLICIT_OPT_IN / NO_NETWORK_REQUEST
+时间：2026-08-12（Asia/Shanghai）
+目标：验证本机被忽略的 `.env.host` 是否具备一次显式 DeepSeek 调用所需的本地条件；只构造 provider 和校验 Prompt Bundle，不发送网络请求。
+执行命令：`make PYTHON=.venv-g1-final-py311/bin/python LLM_REAL_CALL_ENV_FILE=.env.host LLM_REAL_CALL_READINESS_RUN_ID=llm-real-call-readiness-20260812-001 verify-llm-real-call-readiness`
+实际结果：provider=`deepseek`，model=`deepseek-v4-flash`，HTTPS origin 有效，Prompt Bundle=`prompt-v1`、4 个任务、SHA-256 匹配；`external_call_authorized=false`、`network_probe_performed=false`。
+验证证据：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`。
+安全计数：network_requests=0、external_llm_requests=0、database_reads=0、database_writes=0、outbox_claims=0、files_deleted=0、artifact_overwrites=0。
+真实调用条件：就绪检查保持 PASS；使用显式研究组合根并传入 `enable_llm_provider=True`；固定非敏感测试输入、脱敏字段、预算/超时/重试/回退/审计方案；用户明确批准这一次外部请求。默认 Compose、`backend.app.main:app` 和 Worker 仍不会调用 DeepSeek。
+未解决风险：尚未完成真实外部调用的网络/费用/伦理审查，不能把本次预检当成真实调用成功；Explanation/Feedback 的真实 LLM 接线仍需独立边界验收。
+下一步唯一动作：在用户明确批准单次 opt-in 请求前继续保持 Mock/关闭；获批后只发送固定非敏感 fixture，并生成独立请求/响应/安全回读证据。
 ```
 
 ## 阶段交接模板

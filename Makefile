@@ -140,6 +140,8 @@ G8_FINAL_REVALIDATION_PLAN_RUN_ID ?=
 G8_FINAL_REVALIDATION_AUDIT_RUN_ID ?=
 G8_FINAL_REVALIDATION_PLAN ?=
 G8_FINAL_RUNTIME_EVIDENCE ?=
+LLM_REAL_CALL_READINESS_RUN_ID ?=
+LLM_REAL_CALL_ENV_FILE ?= .env.host
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -151,7 +153,7 @@ G8_FINAL_RUNTIME_EVIDENCE ?=
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
-	verify-prompt-bundle \
+	verify-prompt-bundle verify-llm-real-call-readiness \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -344,6 +346,9 @@ verify-evaluation-freeze-inputs:
 
 verify-prompt-bundle:
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_prompt_bundle
+
+verify-llm-real-call-readiness:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_llm_real_call_readiness --env-file "$(LLM_REAL_CALL_ENV_FILE)" $(if $(LLM_REAL_CALL_READINESS_RUN_ID),--run-id "$(LLM_REAL_CALL_READINESS_RUN_ID)",)
 
 verify-g7-optin-http:
 	@test -n "$(G7_RUN_ID)" || { echo "G7_RUN_ID is required and must identify a new evidence run"; exit 2; }

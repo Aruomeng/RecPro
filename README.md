@@ -28,6 +28,7 @@ G4 澄清续跑适配器随后已完成代码级实现：Orchestrator 可从 `WA
 最近配置修复已完成：`scripts/sync_host_env_from_compose.py` 将经过预检的隔离 Compose 参数安全同步到本机 `.env.host`，修复 host MySQL 端口与迁移凭据缺口，并保留 `0600` 备份；旧前端依赖目录只移动到 `/tmp` 备份后按 `package-lock.json` 恢复，40 个前端测试和生产构建通过。Makefile 现在能自动定位本机实际 Docker Desktop CLI；Compose 健康检查已改为对启动负载更稳健的超时与 Neo4j HTTP+Bolt 端口探测。当前 MySQL、backend、frontend 与本项目隔离 Neo4j 均已健康；图书 Neo4j 只为应用用新的健康检查重建了其容器并复用原卷，未执行 Cypher 写入；用户原有大图始终未停止或访问。G4 的 Graph/Vector 只读融合证据见 `artifacts/verification/g4/g4-readonly-fusion-20260811-010/readonly.json` 与 `...-011/readonly.json`。详细配置记录见 `docs/LibraMAS_实施状态与交接记录.md` 的 `CONFIG-FIX-20260811-001`。
 
 书目数据必须先经过 `contracts/data/intake/` 的规范化记录/Manifest 和图计划只读校验，再由 `scripts/import_book_graph.py` 以显式 `--apply` 追加到带 `graph_version` 的 Neo4j 影子图；实体/关系见 [图书图谱模型与导入契约](docs/book_graph_model.md)。仓库不保存外部大模型密钥，也不需要密钥运行 MockLLM/模板路径；DeepSeek 适配器已准备并保持默认关闭，当前本机的 opt-in 配置只能通过被 Git 忽略的环境文件注入，禁止提交到 Git。详见 [LLM 与 Prompt 配置基线](docs/LLM_PROMPT_CONFIGURATION.md)。
+DeepSeek 当前已通过本地“真实调用就绪预检”而非真实网络调用：`artifacts/verification/llm/llm-real-call-readiness-20260812-001/real-call-readiness.json`=`READY_FOR_EXPLICIT_OPT_IN`，provider/model/HTTPS/Prompt Bundle/key 存在性均通过，网络和外部 LLM 请求仍为 `0`。真实调用只有在显式研究组合根传入 `enable_llm_provider=True`、固定非敏感 fixture 与费用/超时/回退/审计边界，并获得用户单次明确批准后才会发生；默认 Compose、HTTP、Worker 继续使用 Mock/关闭。
 
 数据库管理员凭据只保存在本机 `.env.user-secrets`（权限 `0600`，已被 `.gitignore` 忽略），不进入应用日志或提交。MySQL 应用运行账号仍保持最小权限；`root` 仅作为后续受控管理/迁移凭据使用。Neo4j Community 只提供默认 `neo4j` 数据库，因此 RecPro 使用独立 Compose 实例和独立数据卷隔离于本机已有 Neo4j；不会连接本机 `7474/7687` 上的既有图。
 
