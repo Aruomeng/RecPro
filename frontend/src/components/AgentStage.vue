@@ -2,7 +2,7 @@
 import { computed } from "vue";
 import { AGENT_ROLES, useRecommendationStore } from "../stores/recommendation";
 const recommendation = useRecommendationStore();
-const latestEvents = computed(() => recommendation.events.slice(-5).reverse());
+const latestEvents = computed(() => recommendation.events.slice(-8).reverse());
 const actionNames: Record<string, string> = {
   RETURN_RESULT: "返回结果", READ_PROFILE: "读取画像", PROBE_RESOURCES: "探测资源", PLAN_RECALL: "规划召回",
   SELECT_CHANNELS: "选择通道", REQUEST_REPLAN: "请求重规划", RENDER_EVIDENCE: "生成解释", PROPOSE_PROFILE_DELTA: "学习反馈",
@@ -25,11 +25,12 @@ const actionNames: Record<string, string> = {
       <div class="orchestrator-core"><i /><strong>ORCHESTRATOR</strong><small>动态编排</small></div>
     </div>
     <div class="agent-feed">
+      <div class="agent-feed__heading"><span>实时协作记录</span><b>{{ recommendation.events.length }} 条真实事件</b></div>
       <div v-if="!latestEvents.length" class="agent-feed__empty">提交问题后，这里将展示真实 Agent 事件。</div>
       <div v-for="event in latestEvents" :key="event.sequence" class="agent-feed__row">
         <span>#{{ String(event.sequence).padStart(2, '0') }}</span>
         <strong>{{ event.agent_name?.replace('Agent', '') || event.event_type }}</strong>
-        <em>{{ actionNames[event.action || ''] || event.reason_code || event.status || '处理中' }}</em>
+        <em :title="event.reason_code || event.status || event.action">{{ actionNames[event.action || ''] || event.reason_code || event.status || '处理中' }}</em>
       </div>
     </div>
   </section>

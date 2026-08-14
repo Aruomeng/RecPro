@@ -59,7 +59,7 @@ export interface ResourceSummary {
   authors: string[];
   publication_year?: number;
   availability_status: AvailabilityStatus;
-  difficulty_level?: number;
+  difficulty_level?: number | null;
 }
 
 export interface RecommendationEvidence {
@@ -121,7 +121,7 @@ export interface RecommendationExecution {
   decision: InteractionDecision;
   groups?: Array<{ group_id: number; group_type: string; group_key: string; title: string; goal?: string; order_no: number }>;
   items?: RecommendationItem[];
-  questions?: ClarificationQuestion[];
+  questions?: ClarificationQuestion[] | null;
   warnings: string[];
   agent_actions?: Array<{
     step_no?: number;
@@ -172,7 +172,7 @@ export function isRecommendationExecution(value: unknown): value is Recommendati
     Array.isArray(candidate.warnings) && candidate.warnings.every((item) => typeof item === "string") &&
     (candidate.agent_actions === undefined || (Array.isArray(candidate.agent_actions) && candidate.agent_actions.every(isAgentAction))) &&
     (candidate.items === undefined || (Array.isArray(candidate.items) && candidate.items.every(isRecommendationItem))) &&
-    (candidate.questions === undefined || (Array.isArray(candidate.questions) && candidate.questions.every(isClarificationQuestion)))
+    (candidate.questions == null || (Array.isArray(candidate.questions) && candidate.questions.every(isClarificationQuestion)))
   );
 }
 
@@ -206,7 +206,7 @@ function isRecommendationItem(value: unknown): value is RecommendationItem {
     typeof resource.title === "string" && resource.title.length > 0 &&
     Array.isArray(resource.authors) && resource.authors.every((author) => typeof author === "string") &&
     typeof resource.availability_status === "string" &&
-    (resource.difficulty_level === undefined || (typeof resource.difficulty_level === "number" && resource.difficulty_level >= 1 && resource.difficulty_level <= 4)) &&
+    (resource.difficulty_level == null || (typeof resource.difficulty_level === "number" && resource.difficulty_level >= 1 && resource.difficulty_level <= 4)) &&
     (candidate.evidence === undefined || isRecommendationEvidence(candidate.evidence))
   );
 }

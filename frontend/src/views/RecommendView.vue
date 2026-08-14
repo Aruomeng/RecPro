@@ -11,6 +11,9 @@ const outputs = [
   ["TOPIC_RESOURCES", "主题书单"], ["PERSONALIZED_FEED", "个性推荐"], ["READING_PATH", "阅读路径"],
 ] as const;
 const phaseText = computed(() => ({ idle: "等待探索", starting: "正在建立任务", streaming: "Agent 协同运行中", clarification: "需要你的选择", success: "推荐已完成", error: "任务需要重试" }[recommendation.phase]));
+const errorText = computed(() => recommendation.error === "INVALID_RUN_RESULT"
+  ? "推荐结果已返回，但页面未能正确解析。请刷新后重试。"
+  : recommendation.error);
 </script>
 
 <template>
@@ -22,7 +25,7 @@ const phaseText = computed(() => ({ idle: "等待探索", starting: "正在建�
       <button class="primary-action" type="button" :disabled="recommendation.phase === 'streaming' || recommendation.phase === 'starting'" @click="recommendation.start()">
         <span>{{ recommendation.phase === 'streaming' ? '协作进行中' : '启动多智能体推荐' }}</span><b>→</b>
       </button>
-      <p v-if="recommendation.error" class="inline-error">{{ recommendation.error }}</p>
+      <p v-if="recommendation.error" class="inline-error">{{ errorText }}</p>
       <div class="channel-strip">
         <span><i class="mysql" />MySQL<small>结构化馆藏</small></span>
         <span><i class="neo4j" />Neo4j<small>知识关联</small></span>
@@ -41,7 +44,7 @@ const phaseText = computed(() => ({ idle: "等待探索", starting: "正在建�
     </section>
 
     <section v-if="recommendation.items.length" class="result-shelf full-span">
-      <div class="panel-heading"><div><span class="kicker">CURATED FOR THIS SESSION</span><h2>为你找到 {{ recommendation.items.length }} 本书</h2></div><span class="trace-label">Trace {{ recommendation.result?.trace_id.slice(0, 8) }}</span></div>
+      <div class="panel-heading"><div><span class="kicker">CURATED FOR THIS SESSION</span><h2>为你找到 {{ recommendation.items.length }} 本书</h2></div><div class="result-meta"><span v-if="recommendation.result?.warnings.length" class="result-warning">{{ recommendation.result.warnings.includes('LLM_FALLBACK_USED') ? '解释已安全降级' : '含运行提示' }}</span><span class="trace-label">Trace {{ recommendation.result?.trace_id.slice(0, 8) }}</span></div></div>
       <div class="book-shelf">
         <article v-for="item in recommendation.items" :key="item.item_id" class="book-card" tabindex="0" @click="library.openResource(item.resource.resource_id)" @keydown.enter="library.openResource(item.resource.resource_id)">
           <BookCover :title="item.resource.title" :category="item.evidence?.primary_channel" />
