@@ -326,6 +326,9 @@ def _candidate_items(
             if not isinstance(primary_channel, str) or primary_channel.upper() not in channels:
                 raise G4ProjectionError("primary_channel must be one candidate channel")
             primary_channel = primary_channel.upper()
+        negative_penalty = _bounded_number(
+            item.get("negative_penalty", 0.0), "ranked item.negative_penalty"
+        )
         projected.append(
             {
                 "rank_no": rank_no,
@@ -346,6 +349,7 @@ def _candidate_items(
                 "channel_scores": channel_scores,
                 "channel_ranks": channel_ranks,
                 "primary_channel": primary_channel,
+                "negative_penalty": negative_penalty,
             }
         )
     if set(explanations) != seen_resources:

@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from backend.app.catalog.domain.models import ResourceSummary, ResourceTagEvidence
-from backend.app.profile.replay import InterestSignal, ProfileSnapshot
+from backend.app.profile.replay import InterestSignal, NegativeSignal, ProfileSnapshot
 from backend.app.llm.ports.public import LLMResult
 from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.orchestrator import (
@@ -72,6 +72,29 @@ class AlwaysFailCatalog(FakeCatalog):
         super().__init__(failures=100)
 
 
+class SelectiveTagCatalog(FakeCatalog):
+    def __init__(self) -> None:
+        super().__init__()
+        self.resources = (
+            resource(1, "multi-agent negative candidate"),
+            resource(2, "multi-agent positive candidate"),
+        )
+
+    async def list_resource_tags(self, *, resource_ids):
+        self.tag_calls += 1
+        return tuple(
+            ResourceTagEvidence(
+                resource_id=item_id,
+                tag_id=item_id,
+                normalized_name=f"tag-{item_id}",
+                weight=0.9,
+                confidence=0.9,
+                source="RULE",
+            )
+            for item_id in resource_ids
+        )
+
+
 class FakeProfile:
     def __init__(self, *, failures: int = 0) -> None:
         self.failures = failures
@@ -91,6 +114,24 @@ class FakeProfile:
             interests=(InterestSignal(1, 2.0, 0.7, 2, as_of),),
             negatives=(),
             input_hash="a" * 64,
+        )
+
+
+class NegativeProfile(FakeProfile):
+    async def get_snapshot(self, *, user_id: int, as_of: datetime):
+        return ProfileSnapshot(
+            user_id=user_id,
+            as_of=as_of,
+            formula_version="profile-negative-test-v1",
+            event_count=2,
+            profile_confidence=0.8,
+            recent_focus_tag_id=2,
+            topic_focus_strength=0.5,
+            interests=(InterestSignal(2, 1.0, 0.5, 1, as_of),),
+            negatives=(
+                NegativeSignal(1, "TOPIC_NOT_INTERESTED", 9.0, 0.9, 1, as_of),
+            ),
+            input_hash="b" * 64,
         )
 
 
@@ -152,6 +193,19 @@ class G4PortOrchestratorTests(unittest.TestCase):
         semantic = next(item for item in result.dispatches if item.message.receiver == "ResourceSemanticAgent")
         attempts = [call["attempts"] for call in semantic.result.tool_calls]
         self.assertIn(2, attempts)
+
+    def test_explicit_negative_profile_penalizes_matching_resource(self) -> None:
+        result = asyncio.run(
+            build_port_orchestrator(SelectiveTagCatalog(), NegativeProfile()).run(request())
+        )
+        recall = next(
+            item for item in result.dispatches if item.message.receiver == "CandidateRecallAgent"
+        )
+        candidates = recall.result.payload["candidates"]
+        self.assertEqual([2, 1], [item["resource_id"] for item in candidates])
+        self.assertEqual(0.0, candidates[0]["negative_penalty"])
+        self.assertGreater(candidates[1]["negative_penalty"], 0.7)
+        self.assertLess(candidates[1]["score"], candidates[0]["score"])
 
     def test_exhausted_catalog_retry_falls_back_to_degraded_result(self) -> None:
         result = asyncio.run(

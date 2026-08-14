@@ -293,7 +293,7 @@ class CatalogCandidateRecallAgent:
     """Recall deterministic candidates from the real Catalog port."""
 
     name = "CandidateRecallAgent"
-    version = "recall-mysql-v1"
+    version = "recall-mysql-v2"
 
     def __init__(
         self,
@@ -372,6 +372,13 @@ class CatalogCandidateRecallAgent:
         profile_weights = {
             int(signal["tag_id"]): float(signal.get("weight", 0.0))
             for signal in (profile.get("signals", []) if isinstance(profile, dict) else [])
+            if isinstance(signal, dict) and signal.get("tag_id") is not None
+        }
+        negative_profile_weights = {
+            int(signal["tag_id"]): float(signal.get("weight", 0.0))
+            for signal in (
+                profile.get("negative_signals", []) if isinstance(profile, dict) else []
+            )
             if isinstance(signal, dict) and signal.get("tag_id") is not None
         }
         graph_hits: dict[str, Any] = {}
@@ -464,6 +471,15 @@ class CatalogCandidateRecallAgent:
                     for tag in tags_by_resource.get(resource.id, ())
                 ),
             )
+            negative_penalty = min(
+                1.0,
+                sum(
+                    tag.weight
+                    * tag.confidence
+                    * negative_profile_weights.get(tag.tag_id, 0.0)
+                    for tag in tags_by_resource.get(resource.id, ())
+                ),
+            )
             graph_hit = graph_hits.get(resource.external_id)
             graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
             vector_hit = vector_hits.get(resource.external_id)
@@ -477,7 +493,12 @@ class CatalogCandidateRecallAgent:
             if vector_channel_ready:
                 weighted_score += 0.10 * vector_score
                 effective_weight += 0.10
-            score = weighted_score / effective_weight if optional_channel_configured else weighted_score
+            base_score = (
+                weighted_score / effective_weight
+                if optional_channel_configured
+                else weighted_score
+            )
+            score = max(0.0, min(1.0, base_score - 0.35 * negative_penalty))
             channels = ["MYSQL"]
             channel_scores: dict[str, float] = {
                 "MYSQL": round(min(1.0, mysql_weighted_score / 0.75), 6)
@@ -496,6 +517,7 @@ class CatalogCandidateRecallAgent:
                     "resource_id": resource.id,
                     "channel": "+".join(channels),
                     "score": round(score, 6),
+                    "negative_penalty": round(negative_penalty, 6),
                     "evidence_ref": evidence_ref,
                     "channel_scores": channel_scores,
                     # ``None`` means the optional channel was unavailable or
@@ -560,7 +582,8 @@ class CatalogCandidateRecallAgent:
                         1.0,
                         0.55 * metadata_quality
                         + 0.25 * max(scores.values(), default=0.0)
-                        + 0.20 * coverage,
+                        + 0.20 * coverage
+                        - 0.20 * float(candidate.get("negative_penalty", 0.0)),
                     ),
                 ),
                 6,
