@@ -48,7 +48,7 @@ export interface ImpressionResult {
   impression_uuid: string;
   status: "ACCEPTED" | "REPLAYED" | "REJECTED";
   is_valid_exposure: boolean;
-  error_code?: string;
+  error_code?: string | null;
   agent_action?: AgentAction;
 }
 
@@ -73,10 +73,10 @@ export interface FeedbackReceipt {
   feedback_id: number;
   status: "ACCEPTED" | "APPLIED" | "REPLAYED";
   behavior_event_id: number;
-  resource_state?: { state_type: string; suppress_until?: string };
+  resource_state?: { state_type: string; suppress_until?: string | null } | null;
   profile_update_status: "APPLIED" | "PENDING" | "NOT_REQUIRED";
-  profile_version_before?: number;
-  profile_version_after?: number;
+  profile_version_before?: number | null;
+  profile_version_after?: number | null;
   agent_action?: AgentAction;
 }
 

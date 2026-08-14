@@ -21,6 +21,7 @@ const impressionResponse = {
     impression_uuid: "00000000-0000-4000-8000-000000000001",
     status: "ACCEPTED",
     is_valid_exposure: true,
+    error_code: null,
     agent_action: {
       step_no: null,
       agent_name: "FeedbackLearningAgent",

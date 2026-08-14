@@ -94,7 +94,7 @@ function isImpressionResult(value: unknown): boolean {
     isNonEmptyString(value.impression_uuid) &&
     isStatus(value.status, ["ACCEPTED", "REPLAYED", "REJECTED"]) &&
     typeof value.is_valid_exposure === "boolean" &&
-    (value.error_code === undefined || isNonEmptyString(value.error_code)) &&
+    (value.error_code === undefined || value.error_code === null || isNonEmptyString(value.error_code)) &&
     (value.agent_action === undefined || isAgentAction(value.agent_action))
   );
 }
@@ -111,7 +111,9 @@ function isImpressionBatchResponse(value: unknown): value is ImpressionBatchResp
 
 function isResourceState(value: unknown): boolean {
   if (!isRecord(value) || !hasOnlyKeys(value, ["state_type"], ["suppress_until"])) return false;
-  return isNonEmptyString(value.state_type) && (value.suppress_until === undefined || isNonEmptyString(value.suppress_until));
+  return isNonEmptyString(value.state_type) && (
+    value.suppress_until === undefined || value.suppress_until === null || isNonEmptyString(value.suppress_until)
+  );
 }
 
 function isFeedbackReceipt(value: unknown): value is FeedbackReceipt {
@@ -129,9 +131,9 @@ function isFeedbackReceipt(value: unknown): value is FeedbackReceipt {
     isStatus(value.status, ["ACCEPTED", "APPLIED", "REPLAYED"]) &&
     isPositiveInteger(value.behavior_event_id) &&
     isStatus(value.profile_update_status, ["APPLIED", "PENDING", "NOT_REQUIRED"]) &&
-    (value.resource_state === undefined || isResourceState(value.resource_state)) &&
-    (value.profile_version_before === undefined || isPositiveInteger(value.profile_version_before)) &&
-    (value.profile_version_after === undefined || isPositiveInteger(value.profile_version_after)) &&
+    (value.resource_state === undefined || value.resource_state === null || isResourceState(value.resource_state)) &&
+    (value.profile_version_before === undefined || value.profile_version_before === null || isPositiveInteger(value.profile_version_before)) &&
+    (value.profile_version_after === undefined || value.profile_version_after === null || isPositiveInteger(value.profile_version_after)) &&
     (value.agent_action === undefined || isAgentAction(value.agent_action))
   );
 }
