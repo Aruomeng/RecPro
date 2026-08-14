@@ -28,6 +28,14 @@ class BrowserScenarioPlanTests(unittest.TestCase):
             "reading_path_clarification", "negative_feedback_adjustment", "degraded_dependency_path",
         ])
         self.assertEqual(len({item["request"]["request_id"] for item in plan["scenarios"]}), 6)
+        reading_path = next(
+            item
+            for item in plan["scenarios"]
+            if item["scenario_id"] == "reading_path_clarification"
+        )
+        self.assertEqual(reading_path["expected"]["status"], "COMPLETED")
+        self.assertEqual(reading_path["expected"]["delivery_strategy"], "DIRECT")
+        self.assertEqual(reading_path["expected"]["minimum_items"], 6)
         self.assertEqual(plan["aggregate_budget"]["max_outbox_claims"], 0)
         self.assertFalse(plan["safety_assertions"]["business_writes_authorized"])
         unsigned = dict(plan)
