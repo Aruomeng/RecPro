@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from pathlib import Path
 import unittest
 from uuid import uuid4
 
@@ -47,6 +48,21 @@ class ApprovedWriteReconciliationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "external_llm_requests"):
             validate_source_pair(plan, apply, classification="S1_APPEND")
+
+    def test_hash_and_exact_path_bind_legacy_apply_without_plan_id(self) -> None:
+        plan = self.source_plan()
+        source_path = Path(__file__).resolve()
+        apply = {
+            "status": "PASS",
+            "approved_plan_hash": plan["plan_hash"],
+            "plan_path": str(source_path),
+            "actual_delete_count": 0,
+            "files_deleted": 0,
+        }
+        reference = validate_source_pair(
+            plan, apply, classification="S1_APPEND", source_plan_path=source_path,
+        )
+        self.assertEqual(plan["plan_id"], reference["plan_id"])
 
     def test_write_case_set_and_runtime_schema_are_frozen(self) -> None:
         self.assertEqual(

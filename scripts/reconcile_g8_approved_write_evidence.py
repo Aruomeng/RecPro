@@ -84,6 +84,7 @@ def git_is_clean() -> bool:
 
 def validate_source_pair(
     plan: Mapping[str, Any], apply: Mapping[str, Any], *, classification: str,
+    source_plan_path: Path | None = None,
 ) -> dict[str, str]:
     if plan.get("classification") != classification or plan.get("mode") != "DRY_RUN":
         raise ValueError("source ChangePlan classification/mode is invalid")
@@ -93,8 +94,17 @@ def validate_source_pair(
         raise ValueError("source ChangePlan canonical hash is invalid")
     apply_plan_id = str(apply.get("approved_plan_id", apply.get("plan_id", "")))
     apply_plan_hash = str(apply.get("approved_plan_hash", apply.get("plan_hash", "")))
-    if apply_plan_id != str(plan.get("plan_id")) or apply_plan_hash != plan_hash:
+    if apply_plan_hash != plan_hash:
         raise ValueError("source apply evidence does not match its ChangePlan")
+    if apply_plan_id:
+        if apply_plan_id != str(plan.get("plan_id")):
+            raise ValueError("source apply evidence does not match its ChangePlan")
+    else:
+        bound_path = apply.get("plan_path")
+        if source_plan_path is None or not isinstance(bound_path, str):
+            raise ValueError("source apply evidence lacks an exact ChangePlan identity binding")
+        if Path(bound_path).resolve(strict=True) != source_plan_path.resolve(strict=True):
+            raise ValueError("source apply evidence ChangePlan path binding is invalid")
     if apply.get("status") != "PASS":
         raise ValueError("source apply evidence is not PASS")
     for key in ("actual_delete_count", "files_deleted"):
@@ -305,14 +315,16 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
     if any(readonly_by_id[case_id]["status"] != "PASS" for case_id in READ_ONLY_CASE_IDS):
         raise ValueError("all 17 read-only cases must be PASS before write reconciliation")
 
-    a02_plan, _ = load_json(args.a02_plan, label="A02 plan")
+    a02_plan, a02_plan_path = load_json(args.a02_plan, label="A02 plan")
     a02_apply, a02_apply_path = load_json(args.a02_apply, label="A02 apply")
     feedback_plan, _ = load_json(args.feedback_plan, label="feedback plan")
     feedback_apply, feedback_apply_path = load_json(args.feedback_apply, label="feedback apply")
     boundary_plan, _ = load_json(args.boundary_plan, label="boundary plan")
     boundary_apply, boundary_apply_path = load_json(args.boundary_apply, label="boundary apply")
     change_plans = {
-        "A02": validate_source_pair(a02_plan, a02_apply, classification="S1_APPEND"),
+        "A02": validate_source_pair(
+            a02_plan, a02_apply, classification="S1_APPEND", source_plan_path=a02_plan_path,
+        ),
         "feedback": validate_source_pair(feedback_plan, feedback_apply, classification="S2_CONTROLLED_UPDATE"),
         "boundary": validate_source_pair(boundary_plan, boundary_apply, classification="S2_CONTROLLED_UPDATE"),
     }
