@@ -22,8 +22,10 @@ const impressionResponse = {
     status: "ACCEPTED",
     is_valid_exposure: true,
     agent_action: {
+      step_no: null,
       agent_name: "FeedbackLearningAgent",
       agent_version: "feedback-learning-rule-v1",
+      message_type: null,
       action: "OBSERVE",
       target: "UserProfileAgent",
       reason_code: "IMPRESSION_RECORDED",

@@ -18,10 +18,10 @@ export type DirectBehaviorEventType =
   | "ACCESS_PAPER_FULLTEXT";
 
 export interface AgentAction {
-  step_no?: number;
+  step_no?: number | null;
   agent_name: string;
   agent_version: string;
-  message_type?: string;
+  message_type?: string | null;
   action: string;
   target: string;
   reason_code: string;

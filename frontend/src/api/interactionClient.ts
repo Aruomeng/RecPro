@@ -83,8 +83,8 @@ function isAgentAction(value: unknown): boolean {
     typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 1 &&
     isRecord(value.parameters) &&
     Array.isArray(value.evidence_refs) && value.evidence_refs.every(isNonEmptyString) &&
-    (value.step_no === undefined || isPositiveInteger(value.step_no)) &&
-    (value.message_type === undefined || isNonEmptyString(value.message_type))
+    (value.step_no === undefined || value.step_no === null || isPositiveInteger(value.step_no)) &&
+    (value.message_type === undefined || value.message_type === null || isNonEmptyString(value.message_type))
   );
 }
 
