@@ -199,7 +199,7 @@
   - `docs/LibraMAS_实施状态与交接记录.md`
 - `immediate_risk`：默认 Compose 故意运行 health-only 入口，页面会如实显示 LLM=Mock/推荐关闭；这不等于显式研究组合根仍为 Mock。显式 G4+G5 入口、DeepSeek `deepseek-v4-flash`、MySQL/Neo4j/Chroma 与反馈 Worker 均有真实运行证据，但尚未形成一个可长期启动的发布配置。六场景浏览器业务写入仍需按不可重用 UUID/request_id 的精确 ChangePlan 执行；生产 OIDC/JWKS、性能报告和全新环境复现未完成。G9 还缺确认性数据、许可、标注和切分，不能开始正式测试集实验。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：为六个浏览器业务场景建立独立的 append-only ChangePlan 与证据执行器，冻结新 request/event UUID、最大写入量、LLM 请求上限和数据库前后计数；任何真实 POST 前继续执行精确绑定检查。并行准备 G9 Manifest 模板，但真实评测内容必须由用户提供或确认，不能由系统臆造。
+- `next_action`：六场景 DRY_RUN 计划已冻结，等待用户对精确 plan_id/hash 的独立执行批准；批准后再实现/运行浏览器执行器，逐场景核对 DOM、Trace、LLM 回执和数据库前后计数。并行准备 G9 Manifest 模板，但真实评测内容必须由用户提供或确认，不能由系统臆造。
 
 ---
 
@@ -2133,6 +2133,23 @@ LLM：IntentUnderstandingAgent 使用 DeepSeek 1 次；ExplanationAgent 使用 D
 修复后浏览器证据：同一 Vite 页面发送原批准 UUIDv5，后端在 67.875ms 返回 HTTP 200，页面显示原 trace=868529ef 与 8 条既有 DeepSeek 解释；前后 recommendation task/record/item/Agent 和五张书目表计数全部 delta=0，没有新 LLM 调用。
 证据：g4-browser-replay-before-20260814-001、g4-browser-replay-after-20260814-001、g4-browser-uuidv5-replay-after-20260814-001；浏览器 DOM 显示 DeepSeek/Neo4j/Chroma/MySQL/推荐链全部 UP。
 后续约束：所有浏览器固定 identity 必须先通过 isUuid 回归和数据库唯一键存在性检查；任何期望 replay 的请求必须在发送前证明 request/session/body 三者完全一致。
+```
+
+## G8 六场景浏览器 DRY_RUN 计划
+
+```text
+交接ID：G8-BROWSER-SCENARIO-PLAN-20260814-001
+Gate：G7/G8 六个论文演示用户的浏览器业务验收
+状态：PLAN_PASS / APPLY_PENDING_EXACT_APPROVAL
+时间：2026-08-14（Asia/Shanghai）
+目标：将 demo_cold、demo_clear、demo_topic、demo_path、demo_negative、demo_degraded 的输入、期望状态、DOM 断言、UUID、DeepSeek 预算和数据库上限冻结为一个不可变 DRY_RUN 计划。
+新增文件：contracts/verification/g8-browser-scenario-plan.schema.json、scripts/build_g8_browser_scenario_plan.py、scripts/verify_g8_browser_scenario_plan.py、tests/g8/test_browser_scenario_plan.py；Makefile 新增 build/verify-g8-browser-scenario-plan。
+计划：artifacts/verification/g8/g8-browser-scenario-plan-20260814-001/browser-scenario-plan.json；plan_id=4d99e1f6-2a20-5d0d-b979-dd1c8effa301；plan_hash=30e9a2d6f2a02a08d3bcc60f56914b23b8e26b905091ff2daaaa2bfd0fe53ab4；Git=4da20e58efd45a58cbc3628ef7a6b10091d9eaca。
+运行预算：六场景预计最多 MySQL 追加 306 行、DeepSeek 外部尝试 80 次、网络请求 40 次；Outbox claim=0、Neo4j/Chroma writes=0、文件删除=0、数据库物理删除=0、artifact 覆盖=0。计划本身 database_writes=0、external_llm_requests=0。
+冻结内容：六个 request_id/session_id 均由 run_id 派生且互不重复；固定输入和 BOOK/PAPER/output_type/limit；期望 WAITING_CLARIFICATION、COMPLETED 或 DEGRADED_COMPLETED；浏览器 1280×720 DOM 断言；真实回放必须 zero-delta；negative 场景的反馈链路仍需显式逐步执行并回读。
+验证结果：契约总数 33、G8 定向测试通过；计划验证器 PASS，拒绝篡改输入、重复 fixture 身份、重复 UUID 和非 DeepSeek 模型。没有发送浏览器业务 POST，没有 claim Outbox，没有修改任何数据库。
+执行门禁：该计划是新的 S3_BROWSER_SCENARIO 计划，不能被先前 G4/G5/G8 批准自动涵盖。只有用户明确批准上述完整 plan_id 与 plan_hash，才可实现/运行对应的浏览器 apply executor；执行器必须逐场景保存 DOM/Trace/LLM/计数证据，任何中途失败保留已提交事实，不执行补偿删除。
+下一步唯一动作：等待精确 plan_id/hash 执行批准；批准后先做每场景运行前计数与 UUID 预检，再按场景顺序执行并生成独立回读证据。
 ```
 
 ## 阶段交接模板
