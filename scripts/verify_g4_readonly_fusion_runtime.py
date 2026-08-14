@@ -230,7 +230,7 @@ async def execute(args: argparse.Namespace) -> int:
     recall = next(item for item in first.dispatches if item.message.receiver == "CandidateRecallAgent")
     recall_payload = recall.result.payload if isinstance(recall.result.payload, dict) else {}
     candidates = recall_payload.get("candidates", [])
-    if not isinstance(candidates, list) or len(candidates) != args.limit:
+    if not isinstance(candidates, list) or not 1 <= len(candidates) <= args.limit:
         raise ValueError("G4 read-only orchestration returned an unexpected candidate count")
     channels = recall_payload.get("channels")
     allowed_channels = ("MYSQL", "GRAPH", "VECTOR")
@@ -248,6 +248,7 @@ async def execute(args: argparse.Namespace) -> int:
         "channel_ranks",
         "primary_channel",
         "evidence_confidence",
+        "negative_penalty",
     }
     if any(
         not isinstance(candidate, dict)

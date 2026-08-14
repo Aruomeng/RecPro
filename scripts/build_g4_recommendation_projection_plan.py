@@ -37,8 +37,8 @@ BASE_COUNT_TARGETS = (
     ("recommendation_task", 1),
     ("recommendation_task_transition", 8),
     ("recommendation_record", 1),
-    ("recommendation_item", 8),
-    ("recommendation_item_explanation", 8),
+    ("recommendation_item", None),
+    ("recommendation_item_explanation", None),
     ("recommendation_policy_decision", 1),
     ("recommendation_trace", 1),
     ("recommendation_agent_message", 7),
@@ -101,14 +101,16 @@ def load_pass_evidence(path: Path, *, label: str) -> tuple[dict[str, Any], bytes
     return payload, raw
 
 
-def count_targets(*, candidate_rows: int) -> tuple[tuple[str, int], ...]:
+def count_targets(*, candidate_rows: int, item_rows: int = 8) -> tuple[tuple[str, int], ...]:
     if isinstance(candidate_rows, bool) or not 1 <= candidate_rows <= 60:
         raise ValueError("candidate persistence rows must be between 1 and 60")
+    if isinstance(item_rows, bool) or not 1 <= item_rows <= 20:
+        raise ValueError("item rows must be between 1 and 20")
     return (
         ("recommendation_task", 1),
         ("recommendation_task_transition", 8),
         ("recommendation_candidate", candidate_rows),
-        *BASE_COUNT_TARGETS[2:],
+        *((table, item_rows if delta is None else delta) for table, delta in BASE_COUNT_TARGETS[2:]),
     )
 
 
@@ -153,7 +155,12 @@ def build_plan(
     candidate_rows = g4_baseline.get("candidate_persistence_rows")
     if isinstance(candidate_rows, bool) or not isinstance(candidate_rows, int):
         raise ValueError("G4 baseline must record candidate_persistence_rows")
-    count_targets_value = count_targets(candidate_rows=candidate_rows)
+    item_rows = g4_baseline.get("candidate_count")
+    if isinstance(item_rows, bool) or not isinstance(item_rows, int) or not 1 <= item_rows <= limit:
+        raise ValueError("G4 baseline must record 1..limit positive-score candidates")
+    count_targets_value = count_targets(
+        candidate_rows=candidate_rows, item_rows=item_rows
+    )
     missing = [
         table
         for table, _delta in count_targets_value

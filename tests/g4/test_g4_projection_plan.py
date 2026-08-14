@@ -17,11 +17,19 @@ class G4ProjectionPlanTests(unittest.TestCase):
         self.assertEqual(("recommendation_candidate", 13), targets[2])
         self.assertEqual(57, sum(delta for _table, delta in targets))
 
+    def test_positive_item_coverage_drives_item_deltas(self) -> None:
+        targets = dict(count_targets(candidate_rows=7, item_rows=4))
+        self.assertEqual(4, targets["recommendation_item"])
+        self.assertEqual(4, targets["recommendation_item_explanation"])
+
     def test_candidate_persistence_rows_rejects_unsafe_values(self) -> None:
         for value in (0, 61, True, False):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     count_targets(candidate_rows=value)
+        for value in (0, 21, True, False):
+            with self.subTest(item_rows=value), self.assertRaises(ValueError):
+                count_targets(candidate_rows=12, item_rows=value)
 
     def test_query_spec_accepts_bounded_deadline_metadata(self) -> None:
         value = validate_g4_projection_query_spec(

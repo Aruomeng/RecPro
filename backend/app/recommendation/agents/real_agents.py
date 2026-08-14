@@ -293,7 +293,7 @@ class CatalogCandidateRecallAgent:
     """Recall deterministic candidates from the real Catalog port."""
 
     name = "CandidateRecallAgent"
-    version = "recall-mysql-v2"
+    version = "recall-mysql-v3"
 
     def __init__(
         self,
@@ -589,7 +589,15 @@ class CatalogCandidateRecallAgent:
                 6,
             )
         candidates.sort(key=lambda item: (-float(item["score"]), int(item["resource_id"])))
-        selected = candidates[:limit]
+        positive_candidates = [
+            candidate for candidate in candidates if float(candidate["score"]) > 0.0
+        ]
+        selected = positive_candidates[:limit]
+        coverage_warning = (
+            ("INSUFFICIENT_POSITIVE_SCORE_COVERAGE",)
+            if 0 < len(selected) < limit
+            else ()
+        )
         return _result(
             message,
             agent_name=self.name,
@@ -607,9 +615,14 @@ class CatalogCandidateRecallAgent:
                 },
             },
             confidence=0.8 if selected else 0.3,
-            status=AgentResultStatus.PARTIAL if (not selected or graph_warning or vector_warning) else AgentResultStatus.SUCCESS,
-            warnings=(("CATALOG_EMPTY",) if not selected else ()) + graph_warning + vector_warning,
-            fallback_used=bool(graph_warning or vector_warning),
+            status=AgentResultStatus.PARTIAL
+            if (not selected or coverage_warning or graph_warning or vector_warning)
+            else AgentResultStatus.SUCCESS,
+            warnings=(("CATALOG_EMPTY",) if not selected else ())
+            + coverage_warning
+            + graph_warning
+            + vector_warning,
+            fallback_used=bool(coverage_warning or graph_warning or vector_warning),
             tool_calls=(
                 {"operation": "catalog.list_resources.recall", "attempts": resource_attempts, "outcome": "SUCCESS"},
                 {"operation": "catalog.list_resource_tags.recall", "attempts": tag_attempts, "outcome": "SUCCESS"},
@@ -618,12 +631,14 @@ class CatalogCandidateRecallAgent:
             + vector_tool_calls,
             decision=AgentDecision(
                 action=AgentActionType.DEGRADE
-                if (graph_warning or vector_warning or not selected)
+                if (coverage_warning or graph_warning or vector_warning or not selected)
                 else AgentActionType.SELECT_CHANNELS,
                 target="RankingAgent",
                 reason_code=(
                     "OPTIONAL_CHANNEL_DEGRADED"
                     if (graph_warning or vector_warning)
+                    else "INSUFFICIENT_POSITIVE_SCORE_COVERAGE"
+                    if coverage_warning
                     else "CATALOG_EMPTY"
                     if not selected
                     else "RECALL_CHANNELS_SELECTED"

@@ -202,10 +202,18 @@ class G4PortOrchestratorTests(unittest.TestCase):
             item for item in result.dispatches if item.message.receiver == "CandidateRecallAgent"
         )
         candidates = recall.result.payload["candidates"]
-        self.assertEqual([2, 1], [item["resource_id"] for item in candidates])
+        self.assertEqual([2], [item["resource_id"] for item in candidates])
         self.assertEqual(0.0, candidates[0]["negative_penalty"])
-        self.assertGreater(candidates[1]["negative_penalty"], 0.7)
-        self.assertLess(candidates[1]["score"], candidates[0]["score"])
+        self.assertIn("INSUFFICIENT_POSITIVE_SCORE_COVERAGE", recall.result.warnings)
+
+    def test_zero_score_candidates_are_not_used_as_result_padding(self) -> None:
+        result = asyncio.run(
+            build_port_orchestrator(SelectiveTagCatalog(), NegativeProfile()).run(request())
+        )
+        recall = next(
+            item for item in result.dispatches if item.message.receiver == "CandidateRecallAgent"
+        )
+        self.assertTrue(all(item["score"] > 0 for item in recall.result.payload["candidates"]))
 
     def test_exhausted_catalog_retry_falls_back_to_degraded_result(self) -> None:
         result = asyncio.run(
