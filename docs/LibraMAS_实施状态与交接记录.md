@@ -167,8 +167,8 @@
 | G5 曝光反馈画像闭环 | IN_PROGRESS | `artifacts/verification/g5/g5-feedback-20260809-001/g5-runtime.json`；`artifacts/verification/g5/g5-http-20260810-005/http-runtime.json`；`artifacts/verification/g5/g5-worker-recovery-20260810-002/runtime.json`；`artifacts/verification/g5/g5-audit-replay-20260810-001/runtime.json`；`artifacts/verification/g5/g5-formal-auth-20260810-001/runtime.json`；`artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`；`artifacts/verification/g5/g5-worker-readonly-runtime-20260812-002/readonly.json`；`artifacts/verification/g5/g5-feedback-worker-reconcile-20260812-003/reconciliation.json`；25 项 G5 测试、5 项认证测试；`g5-audit-migration-20260810-001/audit-migration.json` | 前向迁移、Worker retry/DEAD 契约、opt-in HTTP、HS256 正式身份、身份/幂等/错误映射、资源状态受控 UPDATE 与同事务审计、真实 MySQL HTTP 链路、故障/重启恢复、历史 `as_of` 只读重算、默认安全 Worker 接线和空队列探针 PASS；第二个真实交互链已完成事实追加但原计划预算出现画像 upsert 行数漂移，独立 reconciliation=`PARTIAL_APPLY_RECONCILED`；动态 delta 预检已补；production HTTP、外部 IdP/JWKS、正式 Worker 非空队列受控消费审批和发布凭据流程待补 |
 | G6 可选检索与解释 | IN_PROGRESS | 图计划/导入、MySQL 书目导入、向量计划/验证、`chroma-collection-plan-20260811-002`/`chroma-collection-verify-20260811-002`、`chroma-import-idempotency-20260811-002`、独立只读 `chroma-import-integrity-20260811-001`；`artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-002/readonly.json`；`backend/app/catalog/adapters/embedding.py`、`backend/app/catalog/adapters/chroma.py`、`backend/app/catalog/adapters/neo4j.py`、`tests/g6/test_retrieval_fusion.py`；provider-only fixture artifact | Neo4j 63,388/191,865、MySQL 书目追加与幂等、确定性向量 14,983/384 维、Chroma collection 追加 14,983 并最终 14,983/14,983、幂等新增 0、独立只读 verifier PASS；图/向量显式组合根真实隔离只读融合与故障降级 fake PASS；MySQL `embedding_status` 仍 PENDING，默认 HTTP/Worker 接线和真实写入授权待完成；真实 G4 LLM 业务探针仍待重新获批并生成 PASS artifact |
 | G7 前端与论文演示 | IN_PROGRESS | G1 Vue 状态页、健康客户端、组件测试和追加式构建证据；`artifacts/verification/g4/g4-frontend-browser-apply-20260812-001/g4-recommendation-projection-apply.json`；`artifacts/verification/g4/g4-frontend-browser-reconcile-20260812-002/reconciliation.json`；`artifacts/verification/g7/g7-frontend-api-browser-20260811-001/frontend.json`；前端 `InteractionPanel`/`InteractionClient` 46 项测试；`dist/g7-interaction-ui-20260812-001` 构建；G7 默认关闭浏览器验收（390×844 无横向溢出、无交互 POST） | 推荐工作台、澄清交互、真实浏览器推荐幂等重放和视觉验收已完成；G4+G5 独立入口已具备，真实浏览器写入、正式部署接线和论文演示冻结流程仍待新的 ChangePlan/opt-in Gate |
-| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-release-preflight-20260812-002/release-preflight.json`=`PASS_WITH_BLOCKERS`；20 项技术检查 PASS；`artifacts/verification/g8/g8-acceptance-coverage-20260812-008/acceptance-coverage.json` 完成 A01—A25 映射；最终计划/审计契约及统一只读/故障矩阵执行器已完成 | 25 项均有直接离线覆盖；17 项只读 final runtime 可由当前统一执行器验证，8 项需独立 ChangePlan；六场景浏览器写入、生产认证和发布凭据仍未完成 |
-| G9 冻结实验 | NOT_STARTED | `artifacts/verification/experiment-inputs/eval-inputs-20260810-002/input-freeze-report.json`（当前为 PASS_WITH_BLOCKERS） | 契约和输入门禁已建立；真实数据、许可、标注、Split、F3 配置和 G8 仍未完成 |
+| G8 可靠性与发布候选 | IN_PROGRESS | `artifacts/verification/g8/g8-final-revalidation-audit-20260814-001/final-revalidation-audit.json`=`PASS`；A01—A25 为 25 PASS/0 PENDING/0 FAIL；只读故障矩阵 64 项断言 PASS；八项历史授权写入证据完成当前数据库对账 | 核心验收语义已全部通过；Gate 尚未标记 COMPLETED，因为六场景真实浏览器业务验收、生产认证/凭据、性能与独立发布环境复现仍属于发布候选退出条件 |
+| G9 冻结实验 | IN_PROGRESS | `artifacts/verification/experiment/freeze-20260814-001/freeze-preflight.json` 与 `artifacts/verification/experiment-inputs/eval-inputs-20260814-001/input-freeze-report.json` 均为 `PASS_WITH_BLOCKERS` | F0 协议已冻结；仍缺确认性评测数据/许可 Manifest、盲标注、Split 和 F3 配置。现有 synthetic fixture 与 Lib 书目不能冒充用户相关性金标准 |
 | G10 最终发布 | NOT_STARTED | — | 依赖G9 |
 
 允许的状态：`NOT_STARTED / IN_PROGRESS / BLOCKED / COMPLETED`。状态只能在证据存在后更新为COMPLETED。
@@ -177,7 +177,7 @@
 
 ## Working Set
 
-- `current_subtask`：G8 final revalidation 已达到 `17 PASS / 8 PENDING / 0 FAIL`。A02 与 A03/A04/A08/A23 已有可复用的独立执行边界；A07/A09/A10 的专用计划生成器、严格 Schema、执行器和精确回读已完成代码与离线门禁。下一步是在本轮提交后的 clean commit 上生成三批新计划并逐批等待精确批准。provider-only DeepSeek fixture 已 PASS，G4 真实 LLM 业务探针仍未形成 PASS artifact；默认 HTTP/Worker/DeepSeek 保持关闭。
+- `current_subtask`：G8 A01—A25 final revalidation 已达到 `25 PASS / 0 PENDING / 0 FAIL`。三批精确批准的写入证据已通过当前 MySQL 只读对账，统一审计为 PASS。下一步聚焦 G7 六场景真实浏览器业务验收、生产认证/发布复现，以及需要用户另行提供论文评测材料的 G9 F1—F3；默认 HTTP/Worker 仍保持 fail-closed，显式 G4 组合根已真实使用 DeepSeek Intent + Explanation 完成无回退任务。
 - `current_evidence`：MySQL 五张目标表总数保持 `14,989/14,986/8,522/70,762/14,989`；幂等复跑前后计数一致，独立只读核验重复外部 ID=0、`resolved_resource_tags=70,750`。向量计划 `vector-index-plan-20260811-001` 生成 14,983 条、384 维记录，产物 SHA-256=`7714919f8e57902002d42fb39dc0ba8b2f6106c4f8c1594a691e5ea180c944ae`；第二次构建哈希一致，验证器 PASS。Chroma plan `...-002` 为 PINNED `chromadb==1.5.9`；正式 collection `library_resources__hash_char_ngram_v1` 位于 `data/chroma`，追加 14,983 条、幂等新增 0、最终 14,983/14,983；独立只读 verifier PASS，源向量 SHA 全量核验 14,983、最大数值误差 2.98e-8、query top-1 score=1.0。首次回读失败证据已保留且未清理；空探查 collection `probe_signature_20260811` 位于独立路径、0 条向量，同样未删除。MySQL `embedding_status` 仍 PENDING，Neo4j 最终计数 63,388/191,865。
 - `active_files_or_commands`：
   - `Makefile`
@@ -197,9 +197,9 @@
   - `docs/LibraMAS_纯推荐模块实施文档_可运行版.md`
   - `docs/LibraMAS_系统实施计划_安全低耦合版.md`
   - `docs/LibraMAS_实施状态与交接记录.md`
-- `immediate_risk`：G3/G4/G5 HTTP 仍未进入默认生产配置；G6 图/向量已完成显式组合根的真实只读融合但尚未接入默认 Agent/HTTP，MySQL embedding 状态仍 PENDING，DeepSeek provider-only fixture 已真实调用但 G4 业务探针尚未形成 PASS；G4 HTTP trace action 与 G5 FeedbackLearningAgent 已完成离线边界验证，但真实业务/Worker 接入、Outbox 消费和前端写入仍待独立 Gate；Prompt Bundle 已冻结但 Explanation/Feedback 的真实 LLM 接线仍待 EvidenceValidator/事务边界评审；G7 推荐工作台与浏览器幂等闭环已完成，feedback/behavior 页面和论文演示冻结仍待完成。任何默认环境仍不得自动开启推荐。Chroma operator 依赖只用于显式导入/校验，不进入默认 backend/worker 镜像。
+- `immediate_risk`：默认 Compose 故意运行 health-only 入口，页面会如实显示 LLM=Mock/推荐关闭；这不等于显式研究组合根仍为 Mock。显式 G4+G5 入口、DeepSeek `deepseek-v4-flash`、MySQL/Neo4j/Chroma 与反馈 Worker 均有真实运行证据，但尚未形成一个可长期启动的发布配置。六场景浏览器业务写入仍需按不可重用 UUID/request_id 的精确 ChangePlan 执行；生产 OIDC/JWKS、性能报告和全新环境复现未完成。G9 还缺确认性数据、许可、标注和切分，不能开始正式测试集实验。
 - `database_boundary`：本机 Homebrew Neo4j `neo4j` 库是受保护外部数据（59,301 节点/185,238 关系）；RecPro 只能使用独立 Compose Neo4j 实例/卷，禁止复用 `127.0.0.1:7474/7687`。
-- `next_action`：提交当前代码后先执行新的 G7/G5 只读基线；随后生成 A02、A03/A04/A08/A23、A07/A09/A10 三个互相独立的 DRY_RUN ChangePlan。未获得各自精确 plan_id/hash 批准前，不执行推荐 POST、feedback/behavior 追加或非空 Worker claim。
+- `next_action`：为六个浏览器业务场景建立独立的 append-only ChangePlan 与证据执行器，冻结新 request/event UUID、最大写入量、LLM 请求上限和数据库前后计数；任何真实 POST 前继续执行精确绑定检查。并行准备 G9 Manifest 模板，但真实评测内容必须由用户提供或确认，不能由系统臆造。
 
 ---
 
@@ -2096,6 +2096,25 @@ G5 数据边界：逐表对账精确匹配计划的 26 项逻辑变更；只允�
 前端安全复核：浏览器本地演示可显示 3 条明确标注的静态资源；交互开关关闭时点击“记录曝光”只返回审批提示、没有生成曝光 UUID。前后 MySQL 的 impression=13、feedback=10、behavior=45、Outbox=32 均不变。
 未解决风险：真实浏览器业务写入、默认 Compose 的显式 opt-in 编排、正式 OIDC/JWKS、G8 剩余边界用例与 G9 论文实验冻结仍需单独计划或正式配置；不得将临时 Demo 组合根等同于默认生产发布。
 下一步唯一动作：在不产生业务写入的前提下复核 G8 最终验收计划与当前提交的证据覆盖；需要浏览器真实 POST 或剩余边界事实时，重新生成并精确批准对应 ChangePlan。
+```
+
+## G8 核心全量复验与 G9 冻结门禁刷新
+
+```text
+交接ID：G8-FINAL-25-AND-G9-PREFLIGHT-20260814-001
+Gate：G8 A01—A25 final revalidation / G9 formal-input preflight
+状态：G8_CORE_25_PASS / G9_PASS_WITH_BLOCKERS
+时间：2026-08-14（Asia/Shanghai）
+当前绑定提交：82990ba98512fbc7da0bc6ea9e553936bec85be6
+最终计划：g8-final-revalidation-plan-20260814-003；plan_hash=1db86eb4a2bd4ccfad2d8f4013edc3f32a53d0fcba726786dc51175f85f60d71。
+只读矩阵：g8-readonly-fault-matrix-20260814-003；17 个用例、64 项隔离断言 PASS。
+写入证据对账：g8-approved-write-reconcile-20260814-003；复用三批用户精确批准且已执行 PASS 的不可变证据，回读任务/推荐记录、事件与反馈 UUID、曝光阈值、ALREADY_READ 状态、主题负偏好、Outbox DONE 和 profile change log；八个用例全部 PASS。
+最终审计：g8-final-revalidation-audit-20260814-001=PASS；A01—A25 为 final_pass=25、final_pending=0、final_fail=0，plan Git 与审计提交匹配。
+本轮数据边界：对账仅执行 15 次隔离 MySQL SELECT 并 rollback；database_writes=0、Outbox claims=0、external_llm_requests=0、Neo4j/Chroma writes=0、files_deleted=0、database_physical_deletions=0、artifact_overwrites=0。来源证据所代表的历史批准操作单列为 database_writes=79、Outbox claims=3，不冒充本轮写入。
+G9 预检：freeze-20260814-001 与 eval-inputs-20260814-001 均为 PASS_WITH_BLOCKERS。F0 协议已冻结；F1/F2/F3 尚缺满足 evaluation schema 的真实数据与许可 Manifest、盲标注、冻结 Split 和配置 Manifest。synthetic-demo fixture 不具备确认性论文资格；Lib 书目事实可用于本地原型和候选库，但没有用户相关性金标准，不能自动作为正式评测集。
+浏览器只读复核：当前默认 Compose 前端可访问，真实展示 backend/MySQL 健康状态、推荐链关闭和 Mock provider；本地演示按钮明确声明不访问 API、不写 MySQL/Neo4j/Chroma。该结果证明默认 fail-closed 正常，不代表显式 DeepSeek 组合根失效；后者已有真实 HTTP 与模型证据。
+未解决风险：六场景真实浏览器业务 POST、生产 OIDC/JWKS、性能/恢复报告和全新发布环境复现仍未完成，因此 G8 Gate 保持 IN_PROGRESS；G9 不能在缺少评测输入时伪造开始。
+下一步唯一动作：实现并生成六场景浏览器专用 ChangePlan/执行器；固定新身份和幂等键、逐场景最大增量、LLM 预算、前后数据库计数与 DOM/trace 证据，再执行精确审批门禁。
 ```
 
 ## 阶段交接模板
