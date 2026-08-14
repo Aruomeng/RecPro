@@ -1,0 +1,115 @@
+{
+  "schema_version": "kiosk-core-acceptance-plan-v1",
+  "plan_id": "94267c92-247d-52ea-9a4b-d7a8bb32a3e5",
+  "plan_hash": "fe8eee98c6c46eb9a1d646f066308cfb7130964b1e1b2e873edfc9631acd55d3",
+  "run_id": "kiosk-core-acceptance-20260814-001",
+  "created_at": "2026-08-14T05:10:00Z",
+  "implementation_commit": "0e38cd838dfbfce7b7176c0d4017cbe14b3bcc30",
+  "classification": "S3_REAL_RECOMMENDATION_AND_FEEDBACK",
+  "mode": "DRY_RUN_AWAITING_EXPLICIT_APPROVAL",
+  "identity": {
+    "user_id": 1001,
+    "profile_mode": "DEMO_PROFILE",
+    "session_id": "b795d81a-ccdf-5271-8063-bc064474ddc2"
+  },
+  "versions": {
+    "dataset": "lib-books-v1-20260810",
+    "graph": "lib-books-v1-20260810",
+    "vector_index": "lib-books-vector-v1-20260811",
+    "embedding": "hash-char-ngram-v1",
+    "llm_provider": "deepseek",
+    "llm_model": "deepseek-v4-flash"
+  },
+  "baseline": {
+    "path": "artifacts/verification/g4/g4-browser-successor-baseline-20260814-006/readonly.json",
+    "sha256": "0e60685cd819291f6013b80e05e5e0baa12b322ebdedb894405796969b05d30e",
+    "must_be_rechecked_immediately_before_execution": true
+  },
+  "requests": [
+    {
+      "step": 1,
+      "operation": "POST /api/v1/recommendation-runs",
+      "request_id": "43c71890-819d-5944-a10e-517717926b03",
+      "idempotency_key": "43c71890-819d-5944-a10e-517717926b03",
+      "input_text": "请推荐多智能体系统、知识图谱与智慧图书馆相关图书",
+      "resource_types": ["BOOK"],
+      "output_type": "TOPIC_RESOURCES",
+      "limit": 8,
+      "expected_terminal_statuses": ["COMPLETED", "DEGRADED_COMPLETED"],
+      "required_checks": ["SSE event sequence is monotonic", "Agent events match persisted trace", "at least six real resources", "bounded channel evidence is present"]
+    },
+    {
+      "step": 2,
+      "operation": "POST /api/v1/recommendation-impressions/batch",
+      "impression_uuid": "573fed32-b050-5eac-928a-b14a2a4a2288",
+      "selection": "rank_no=1 from step 1",
+      "visible_ms": 1000,
+      "max_visible_ratio": 1.0,
+      "required_checks": ["one valid exposure only", "page load alone creates no exposure"]
+    },
+    {
+      "step": 3,
+      "operation": "POST /api/v1/recommendation-items/{item_id}/feedback",
+      "feedback_uuid": "60541761-b1b8-5045-9151-83824c0ae2c7",
+      "feedback_type": "NOT_INTERESTED",
+      "reason_code": "TOPIC_NOT_INTERESTED",
+      "selection": "item_id and impression_uuid from steps 1 and 2",
+      "required_checks": ["FeedbackLearningAgent action is public", "resource suppression state is visible", "profile update status is explicit"]
+    },
+    {
+      "step": 4,
+      "operation": "POST /api/v1/recommendation-runs",
+      "request_id": "0e09efcb-c745-5701-a32c-799b0ee06f80",
+      "idempotency_key": "0e09efcb-c745-5701-a32c-799b0ee06f80",
+      "input_text": "继续推荐多智能体系统、知识图谱与智慧图书馆相关图书，并避开刚才不感兴趣的资源",
+      "resource_types": ["BOOK"],
+      "output_type": "TOPIC_RESOURCES",
+      "limit": 8,
+      "expected_terminal_statuses": ["COMPLETED", "DEGRADED_COMPLETED"],
+      "required_checks": ["suppressed resource is absent or has explicit penalty", "negative_penalty is bounded", "replay creates zero additional rows"]
+    }
+  ],
+  "estimated_mysql_append_upper_bounds": {
+    "recommendation_task": 2,
+    "recommendation_task_transition": 20,
+    "recommendation_agent_message": 16,
+    "recommendation_agent_result": 16,
+    "recommendation_orchestration_result": 16,
+    "recommendation_agent_artifact": 18,
+    "recommendation_candidate": 48,
+    "recommendation_record": 2,
+    "recommendation_item": 16,
+    "recommendation_item_explanation": 16,
+    "recommendation_policy_decision": 2,
+    "recommendation_trace": 2,
+    "recommendation_impression": 1,
+    "recommendation_feedback": 1,
+    "behavior_event": 1,
+    "profile_update_outbox": 1,
+    "user_resource_state": 1,
+    "aggregate_max_appended_rows": 179
+  },
+  "external_budgets": {
+    "max_deepseek_requests": 8,
+    "max_deepseek_output_tokens_per_request": 512,
+    "max_http_post_requests_including_idempotent_replays": 6,
+    "max_active_recommendation_runs": 1,
+    "timeout_seconds_per_recommendation_run": 120
+  },
+  "immutable_safety_limits": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "mysql_delete_statements": 0,
+    "neo4j_writes": 0,
+    "chroma_writes": 0,
+    "container_or_volume_deletions": 0,
+    "outbox_worker_claims": 0,
+    "artifact_overwrites": 0,
+    "stop_on_any_budget_overrun": true
+  },
+  "approval": {
+    "business_writes_authorized": false,
+    "required_approval_text": "批准 plan_id 94267c92-247d-52ea-9a4b-d7a8bb32a3e5 与对应 plan_hash",
+    "executor_status": "BLOCKED_PENDING_EXPLICIT_APPROVAL"
+  }
+}
