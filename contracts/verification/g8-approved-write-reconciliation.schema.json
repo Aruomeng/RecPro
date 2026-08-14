@@ -4,7 +4,7 @@
   "title": "LibraMAS G8 approved write reconciliation",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "status", "run_id", "plan_run_id", "plan_hash", "git_commit", "source_evidence", "cases", "database_identity", "safety"],
+  "required": ["schema_version", "status", "run_id", "plan_run_id", "plan_hash", "git_commit", "source_evidence", "approved_source_totals", "cases", "database_identity", "safety"],
   "properties": {
     "schema_version": {"const": "g8-approved-write-reconciliation-v1"},
     "status": {"const": "PASS"},
@@ -26,6 +26,16 @@
           "classification": {"enum": ["S1_APPEND", "S2_CONTROLLED_UPDATE"]},
           "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
         }
+      }
+    },
+    "approved_source_totals": {
+      "type": "object", "additionalProperties": false,
+      "required": ["database_writes", "outbox_claims", "external_llm_requests", "database_physical_deletions"],
+      "properties": {
+        "database_writes": {"type": "integer", "minimum": 0},
+        "outbox_claims": {"type": "integer", "minimum": 0},
+        "external_llm_requests": {"const": 0},
+        "database_physical_deletions": {"const": 0}
       }
     },
     "cases": {
@@ -63,8 +73,8 @@
       "required": ["database_reads", "database_writes", "outbox_claims", "external_llm_requests", "neo4j_writes", "chroma_writes", "files_deleted", "database_physical_deletions", "artifact_overwrites"],
       "properties": {
         "database_reads": {"type": "integer", "minimum": 1},
-        "database_writes": {"type": "integer", "minimum": 0},
-        "outbox_claims": {"type": "integer", "minimum": 0},
+        "database_writes": {"const": 0},
+        "outbox_claims": {"const": 0},
         "external_llm_requests": {"const": 0},
         "neo4j_writes": {"const": 0},
         "chroma_writes": {"const": 0},

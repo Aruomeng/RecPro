@@ -379,6 +379,12 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "status": "PASS", "run_id": run_id, "plan_run_id": str(plan["run_id"]),
         "plan_hash": str(plan["plan_hash"]), "git_commit": git_commit,
         "source_evidence": source_evidence,
+        "approved_source_totals": {
+            "database_writes": int(a02_apply["database_writes"]) + int(feedback_apply["database_writes"]) + int(boundary_apply["database_row_count_increase"]),
+            "outbox_claims": int(feedback_apply["outbox_claims"]) + int(boundary_apply["outbox_claims"]),
+            "external_llm_requests": 0,
+            "database_physical_deletions": 0,
+        },
         "cases": [
             {"case_id": case_id, "status": "PASS", "observations": observations[case_id], "change_plan": plan_for_case[case_id]}
             for case_id in WRITE_CASE_IDS
@@ -386,8 +392,8 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "database_identity": database_identity,
         "safety": {
             "database_reads": database_reads,
-            "database_writes": int(a02_apply["database_writes"]) + int(feedback_apply["database_writes"]) + int(boundary_apply["database_row_count_increase"]),
-            "outbox_claims": int(feedback_apply["outbox_claims"]) + int(boundary_apply["outbox_claims"]),
+            "database_writes": 0,
+            "outbox_claims": 0,
             "external_llm_requests": 0, "neo4j_writes": 0, "chroma_writes": 0,
             "files_deleted": 0, "database_physical_deletions": 0, "artifact_overwrites": 0,
         },
@@ -415,9 +421,9 @@ def execute(args: argparse.Namespace) -> dict[str, Any]:
         "git_commit": git_commit, "status": "PASS",
         "safety": {
             "database_reads": database_reads,
-            "database_writes": reconciliation["safety"]["database_writes"],
+            "database_writes": 0,
             "neo4j_reads": 0, "neo4j_writes": 0, "chroma_reads": 0, "chroma_writes": 0,
-            "outbox_claims": reconciliation["safety"]["outbox_claims"],
+            "outbox_claims": 0,
             "external_llm_requests": 0, "files_deleted": 0,
             "database_physical_deletions": 0, "artifact_overwrites": 0,
         },
