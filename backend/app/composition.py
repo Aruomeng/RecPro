@@ -596,6 +596,7 @@ def build_profile_outbox_worker(
     formula_version: str = "profile-g2-v1",
     lease_seconds: int = 60,
     max_attempts: int = 3,
+    allowed_outbox_ids: tuple[int, ...] | None = None,
 ) -> ProfileOutboxWorker:
     """Build a worker with an explicitly supplied, controlled-write connection."""
 
@@ -610,6 +611,7 @@ def build_profile_outbox_worker(
         formula_version=formula_version,
         lease_seconds=lease_seconds,
         max_attempts=max_attempts,
+        allowed_outbox_ids=allowed_outbox_ids,
     )
 
 

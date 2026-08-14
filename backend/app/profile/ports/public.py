@@ -41,6 +41,7 @@ class ProfileRefreshPort(Protocol):
         limit: int,
         lease_seconds: int,
         max_attempts: int,
+        allowed_outbox_ids: tuple[int, ...] | None = None,
     ) -> tuple[dict[str, object], ...]: ...
 
     async def apply_claim(

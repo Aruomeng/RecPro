@@ -369,6 +369,20 @@ execute-g5-feedback-worker-plan:
 	@test -n "$(G5_FEEDBACK_APPLY_BASELINE)" || { echo "G5_FEEDBACK_APPLY_BASELINE is required and must point to the matching PASS read-only baseline"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g5_feedback_worker_plan --apply --plan "$(G5_FEEDBACK_APPLY_PLAN)" --plan-id "$(G5_FEEDBACK_APPLY_PLAN_ID)" --approved-plan-hash "$(G5_FEEDBACK_APPLY_PLAN_HASH)" --baseline "$(G5_FEEDBACK_APPLY_BASELINE)" --run-id "$(G5_FEEDBACK_APPLY_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
 
+build-g5-pending-outbox-plan:
+	@test -n "$(G5_PENDING_OUTBOX_PLAN_RUN_ID)" || { echo "G5_PENDING_OUTBOX_PLAN_RUN_ID is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_PLAN_BASELINE)" || { echo "G5_PENDING_OUTBOX_PLAN_BASELINE is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_IDS)" || { echo "G5_PENDING_OUTBOX_IDS is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g5_pending_outbox_plan --run-id "$(G5_PENDING_OUTBOX_PLAN_RUN_ID)" --baseline "$(G5_PENDING_OUTBOX_PLAN_BASELINE)" --outbox-ids "$(G5_PENDING_OUTBOX_IDS)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
+
+execute-g5-pending-outbox-plan:
+	@test -n "$(G5_PENDING_OUTBOX_APPLY_RUN_ID)" || { echo "G5_PENDING_OUTBOX_APPLY_RUN_ID is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_APPLY_PLAN)" || { echo "G5_PENDING_OUTBOX_APPLY_PLAN is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_APPLY_PLAN_ID)" || { echo "G5_PENDING_OUTBOX_APPLY_PLAN_ID is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_APPLY_PLAN_HASH)" || { echo "G5_PENDING_OUTBOX_APPLY_PLAN_HASH is required"; exit 2; }
+	@test -n "$(G5_PENDING_OUTBOX_APPLY_BASELINE)" || { echo "G5_PENDING_OUTBOX_APPLY_BASELINE is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g5_pending_outbox_plan --apply --plan "$(G5_PENDING_OUTBOX_APPLY_PLAN)" --plan-id "$(G5_PENDING_OUTBOX_APPLY_PLAN_ID)" --approved-plan-hash "$(G5_PENDING_OUTBOX_APPLY_PLAN_HASH)" --baseline "$(G5_PENDING_OUTBOX_APPLY_BASELINE)" --run-id "$(G5_PENDING_OUTBOX_APPLY_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
+
 verify-g5-feedback-worker-reconcile:
 	@test -n "$(G5_FEEDBACK_RECONCILE_RUN_ID)" || { echo "G5_FEEDBACK_RECONCILE_RUN_ID is required and must identify a new read-only evidence run"; exit 2; }
 	@test -n "$(G5_FEEDBACK_RECONCILE_PLAN)" || { echo "G5_FEEDBACK_RECONCILE_PLAN is required and must point to the attempted G5 ChangePlan"; exit 2; }

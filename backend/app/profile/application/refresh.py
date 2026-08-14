@@ -30,6 +30,7 @@ class ProfileOutboxWorker:
         formula_version: str = "profile-g2-v1",
         lease_seconds: int = 60,
         max_attempts: int = 3,
+        allowed_outbox_ids: tuple[int, ...] | None = None,
     ) -> None:
         if not worker_id.strip():
             raise ValueError("worker_id must not be blank")
@@ -37,12 +38,21 @@ class ProfileOutboxWorker:
             raise ValueError("lease_seconds must be between 1 and 3600")
         if not 1 <= max_attempts <= 10:
             raise ValueError("max_attempts must be between 1 and 10")
+        if allowed_outbox_ids is not None:
+            normalized_ids = tuple(dict.fromkeys(int(item) for item in allowed_outbox_ids))
+            if not normalized_ids or len(normalized_ids) > 100 or any(item <= 0 for item in normalized_ids):
+                raise ValueError("allowed_outbox_ids must contain 1-100 unique positive ids")
+            if len(normalized_ids) != len(allowed_outbox_ids):
+                raise ValueError("allowed_outbox_ids must not contain duplicates")
+        else:
+            normalized_ids = None
         self._connection_factory = connection_factory
         self._refresh_port = refresh_port
         self._worker_id = worker_id
         self._formula_version = formula_version
         self._lease_seconds = lease_seconds
         self._max_attempts = max_attempts
+        self._allowed_outbox_ids = normalized_ids
 
     async def run_once(self, *, limit: int = 10) -> tuple[ProfileRefreshReceipt, ...]:
         claim_connection = await self._connection_factory()
@@ -53,6 +63,7 @@ class ProfileOutboxWorker:
                 limit=limit,
                 lease_seconds=self._lease_seconds,
                 max_attempts=self._max_attempts,
+                allowed_outbox_ids=self._allowed_outbox_ids,
             )
             await claim_connection.commit()
         except BaseException:

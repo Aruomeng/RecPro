@@ -37,8 +37,10 @@ class FakeRefreshPort:
         self.claims = 0
         self.done: list[int] = []
         self.failed: list[tuple[int, bool]] = []
+        self.last_claim_kwargs = {}
 
     async def claim_pending(self, connection, **kwargs):
+        self.last_claim_kwargs = kwargs
         self.claims += 1
         if self.empty_after_first and self.claims > 1:
             return ()
@@ -168,6 +170,33 @@ class ProfileWorkerTests(unittest.TestCase):
         self.assertEqual((), asyncio.run(worker.run_once(limit=1)))
         self.assertEqual([(44, True)], port.failed)
         self.assertEqual([], port.done)
+
+    def test_worker_passes_exact_outbox_allowlist_to_port(self) -> None:
+        async def factory():
+            return FakeConnection()
+
+        port = FakeRefreshPort(empty_after_first=True)
+        worker = ProfileOutboxWorker(
+            connection_factory=factory,
+            refresh_port=port,
+            worker_id="g5-targeted-worker",
+            allowed_outbox_ids=(47, 48),
+        )
+        asyncio.run(worker.run_once(limit=2))
+        self.assertEqual((47, 48), port.last_claim_kwargs["allowed_outbox_ids"])
+
+    def test_worker_rejects_unsafe_outbox_allowlists(self) -> None:
+        async def factory():
+            return FakeConnection()
+
+        for unsafe in ((), (0,), (47, 47)):
+            with self.subTest(unsafe=unsafe), self.assertRaises(ValueError):
+                ProfileOutboxWorker(
+                    connection_factory=factory,
+                    refresh_port=FakeRefreshPort(),
+                    worker_id="g5-targeted-worker",
+                    allowed_outbox_ids=unsafe,
+                )
 
 
 if __name__ == "__main__":

@@ -85,20 +85,33 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
         limit: int,
         lease_seconds: int,
         max_attempts: int,
+        allowed_outbox_ids: tuple[int, ...] | None = None,
     ) -> tuple[dict[str, object], ...]:
         if not 1 <= limit <= 100:
             raise ValueError("profile outbox limit must be between 1 and 100")
         if not 1 <= max_attempts <= 10:
             raise ValueError("profile outbox max_attempts must be between 1 and 10")
+        if allowed_outbox_ids is not None:
+            if not allowed_outbox_ids or len(allowed_outbox_ids) > 100:
+                raise ValueError("allowed_outbox_ids must contain 1-100 ids")
+            if any(not isinstance(item, int) or item <= 0 for item in allowed_outbox_ids):
+                raise ValueError("allowed_outbox_ids must contain positive integers")
+            if len(set(allowed_outbox_ids)) != len(allowed_outbox_ids):
+                raise ValueError("allowed_outbox_ids must not contain duplicates")
         now = datetime.now(UTC).replace(tzinfo=None)
         stale_before = now - timedelta(seconds=max(1, lease_seconds))
         claimed: list[dict[str, object]] = []
+        id_clause = ""
+        id_parameters: tuple[object, ...] = ()
+        if allowed_outbox_ids is not None:
+            id_clause = f"id IN ({','.join('%s' for _ in allowed_outbox_ids)}) AND "
+            id_parameters = tuple(allowed_outbox_ids)
         async with connection.cursor() as cursor:
             await cursor.execute(
                 "SELECT id, user_id, source_event_id, status, attempts FROM profile_update_outbox "
-                "WHERE status IN ('PENDING','PROCESSING') AND attempts >= %s "
+                f"WHERE {id_clause}status IN ('PENDING','PROCESSING') AND attempts >= %s "
                 "ORDER BY id FOR UPDATE",
-                (max_attempts,),
+                (*id_parameters, max_attempts),
             )
             dead_rows = await cursor.fetchall()
             for row in dead_rows:
@@ -122,11 +135,11 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
                 )
             await cursor.execute(
                 "SELECT id, user_id, source_event_id, status, source_type, payload_json, attempts "
-                "FROM profile_update_outbox WHERE "
+                f"FROM profile_update_outbox WHERE {id_clause}("
                 "(status = 'PENDING' AND (next_retry_at IS NULL OR next_retry_at <= %s)) "
                 "OR (status = 'PROCESSING' AND locked_at <= %s AND attempts < %s) "
-                "ORDER BY id LIMIT %s FOR UPDATE",
-                (now, stale_before, max_attempts, limit),
+                ") ORDER BY id LIMIT %s FOR UPDATE",
+                (*id_parameters, now, stale_before, max_attempts, limit),
             )
             rows = await cursor.fetchall()
             for row in rows:
