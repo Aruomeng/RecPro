@@ -64,6 +64,17 @@ class LLMIntentAgentTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(result.fallback_used)
         self.assertIn("LLM_INTENT_SKIPPED_EMPTY_INPUT", result.warnings)
 
+    async def test_explicitly_uncertain_goal_skips_provider_and_requests_clarification(self) -> None:
+        provider = AsyncMock()
+        result = await LLMIntentUnderstandingAgent(provider).handle(
+            message(input_text="我还不确定要研究什么，先帮我梳理方向")
+        )
+        provider.classify_intent.assert_not_awaited()
+        self.assertEqual("UNCLEAR", result.payload["intent_type"])
+        self.assertEqual("ASK_CLARIFICATION", result.decision.action.value)
+        self.assertTrue(result.fallback_used)
+        self.assertIn("LLM_INTENT_SKIPPED_AMBIGUOUS_INPUT", result.warnings)
+
     async def test_bad_provider_payload_falls_back(self) -> None:
         provider = AsyncMock()
         provider.classify_intent.return_value = type(

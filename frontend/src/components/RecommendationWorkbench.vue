@@ -5,6 +5,7 @@ import type {
   RecommendationClient,
   RecommendationExecution,
   RecommendationItem,
+  RecommendationOutputType,
   ResourceType,
 } from "../domain/recommendation";
 import type { InteractionClient } from "../domain/interaction";
@@ -27,6 +28,7 @@ const props = withDefaults(defineProps<{
 
 const query = ref("多智能体系统与智慧图书馆");
 const selectedTypes = ref<ResourceType[]>(["BOOK"]);
+const selectedOutputType = ref<RecommendationOutputType>("TOPIC_RESOURCES");
 const limit = ref(8);
 const phase = ref<"idle" | "demo" | "loading" | "success" | "clarification" | "error">("idle");
 const result = ref<RecommendationExecution | null>(null);
@@ -179,7 +181,7 @@ async function submit(): Promise<void> {
       scene: "SEARCH_AFTER",
       input_text: input,
       requested_resource_types: [...selectedTypes.value],
-      requested_output_type: "TOPIC_RESOURCES",
+      requested_output_type: selectedOutputType.value,
       limit: limit.value,
     }, { signal: controller.signal });
     if (controller.signal.aborted) return;
@@ -307,6 +309,13 @@ function typeLabel(type: ResourceType): string {
             <option :value="6">6</option>
             <option :value="8">8</option>
             <option :value="10">10</option>
+          </select>
+        </label>
+        <label class="limit-field" for="output-type">输出形式
+          <select id="output-type" v-model="selectedOutputType" :disabled="isBusy">
+            <option value="TOPIC_RESOURCES">主题资源</option>
+            <option value="PERSONALIZED_FEED">个性化推荐</option>
+            <option value="READING_PATH">学习路径</option>
           </select>
         </label>
         <div class="form-actions">

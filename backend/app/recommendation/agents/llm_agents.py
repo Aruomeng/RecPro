@@ -93,6 +93,25 @@ def _rule_payload(message: AgentMessage) -> tuple[dict[str, object], float]:
     )
 
 
+_GUIDED_CLARIFICATION_MARKERS = (
+    "不确定",
+    "不清楚",
+    "不知道",
+    "没想好",
+    "没有想好",
+    "梳理方向",
+    "先帮我梳理",
+    "还没有明确",
+)
+
+
+def _looks_like_guided_clarification(text: str) -> bool:
+    """Detect an explicit lack of research direction before spending an LLM call."""
+
+    normalized = "".join(text.split()).lower()
+    return any(marker.lower() in normalized for marker in _GUIDED_CLARIFICATION_MARKERS)
+
+
 class LLMIntentUnderstandingAgent:
     """Use the configured text capability for classification, never for facts."""
 
@@ -120,6 +139,32 @@ class LLMIntentUnderstandingAgent:
                     target="RecommendationOrchestrator",
                     reason_code="LLM_INTENT_SKIPPED_EMPTY_INPUT",
                     confidence=min(confidence, 0.62),
+                ),
+            )
+
+        if _looks_like_guided_clarification(text):
+            requested_types = [str(item) for item in message.payload.get("resource_types", [])]
+            payload = {
+                "intent_type": "UNCLEAR",
+                "confidence": 0.72,
+                "topic_terms": [],
+                "resource_types": requested_types or ["BOOK", "PAPER"],
+                "reason_codes": ["AMBIGUOUS_USER_GOAL"],
+            }
+            return _result(
+                message,
+                agent_name=self.name,
+                version="intent-guided-rule-v1",
+                payload=payload,
+                confidence=0.72,
+                evidence_ref="rule:intent-guided-v1",
+                warnings=("LLM_INTENT_SKIPPED_AMBIGUOUS_INPUT",),
+                fallback_used=True,
+                decision=AgentDecision(
+                    action=AgentActionType.ASK_CLARIFICATION,
+                    target="RecommendationOrchestrator",
+                    reason_code="AMBIGUOUS_USER_GOAL",
+                    confidence=0.72,
                 ),
             )
 

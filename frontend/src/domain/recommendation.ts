@@ -1,5 +1,5 @@
 export type ResourceType = "BOOK" | "PAPER";
-export type RecommendationOutputType = "TOPIC_RESOURCES";
+export type RecommendationOutputType = "PERSONALIZED_FEED" | "TOPIC_RESOURCES" | "READING_PATH";
 export type TriggerScene = "HOME" | "SEARCH_AFTER" | "RESOURCE_DETAIL" | "FEEDBACK_REFRESH" | "EXPLANATION";
 export type TaskStatus =
   | "CREATED"

@@ -80,6 +80,21 @@ describe("RecommendationWorkbench", () => {
     expect(wrapper.text()).toContain("主题匹配");
   });
 
+  it("sends the explicitly selected output form to the recommendation API", async () => {
+    const createTask = vi.fn().mockResolvedValue(response);
+    const wrapper = mount(RecommendationWorkbench, {
+      props: { pipelineEnabled: true, client: { createTask, submitClarification: vi.fn() } as unknown as RecommendationClient },
+    });
+
+    await wrapper.get("#output-type").setValue("READING_PATH");
+    await wrapper.find("form").trigger("submit");
+
+    expect(createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_output_type: "READING_PATH" }),
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+  });
+
   it("continues a waiting task with the same client port and an abort signal", async () => {
     const submitClarification = vi.fn().mockResolvedValue(response);
     const client: RecommendationClient = {
