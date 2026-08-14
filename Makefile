@@ -184,7 +184,7 @@ G8_BROWSER_SCENARIO_PLAN ?=
 	verify-formal-auth-runtime \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy verify-g8-readonly-fault-matrix \
-	run-g4-deepseek-demo \
+	run-g4-deepseek-demo research-workbench-check research-workbench \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
@@ -446,6 +446,12 @@ run-g4-deepseek-demo:
 		test "$${RECPRO_G4_LLM_INTENT_ENABLED}" = "true" || { echo "RECPRO_G4_LLM_INTENT_ENABLED=true is required"; exit 2; }; \
 		test "$${RECPRO_LLM_PROVIDER}" = "deepseek" || { echo "RECPRO_LLM_PROVIDER=deepseek is required"; exit 2; }; \
 		exec $(PYTHON) -m uvicorn backend.app.g4_demo_main:app --host 127.0.0.1 --port "$(DEMO_BACKEND_PORT)"
+
+research-workbench-check:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --check-only --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)" --npm "$(NPM)"
+
+research-workbench:
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)" --npm "$(NPM)"
 
 verify-g4-agent-autonomy:
 	@test -n "$(G4_AGENT_AUTONOMY_RUN_ID)" || { echo "G4_AGENT_AUTONOMY_RUN_ID is required and must identify a new evidence run"; exit 2; }
