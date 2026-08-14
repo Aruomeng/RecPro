@@ -2144,7 +2144,7 @@ Gate：G7/G8 六个论文演示用户的浏览器业务验收
 时间：2026-08-14（Asia/Shanghai）
 目标：将 demo_cold、demo_clear、demo_topic、demo_path、demo_negative、demo_degraded 的输入、期望状态、DOM 断言、UUID、DeepSeek 预算和数据库上限冻结为一个不可变 DRY_RUN 计划。
 新增文件：contracts/verification/g8-browser-scenario-plan.schema.json、scripts/build_g8_browser_scenario_plan.py、scripts/verify_g8_browser_scenario_plan.py、tests/g8/test_browser_scenario_plan.py；Makefile 新增 build/verify-g8-browser-scenario-plan。
-计划：artifacts/verification/g8/g8-browser-scenario-plan-20260814-001/browser-scenario-plan.json；plan_id=4d99e1f6-2a20-5d0d-b979-dd1c8effa301；plan_hash=30e9a2d6f2a02a08d3bcc60f56914b23b8e26b905091ff2daaaa2bfd0fe53ab4；Git=4da20e58efd45a58cbc3628ef7a6b10091d9eaca。
+计划：最新 `artifacts/verification/g8/g8-browser-scenario-plan-*/browser-scenario-plan.json`；每次状态文档提交后必须生成新的 successor 计划并重新核对精确 plan_id/hash，旧计划仅保留审计用途，不能跨提交执行。
 运行预算：六场景预计最多 MySQL 追加 306 行、DeepSeek 外部尝试 80 次、网络请求 40 次；Outbox claim=0、Neo4j/Chroma writes=0、文件删除=0、数据库物理删除=0、artifact 覆盖=0。计划本身 database_writes=0、external_llm_requests=0。
 冻结内容：六个 request_id/session_id 均由 run_id 派生且互不重复；固定输入和 BOOK/PAPER/output_type/limit；期望 WAITING_CLARIFICATION、COMPLETED 或 DEGRADED_COMPLETED；浏览器 1280×720 DOM 断言；真实回放必须 zero-delta；negative 场景的反馈链路仍需显式逐步执行并回读。
 验证结果：契约总数 33、G8 定向测试通过；计划验证器 PASS，拒绝篡改输入、重复 fixture 身份、重复 UUID 和非 DeepSeek 模型。没有发送浏览器业务 POST，没有 claim Outbox，没有修改任何数据库。
