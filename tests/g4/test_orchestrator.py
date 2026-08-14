@@ -6,7 +6,10 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from backend.app.recommendation.application.orchestration import build_rule_orchestrator
-from backend.app.recommendation.agents.orchestrator import OrchestrationRequest
+from backend.app.recommendation.agents.orchestrator import (
+    OrchestrationRequest,
+    _reconcile_runtime_degradation,
+)
 from backend.app.recommendation.agents.registry import AgentRegistry, AgentUnavailableError
 from backend.app.recommendation.agents.rule_agents import DEFAULT_RULE_AGENTS
 from backend.app.shared_kernel.contracts.enums import TaskStatus
@@ -82,6 +85,20 @@ class G4OrchestratorTest(unittest.TestCase):
         self.assertIn("VECTOR_CHANNEL_UNAVAILABLE", result.payload["warnings"])
         self.assertGreaterEqual(len(result.payload["items"]), 1)
         self.assertTrue(result.payload["agent_results"]["CandidateRecallAgent"]["fallback_used"])
+
+    def test_runtime_warning_reconciles_final_delivery_strategy(self) -> None:
+        direct = {
+            "delivery_strategy": "DIRECT",
+            "adaptation_state": "NORMAL",
+            "decision_reason_codes": ["DIRECT_PATH"],
+            "decision_reason": "正常交付。",
+        }
+        reconciled = _reconcile_runtime_degradation(direct, degraded=True)
+        self.assertEqual("DEGRADED", reconciled["delivery_strategy"])
+        self.assertEqual("DEGRADED", reconciled["adaptation_state"])
+        self.assertIn("RUNTIME_CHANNEL_DEGRADED", reconciled["decision_reason_codes"])
+        self.assertIn("缺口", reconciled["decision_reason"])
+        self.assertEqual("DIRECT", direct["delivery_strategy"])
 
     def test_reading_path_with_one_difficulty_level_is_degraded_without_fake_stages(self) -> None:
         result = self.execute(

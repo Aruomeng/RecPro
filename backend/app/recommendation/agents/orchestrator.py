@@ -79,6 +79,27 @@ class OrchestrationDeadlineExceeded(TimeoutError):
     """The request deadline elapsed before a next Agent dispatch."""
 
 
+def _reconcile_runtime_degradation(
+    policy: dict[str, object], *, degraded: bool
+) -> dict[str, object]:
+    """Make the final delivery metadata reflect downstream Agent failures."""
+
+    if not degraded or policy.get("delivery_strategy") == "DEGRADED":
+        return policy
+    effective = dict(policy)
+    effective["delivery_strategy"] = "DEGRADED"
+    effective["adaptation_state"] = "DEGRADED"
+    reason_codes = list(effective.get("decision_reason_codes", []))
+    if "RUNTIME_CHANNEL_DEGRADED" not in reason_codes:
+        reason_codes.append("RUNTIME_CHANNEL_DEGRADED")
+    effective["decision_reason_codes"] = reason_codes
+    effective["decision_reason"] = (
+        f"{effective.get('decision_reason', '推荐链已完成。')}"
+        " 下游运行时通道出现缺口，编排器已切换为降级交付。"
+    )
+    return effective
+
+
 class RecommendationOrchestrator:
     """Only this class may advance global status or choose the next Agent."""
 
@@ -360,7 +381,20 @@ class RecommendationOrchestrator:
         for warning in orchestration_warnings:
             if warning not in warnings:
                 warnings.append(warning)
-        degraded = policy.get("delivery_strategy") == "DEGRADED" or bool(warnings) or not ranking.get("ranked_items")
+        no_ranked_items = not ranking.get("ranked_items")
+        runtime_channel_degraded = no_ranked_items or any(
+            warning.endswith("_CHANNEL_UNAVAILABLE")
+            or warning in {"GRAPH_RECALL_UNAVAILABLE", "VECTOR_RECALL_UNAVAILABLE"}
+            for warning in warnings
+        )
+        degraded = (
+            policy.get("delivery_strategy") == "DEGRADED"
+            or bool(warnings)
+            or no_ranked_items
+        )
+        policy = _reconcile_runtime_degradation(
+            policy, degraded=runtime_channel_degraded
+        )
         transition(TaskStatus.PERSISTING, "G4_RESULT_READY")
         transition(
             TaskStatus.DEGRADED_COMPLETED if degraded else TaskStatus.COMPLETED,

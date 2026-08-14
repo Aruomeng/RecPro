@@ -45,6 +45,12 @@ onBeforeUnmount(() => activeController?.abort());
 const client = computed(() => props.client);
 const items = computed<RecommendationItem[]>(() => result.value?.items ?? []);
 const isBusy = computed(() => phase.value === "loading");
+
+function presentWarning(warning: string): string {
+  return warning.endsWith("_CHANNEL_UNAVAILABLE")
+    ? `依赖缺口：${warning}`
+    : warning;
+}
 const modeLabel = computed(() => {
   if (phase.value === "demo") return "本地演示";
   if (phase.value === "success" || phase.value === "clarification") return "真实接口";
@@ -376,7 +382,7 @@ function typeLabel(type: ResourceType): string {
           </div>
         </article>
       </div>
-      <p v-if="result?.warnings?.length" class="result-warning">{{ result.warnings.join(" · ") }}</p>
+      <p v-if="result?.warnings?.length" class="result-warning">{{ result.warnings.map(presentWarning).join(" · ") }}</p>
     </div>
 
     <InteractionPanel

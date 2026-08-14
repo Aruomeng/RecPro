@@ -80,6 +80,24 @@ describe("RecommendationWorkbench", () => {
     expect(wrapper.text()).toContain("主题匹配");
   });
 
+  it("labels unavailable runtime channels as a dependency gap", async () => {
+    const degraded = {
+      ...response,
+      status: "DEGRADED_COMPLETED" as const,
+      warnings: ["KG_CHANNEL_UNAVAILABLE"],
+    };
+    const client: RecommendationClient = {
+      createTask: vi.fn().mockResolvedValue(degraded),
+      submitClarification: vi.fn(),
+    };
+    const wrapper = mount(RecommendationWorkbench, {
+      props: { pipelineEnabled: true, client },
+    });
+
+    await wrapper.find("form").trigger("submit");
+    expect(wrapper.text()).toContain("依赖缺口：KG_CHANNEL_UNAVAILABLE");
+  });
+
   it("sends the explicitly selected output form to the recommendation API", async () => {
     const createTask = vi.fn().mockResolvedValue(response);
     const wrapper = mount(RecommendationWorkbench, {
