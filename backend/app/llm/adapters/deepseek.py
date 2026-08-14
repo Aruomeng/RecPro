@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from http.client import IncompleteRead
 import json
 from typing import Any, Callable, Mapping
 from uuid import uuid4
@@ -260,7 +261,14 @@ class DeepSeekLLMProvider:
                 f"DeepSeek request failed with status {exc.code}",
                 retryable=retryable,
             ) from exc
-        except (URLError, TimeoutError, OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        except (
+            URLError,
+            TimeoutError,
+            OSError,
+            IncompleteRead,
+            UnicodeDecodeError,
+            json.JSONDecodeError,
+        ) as exc:
             raise DeepSeekRequestError(
                 f"DeepSeek request failed: {type(exc).__name__}",
                 retryable=True,

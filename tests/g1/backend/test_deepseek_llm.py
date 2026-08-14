@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from http.client import IncompleteRead
 from unittest.mock import AsyncMock, patch
 import unittest
 
 from pydantic import SecretStr
 
-from backend.app.llm.adapters.deepseek import DeepSeekLLMProvider
+from backend.app.llm.adapters.deepseek import DeepSeekLLMProvider, DeepSeekRequestError
 from backend.app.llm.adapters.mock import MockLLMProvider
 from backend.app.llm.factory import build_llm_provider
 from backend.app.config import AppSettings
@@ -124,6 +125,17 @@ class DeepSeekLLMProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(2, complete.await_count)
         self.assertEqual(2, result.attempts)
         self.assertEqual(["behavior:1"], result.payload["evidence_refs"])
+
+    def test_incomplete_chunked_response_is_a_retryable_provider_error(self) -> None:
+        provider = self._provider()
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.side_effect = IncompleteRead(b"partial", 2)
+        with patch("backend.app.llm.adapters.deepseek.urlopen", return_value=response):
+            with self.assertRaises(DeepSeekRequestError) as raised:
+                provider._complete_sync(system="system", user="user")
+
+        self.assertTrue(raised.exception.retryable)
+        self.assertIn("IncompleteRead", str(raised.exception))
 
     def test_factory_keeps_mock_default_and_does_not_call_network(self) -> None:
         settings = AppSettings(mysql_password="isolated-test-password")
