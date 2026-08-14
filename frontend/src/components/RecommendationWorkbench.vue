@@ -11,6 +11,7 @@ import type { InteractionClient } from "../domain/interaction";
 import {
   createRequestId,
   isRecommendationFailure,
+  isUuid,
 } from "../domain/recommendation";
 import InteractionPanel from "./InteractionPanel.vue";
 
@@ -32,10 +33,9 @@ const result = ref<RecommendationExecution | null>(null);
 const errorMessage = ref("");
 const notice = ref("");
 const selectedAnswers = ref<Record<string, string>>({});
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const configuredSessionId = (import.meta.env.VITE_G4_DEMO_SESSION_ID ?? "").trim();
 const configuredRequestId = (import.meta.env.VITE_G4_DEMO_REQUEST_ID ?? "").trim();
-const sessionId = UUID_PATTERN.test(configuredSessionId) ? configuredSessionId : createRequestId();
+const sessionId = isUuid(configuredSessionId) ? configuredSessionId : createRequestId();
 let configuredRequestIdConsumed = false;
 let activeController: AbortController | undefined;
 onBeforeUnmount(() => activeController?.abort());
@@ -98,7 +98,7 @@ const demoItems: RecommendationItem[] = [
 ];
 
 function nextRequestId(): string {
-  if (!configuredRequestIdConsumed && UUID_PATTERN.test(configuredRequestId)) {
+  if (!configuredRequestIdConsumed && isUuid(configuredRequestId)) {
     configuredRequestIdConsumed = true;
     return configuredRequestId;
   }

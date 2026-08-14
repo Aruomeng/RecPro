@@ -113,6 +113,12 @@ export interface RecommendationExecution {
   versions?: VersionBundle;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isUuid(value: string): boolean {
+  return UUID_PATTERN.test(value);
+}
+
 export function createRequestId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
   return `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;

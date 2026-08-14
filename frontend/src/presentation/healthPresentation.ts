@@ -60,7 +60,7 @@ export function presentReadiness(readiness: ReadinessResponse): StatusCopy {
   if (isRecommendationPipelineDisabled(readiness)) {
     return {
       label: "推荐能力尚未启用",
-      detail: "基础服务可观测，但 G1 尚未实现推荐链路，不会生成推荐结果。",
+      detail: "当前是默认安全待机入口，不会生成推荐结果；请使用经过审核的显式研究组合根。",
       tone: "warning",
     };
   }

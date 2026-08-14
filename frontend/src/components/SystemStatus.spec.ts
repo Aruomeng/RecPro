@@ -38,6 +38,7 @@ describe("SystemStatus", () => {
     expect(wrapper.text()).toContain("进程存活");
     expect(wrapper.text()).toContain("推荐能力尚未启用");
     expect(wrapper.text()).toContain("不会生成推荐结果");
+    expect(wrapper.text()).toContain("默认安全待机入口");
     expect(wrapper.text()).toContain("MySQL 核心存储");
   });
 

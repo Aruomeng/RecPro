@@ -53,10 +53,10 @@ onBeforeUnmount(() => activeController?.abort());
   <main class="page-shell">
     <header class="hero">
       <div class="hero__copy">
-        <p class="phase-label"><span>G1</span> 可启动工程骨架</p>
-        <h1>系统状态，一眼可核验</h1>
+        <p class="phase-label"><span>G8</span> 核心验收已通过</p>
+        <h1>智慧图书馆多智能体推荐系统</h1>
         <p>
-          当前页面只报告真实健康状态。进程存活不等于依赖就绪，依赖就绪也不代表推荐能力已经实现。
+          页面同时核验运行依赖与推荐能力；只有显式研究组合根就绪时，才允许发送真实推荐请求。
         </p>
       </div>
       <button class="refresh-button" type="button" :disabled="isRefreshing" :aria-busy="isRefreshing" @click="refresh">
@@ -69,7 +69,7 @@ onBeforeUnmount(() => activeController?.abort());
 
     <aside class="scope-note" aria-label="当前阶段说明">
       <span class="scope-note__mark" aria-hidden="true">i</span>
-      <p><strong>运行边界：</strong>默认运行时仍不会自动启用推荐链；只有显式组合根的健康闸门通过后，工作台才会发送真实请求。</p>
+      <p><strong>运行边界：</strong>默认 Compose 保持安全待机；真实 MySQL、Neo4j、Chroma 与 DeepSeek 仅由显式研究组合根启用。</p>
     </aside>
 
     <SystemStatus :liveness="liveness" :readiness="readiness" />
@@ -83,7 +83,7 @@ onBeforeUnmount(() => activeController?.abort());
 
     <footer>
       <span>LibraMAS · Multi-Agent System for Smart Library</span>
-      <span>状态核验 + 推荐工作台</span>
+      <span>运行核验 + 推荐与反馈工作台</span>
     </footer>
   </main>
 </template>

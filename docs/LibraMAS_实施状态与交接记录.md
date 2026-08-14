@@ -2117,6 +2117,24 @@ G9 预检：freeze-20260814-001 与 eval-inputs-20260814-001 均为 PASS_WITH_BL
 下一步唯一动作：实现并生成六场景浏览器专用 ChangePlan/执行器；固定新身份和幂等键、逐场景最大增量、LLM 预算、前后数据库计数与 DOM/trace 证据，再执行精确审批门禁。
 ```
 
+## G7 真实浏览器推荐与 UUIDv5 幂等修复
+
+```text
+交接ID：G7-BROWSER-UUIDV5-REPLAY-20260814-001
+Gate：真实前端 → G4 DeepSeek 组合根 → MySQL 投影
+状态：REAL_BROWSER_PASS / INCIDENT_RECONCILED / UUIDV5_REPLAY_PASS
+时间：2026-08-14（Asia/Shanghai）
+预期：让 Vite 前端使用既有批准请求 request_id=f343aa37-5020-5276-aa90-0decd9692c91、session_id=55848636-0fd0-5621-a5b4-6d4821a26b65 做零增量幂等回放。
+偏差：RecommendationWorkbench 的配置 UUID 正则只接受 UUIDv4，而批准的 deterministic identity 是 UUIDv5；前端因此生成 request_id=773bcfaa-5faf-4b17-95ae-44c4f747d60c、session_id=8ecb31ba-36c1-47da-8ac6-416af89a8259，并产生新的 task=7260ad3b-1a2c-5484-bdd8-a02d14d08621、trace=dccba61e-93e6-51c2-be48-9013ec458a51。
+实际新增：MySQL 仅追加完整 G4 审计闭环 56 行：task=1、transition=8、candidate=12、record=1、item=8、item_explanation=8、policy=1、trace=1、Agent message/result 各 7、artifact=1、orchestration result=1。任务 COMPLETED，前端真实显示 8 条 BOOK 结果。
+LLM：IntentUnderstandingAgent 使用 DeepSeek 1 次；ExplanationAgent 使用 DeepSeek 10 次，8 条解释全部返回且 fallback=false。模型、Prompt 与证据引用均通过已存在的运行时约束。
+安全影响：资源/书目五张共享表 delta=0；Neo4j/Chroma 写入=0；Outbox claim=0；文件删除=0；数据库物理删除=0。没有回滚、覆盖或删除新增事实。
+前向修复：把 UUID 检查抽成 domain.isUuid，接受标准 8-4-4-4-12 UUID，包括已批准计划使用的 UUIDv5；新增 UUIDv5/UUIDv4/非法值测试。48 项前端测试 PASS，追加式生产构建 g8-browser-uuidv5-20260814-001 PASS。
+修复后浏览器证据：同一 Vite 页面发送原批准 UUIDv5，后端在 67.875ms 返回 HTTP 200，页面显示原 trace=868529ef 与 8 条既有 DeepSeek 解释；前后 recommendation task/record/item/Agent 和五张书目表计数全部 delta=0，没有新 LLM 调用。
+证据：g4-browser-replay-before-20260814-001、g4-browser-replay-after-20260814-001、g4-browser-uuidv5-replay-after-20260814-001；浏览器 DOM 显示 DeepSeek/Neo4j/Chroma/MySQL/推荐链全部 UP。
+后续约束：所有浏览器固定 identity 必须先通过 isUuid 回归和数据库唯一键存在性检查；任何期望 replay 的请求必须在发送前证明 request/session/body 三者完全一致。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：
