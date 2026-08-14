@@ -72,6 +72,7 @@ REQUIRED_DOCUMENTS = {
     "contracts/verification/g8-boundary-change-plan.schema.json",
     "contracts/verification/g8-boundary-apply-evidence.schema.json",
     "contracts/verification/g8-approved-write-reconciliation.schema.json",
+    "contracts/verification/g8-browser-scenario-plan.schema.json",
     "contracts/verification/g8-final-revalidation-audit.schema.json",
     "contracts/verification/g8-final-runtime-evidence.schema.json",
     "contracts/verification/g8-final-revalidation-plan.schema.json",

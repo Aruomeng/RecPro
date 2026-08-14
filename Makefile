@@ -168,6 +168,10 @@ G8_BOUNDARY_APPLY_PLAN ?=
 G8_BOUNDARY_APPLY_PLAN_ID ?=
 G8_BOUNDARY_APPLY_PLAN_HASH ?=
 G8_BOUNDARY_APPLY_BASELINE ?=
+G8_BROWSER_SCENARIO_PLAN_RUN_ID ?=
+G8_BROWSER_SCENARIO_PLAN_BASELINE ?=
+G8_BROWSER_SCENARIO_COMPOSE_PROJECT ?=
+G8_BROWSER_SCENARIO_PLAN ?=
 
 .PHONY: \
 	bootstrap bootstrap-check \
@@ -184,7 +188,7 @@ G8_BOUNDARY_APPLY_BASELINE ?=
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
 	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
-	verify-g8-release-preflight verify-g8-acceptance-coverage build-g8-final-revalidation-plan verify-g8-final-revalidation-plan build-g8-boundary-change-plan execute-g8-boundary-change-plan reconcile-g8-approved-write-evidence \
+	verify-g8-release-preflight verify-g8-acceptance-coverage build-g8-final-revalidation-plan verify-g8-final-revalidation-plan build-g8-boundary-change-plan execute-g8-boundary-change-plan reconcile-g8-approved-write-evidence build-g8-browser-scenario-plan verify-g8-browser-scenario-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
 	build-vector-index-plan verify-vector-index-plan build-chroma-collection-plan verify-chroma-collection-plan \
@@ -311,6 +315,16 @@ reconcile-g8-approved-write-evidence:
 	@test -n "$(G8_WRITE_RECONCILE_PLAN)" || { echo "G8_WRITE_RECONCILE_PLAN is required"; exit 2; }
 	@test -n "$(G8_WRITE_RECONCILE_READONLY_EVIDENCE)" || { echo "G8_WRITE_RECONCILE_READONLY_EVIDENCE is required"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.reconcile_g8_approved_write_evidence --run-id "$(G8_WRITE_RECONCILE_RUN_ID)" --plan "$(G8_WRITE_RECONCILE_PLAN)" --readonly-evidence "$(G8_WRITE_RECONCILE_READONLY_EVIDENCE)" --a02-plan "$(G8_WRITE_RECONCILE_A02_PLAN)" --a02-apply "$(G8_WRITE_RECONCILE_A02_APPLY)" --feedback-plan "$(G8_WRITE_RECONCILE_FEEDBACK_PLAN)" --feedback-apply "$(G8_WRITE_RECONCILE_FEEDBACK_APPLY)" --boundary-plan "$(G8_WRITE_RECONCILE_BOUNDARY_PLAN)" --boundary-apply "$(G8_WRITE_RECONCILE_BOUNDARY_APPLY)" --env-file "$(COMPOSE_ENV_FILE)" --secrets-file ".env.user-secrets"
+
+build-g8-browser-scenario-plan:
+	@test -n "$(G8_BROWSER_SCENARIO_PLAN_RUN_ID)" || { echo "G8_BROWSER_SCENARIO_PLAN_RUN_ID is required and must name a new DRY_RUN plan"; exit 2; }
+	@test -n "$(G8_BROWSER_SCENARIO_PLAN_BASELINE)" || { echo "G8_BROWSER_SCENARIO_PLAN_BASELINE is required"; exit 2; }
+	@test -n "$(G8_BROWSER_SCENARIO_COMPOSE_PROJECT)" || { echo "G8_BROWSER_SCENARIO_COMPOSE_PROJECT is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.build_g8_browser_scenario_plan --run-id "$(G8_BROWSER_SCENARIO_PLAN_RUN_ID)" --baseline "$(G8_BROWSER_SCENARIO_PLAN_BASELINE)" --compose-project "$(G8_BROWSER_SCENARIO_COMPOSE_PROJECT)"
+
+verify-g8-browser-scenario-plan:
+	@test -n "$(G8_BROWSER_SCENARIO_PLAN)" || { echo "G8_BROWSER_SCENARIO_PLAN is required"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.verify_g8_browser_scenario_plan --plan "$(G8_BROWSER_SCENARIO_PLAN)"
 
 verify-g0: safety-check architecture-check docs-check contracts-check verify-prompt-bundle test-g0
 

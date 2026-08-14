@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-browser-scenario-plan.schema.json",
+  "title": "LibraMAS G8 six browser scenario ChangePlan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_id", "plan_hash", "run_id", "created_at", "git_commit",
+    "classification", "mode", "environment", "baseline", "scenario_ids", "scenarios",
+    "aggregate_budget", "safety_assertions", "executor_status"
+  ],
+  "properties": {
+    "schema_version": {"const": "g8-browser-scenario-plan-v1"},
+    "plan_id": {"type": "string", "format": "uuid"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "run_id": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "classification": {"const": "S3_BROWSER_SCENARIO"},
+    "mode": {"const": "DRY_RUN"},
+    "environment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["compose_project", "mysql_database", "frontend_origin", "backend_origin", "graph_version", "embedding_version", "index_version", "llm_provider", "llm_model"],
+      "properties": {
+        "compose_project": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]{2,62}$"},
+        "mysql_database": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+        "frontend_origin": {"type": "string", "format": "uri"},
+        "backend_origin": {"type": "string", "format": "uri"},
+        "graph_version": {"type": "string", "minLength": 1},
+        "embedding_version": {"type": "string", "minLength": 1},
+        "index_version": {"type": "string", "minLength": 1},
+        "llm_provider": {"enum": ["mock", "deepseek"]},
+        "llm_model": {"type": "string", "minLength": 1}
+      }
+    },
+    "baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256", "counts_sha256", "compose_project", "counts"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "counts_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "compose_project": {"type": "string", "minLength": 1},
+        "counts": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "scenario_ids": {
+      "type": "array", "prefixItems": [
+        {"const": "cold_user_guided"}, {"const": "clear_user_recommendation"},
+        {"const": "topic_user_explanation"}, {"const": "reading_path_clarification"},
+        {"const": "negative_feedback_adjustment"}, {"const": "degraded_dependency_path"}
+      ],
+      "items": false, "minItems": 6, "maxItems": 6
+    },
+    "scenarios": {
+      "type": "array", "minItems": 6, "maxItems": 6,
+      "items": {"$ref": "#/$defs/scenario"}
+    },
+    "aggregate_budget": {
+      "type": "object", "additionalProperties": false,
+      "required": ["max_database_writes", "max_external_llm_requests", "max_network_requests", "max_outbox_claims", "max_files_deleted", "max_database_physical_deletions", "max_artifact_overwrites"],
+      "properties": {
+        "max_database_writes": {"type": "integer", "minimum": 0},
+        "max_external_llm_requests": {"type": "integer", "minimum": 0},
+        "max_network_requests": {"type": "integer", "minimum": 0},
+        "max_outbox_claims": {"const": 0},
+        "max_files_deleted": {"const": 0},
+        "max_database_physical_deletions": {"const": 0},
+        "max_artifact_overwrites": {"const": 0}
+      }
+    },
+    "safety_assertions": {
+      "type": "object", "additionalProperties": false,
+      "required": ["business_writes_authorized", "file_deletions", "database_physical_deletions", "artifact_overwrites", "outbox_claims", "neo4j_writes", "chroma_writes", "external_llm_requests"],
+      "properties": {
+        "business_writes_authorized": {"const": false},
+        "file_deletions": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0},
+        "outbox_claims": {"const": 0},
+        "neo4j_writes": {"const": 0},
+        "chroma_writes": {"const": 0},
+        "external_llm_requests": {"const": 0}
+      }
+    },
+    "executor_status": {"const": "READY_FOR_EXPLICIT_APPROVAL"}
+  },
+  "$defs": {
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request_id", "session_id", "scene", "input_text", "requested_resource_types", "requested_output_type", "limit"],
+      "properties": {
+        "request_id": {"type": "string", "format": "uuid"},
+        "session_id": {"type": "string", "format": "uuid"},
+        "scene": {"const": "SEARCH_AFTER"},
+        "input_text": {"type": "string", "minLength": 1, "maxLength": 500},
+        "requested_resource_types": {"type": "array", "minItems": 1, "items": {"enum": ["BOOK", "PAPER"]}},
+        "requested_output_type": {"enum": ["PERSONALIZED_FEED", "TOPIC_RESOURCES", "READING_PATH"]},
+        "limit": {"type": "integer", "minimum": 3, "maximum": 10}
+      }
+    },
+    "scenario": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scenario_id", "fixture_user", "request", "expected", "browser", "actions", "budget"],
+      "properties": {
+        "scenario_id": {"enum": ["cold_user_guided", "clear_user_recommendation", "topic_user_explanation", "reading_path_clarification", "negative_feedback_adjustment", "degraded_dependency_path"]},
+        "fixture_user": {"enum": ["demo_cold", "demo_clear", "demo_topic", "demo_path", "demo_negative", "demo_degraded"]},
+        "request": {"$ref": "#/$defs/request"},
+        "expected": {
+          "type": "object", "additionalProperties": false,
+          "required": ["status", "output_type", "delivery_strategy", "minimum_items", "required_texts"],
+          "properties": {
+            "status": {"enum": ["WAITING_CLARIFICATION", "COMPLETED", "DEGRADED_COMPLETED"]},
+            "output_type": {"enum": ["PERSONALIZED_FEED", "TOPIC_RESOURCES", "READING_PATH"]},
+            "delivery_strategy": {"enum": ["DIRECT", "GUIDED", "DEGRADED"]},
+            "minimum_items": {"type": "integer", "minimum": 0, "maximum": 10},
+            "required_texts": {"type": "array", "items": {"type": "string", "minLength": 1}, "maxItems": 8}
+          }
+        },
+        "browser": {
+          "type": "object", "additionalProperties": false,
+          "required": ["viewport", "required_selectors", "assertions"],
+          "properties": {
+            "viewport": {"type": "object", "additionalProperties": false, "required": ["width", "height"], "properties": {"width": {"enum": [390, 1280]}, "height": {"enum": [844, 720]}}},
+            "required_selectors": {"type": "array", "minItems": 3, "items": {"type": "string", "minLength": 1}},
+            "assertions": {"type": "array", "minItems": 3, "items": {"type": "string", "minLength": 1}}
+          }
+        },
+        "actions": {"type": "array", "minItems": 1, "items": {"enum": ["readiness_get", "recommendation_post", "recommendation_replay", "submit_clarification", "record_impression", "record_feedback", "record_behavior", "dependency_fault"]}},
+        "budget": {
+          "type": "object", "additionalProperties": false,
+          "required": ["max_database_writes", "max_external_llm_requests", "max_network_requests", "max_outbox_claims", "replay_zero_delta"],
+          "properties": {
+            "max_database_writes": {"type": "integer", "minimum": 0},
+            "max_external_llm_requests": {"type": "integer", "minimum": 0},
+            "max_network_requests": {"type": "integer", "minimum": 0},
+            "max_outbox_claims": {"const": 0},
+            "replay_zero_delta": {"type": "boolean"}
+          }
+        }
+      }
+    }
+  }
+}
