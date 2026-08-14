@@ -38,6 +38,9 @@ from scripts.verify_g8_acceptance_coverage import (
 AUDIT_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "verification" / "g8-final-revalidation-audit.schema.json"
 RUNTIME_EVIDENCE_SCHEMA_PATH = PROJECT_ROOT / "contracts" / "verification" / "g8-final-runtime-evidence.schema.json"
 RUNTIME_ARTIFACT_SCHEMAS = {
+    "g8-approved-write-reconciliation-v1": (
+        PROJECT_ROOT / "contracts" / "verification" / "g8-approved-write-reconciliation.schema.json"
+    ),
     "g8-boundary-apply-evidence-v1": (
         PROJECT_ROOT / "contracts" / "verification" / "g8-boundary-apply-evidence.schema.json"
     ),

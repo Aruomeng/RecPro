@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://recpro.local/contracts/verification/g8-approved-write-reconciliation.schema.json",
+  "title": "LibraMAS G8 approved write reconciliation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "run_id", "plan_run_id", "plan_hash", "git_commit", "source_evidence", "cases", "database_identity", "safety"],
+  "properties": {
+    "schema_version": {"const": "g8-approved-write-reconciliation-v1"},
+    "status": {"const": "PASS"},
+    "run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_run_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$"},
+    "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_evidence": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["path", "schema_version", "sha256", "plan_id", "plan_hash", "classification", "git_commit"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "schema_version": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "plan_id": {"type": "string", "format": "uuid"},
+          "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "classification": {"enum": ["S1_APPEND", "S2_CONTROLLED_UPDATE"]},
+          "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"}
+        }
+      }
+    },
+    "cases": {
+      "type": "array", "minItems": 8, "maxItems": 8,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["case_id", "status", "observations", "change_plan"],
+        "properties": {
+          "case_id": {"enum": ["A02", "A03", "A04", "A07", "A08", "A09", "A10", "A23"]},
+          "status": {"const": "PASS"},
+          "observations": {"type": "object"},
+          "change_plan": {
+            "type": "object", "additionalProperties": false,
+            "required": ["plan_id", "plan_hash", "classification"],
+            "properties": {
+              "plan_id": {"type": "string", "format": "uuid"},
+              "plan_hash": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+              "classification": {"enum": ["S1_APPEND", "S2_CONTROLLED_UPDATE"]}
+            }
+          }
+        }
+      }
+    },
+    "database_identity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["database", "current_user", "probe_id"],
+      "properties": {
+        "database": {"type": "string", "minLength": 1},
+        "current_user": {"type": "string", "minLength": 1},
+        "probe_id": {"type": "string", "minLength": 1}
+      }
+    },
+    "safety": {
+      "type": "object", "additionalProperties": false,
+      "required": ["database_reads", "database_writes", "outbox_claims", "external_llm_requests", "neo4j_writes", "chroma_writes", "files_deleted", "database_physical_deletions", "artifact_overwrites"],
+      "properties": {
+        "database_reads": {"type": "integer", "minimum": 1},
+        "database_writes": {"type": "integer", "minimum": 0},
+        "outbox_claims": {"type": "integer", "minimum": 0},
+        "external_llm_requests": {"const": 0},
+        "neo4j_writes": {"const": 0},
+        "chroma_writes": {"const": 0},
+        "files_deleted": {"const": 0},
+        "database_physical_deletions": {"const": 0},
+        "artifact_overwrites": {"const": 0}
+      }
+    }
+  }
+}
