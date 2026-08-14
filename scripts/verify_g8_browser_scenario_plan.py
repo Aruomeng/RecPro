@@ -53,6 +53,13 @@ def validate_plan(payload: dict[str, Any], *, expected_commit: str | None = None
         raise ValueError("browser plan cannot authorize Outbox claims or business writes")
     if any(item["budget"]["max_outbox_claims"] != 0 or not item["budget"]["replay_zero_delta"] for item in payload["scenarios"]):
         raise ValueError("every browser scenario must require zero-delta replay and zero Outbox claims")
+    for item in payload["scenarios"]:
+        expected = item["expected"]
+        acceptable = expected.get("acceptable_statuses", [expected["status"]])
+        if expected["status"] not in acceptable:
+            raise ValueError("nominal browser status must be included in acceptable_statuses")
+        if item["scenario_id"] in {"cold_user_guided", "degraded_dependency_path"} and acceptable != [expected["status"]]:
+            raise ValueError("guided and dependency-fault scenarios require an exact status")
     if payload["environment"]["llm_provider"] != "deepseek" or payload["environment"]["llm_model"] != "deepseek-v4-flash":
         raise ValueError("browser plan must freeze the configured DeepSeek model")
     return payload

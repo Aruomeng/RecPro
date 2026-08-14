@@ -111,6 +111,12 @@
           "required": ["status", "output_type", "delivery_strategy", "minimum_items", "required_texts"],
           "properties": {
             "status": {"enum": ["WAITING_CLARIFICATION", "COMPLETED", "DEGRADED_COMPLETED"]},
+            "acceptable_statuses": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"enum": ["WAITING_CLARIFICATION", "COMPLETED", "DEGRADED_COMPLETED"]}
+            },
             "output_type": {"enum": ["PERSONALIZED_FEED", "TOPIC_RESOURCES", "READING_PATH"]},
             "delivery_strategy": {"enum": ["DIRECT", "GUIDED", "DEGRADED"]},
             "minimum_items": {"type": "integer", "minimum": 0, "maximum": 10},

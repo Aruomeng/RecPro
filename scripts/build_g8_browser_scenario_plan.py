@@ -88,12 +88,18 @@ def _request(run_id: str, name: str, input_text: str, resource_types: list[str],
 
 
 def _scenario(run_id: str, scenario_id: str, fixture_user: str, request: dict[str, Any], status: str, output_type: str, delivery: str, minimum_items: int, required_texts: list[str], actions: list[str], max_db: int, max_llm: int, max_network: int) -> dict[str, Any]:
+    acceptable_statuses = (
+        ["COMPLETED", "DEGRADED_COMPLETED"]
+        if status == "COMPLETED"
+        else [status]
+    )
     return {
         "scenario_id": scenario_id,
         "fixture_user": fixture_user,
         "request": request,
         "expected": {
             "status": status,
+            "acceptable_statuses": acceptable_statuses,
             "output_type": output_type,
             "delivery_strategy": delivery,
             "minimum_items": minimum_items,

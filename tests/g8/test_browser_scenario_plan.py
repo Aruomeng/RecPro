@@ -34,8 +34,16 @@ class BrowserScenarioPlanTests(unittest.TestCase):
             if item["scenario_id"] == "reading_path_clarification"
         )
         self.assertEqual(reading_path["expected"]["status"], "COMPLETED")
+        self.assertEqual(
+            reading_path["expected"]["acceptable_statuses"],
+            ["COMPLETED", "DEGRADED_COMPLETED"],
+        )
         self.assertEqual(reading_path["expected"]["delivery_strategy"], "DIRECT")
         self.assertEqual(reading_path["expected"]["minimum_items"], 6)
+        cold = plan["scenarios"][0]
+        degraded = plan["scenarios"][-1]
+        self.assertEqual(cold["expected"]["acceptable_statuses"], ["WAITING_CLARIFICATION"])
+        self.assertEqual(degraded["expected"]["acceptable_statuses"], ["DEGRADED_COMPLETED"])
         self.assertEqual(plan["aggregate_budget"]["max_outbox_claims"], 0)
         self.assertFalse(plan["safety_assertions"]["business_writes_authorized"])
         unsigned = dict(plan)
