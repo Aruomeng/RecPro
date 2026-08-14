@@ -17,6 +17,19 @@ export type DirectBehaviorEventType =
   | "CLICK_RECOMMENDATION"
   | "ACCESS_PAPER_FULLTEXT";
 
+export interface AgentAction {
+  step_no?: number;
+  agent_name: string;
+  agent_version: string;
+  message_type?: string;
+  action: string;
+  target: string;
+  reason_code: string;
+  confidence: number;
+  parameters: Record<string, unknown>;
+  evidence_refs: string[];
+}
+
 export interface ImpressionInput {
   impression_uuid: string;
   recommendation_item_id: number;
@@ -36,6 +49,7 @@ export interface ImpressionResult {
   status: "ACCEPTED" | "REPLAYED" | "REJECTED";
   is_valid_exposure: boolean;
   error_code?: string;
+  agent_action?: AgentAction;
 }
 
 export interface ImpressionBatchResponse {
@@ -63,6 +77,7 @@ export interface FeedbackReceipt {
   profile_update_status: "APPLIED" | "PENDING" | "NOT_REQUIRED";
   profile_version_before?: number;
   profile_version_after?: number;
+  agent_action?: AgentAction;
 }
 
 export interface BehaviorEventRequest {
@@ -84,6 +99,7 @@ export interface BehaviorEventReceipt {
   event_id: number;
   status: "ACCEPTED" | "APPLIED" | "REPLAYED";
   profile_update_status: "APPLIED" | "PENDING" | "NOT_REQUIRED";
+  agent_action?: AgentAction;
 }
 
 export interface InteractionClient {

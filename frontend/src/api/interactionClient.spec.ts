@@ -21,6 +21,16 @@ const impressionResponse = {
     impression_uuid: "00000000-0000-4000-8000-000000000001",
     status: "ACCEPTED",
     is_valid_exposure: true,
+    agent_action: {
+      agent_name: "FeedbackLearningAgent",
+      agent_version: "feedback-learning-rule-v1",
+      action: "OBSERVE",
+      target: "UserProfileAgent",
+      reason_code: "IMPRESSION_RECORDED",
+      confidence: 1,
+      parameters: {},
+      evidence_refs: [],
+    },
   }],
 };
 

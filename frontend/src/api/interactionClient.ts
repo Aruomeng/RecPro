@@ -68,13 +68,34 @@ function isStatus(value: unknown, allowed: readonly string[]): boolean {
   return typeof value === "string" && allowed.includes(value);
 }
 
+function isAgentAction(value: unknown): boolean {
+  if (!isRecord(value) || !hasOnlyKeys(
+    value,
+    ["agent_name", "agent_version", "action", "target", "reason_code", "confidence", "parameters", "evidence_refs"],
+    ["step_no", "message_type"],
+  )) return false;
+  return (
+    isNonEmptyString(value.agent_name) &&
+    isNonEmptyString(value.agent_version) &&
+    isNonEmptyString(value.action) &&
+    isNonEmptyString(value.target) &&
+    isNonEmptyString(value.reason_code) &&
+    typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 1 &&
+    isRecord(value.parameters) &&
+    Array.isArray(value.evidence_refs) && value.evidence_refs.every(isNonEmptyString) &&
+    (value.step_no === undefined || isPositiveInteger(value.step_no)) &&
+    (value.message_type === undefined || isNonEmptyString(value.message_type))
+  );
+}
+
 function isImpressionResult(value: unknown): boolean {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["impression_uuid", "status", "is_valid_exposure"], ["error_code"])) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ["impression_uuid", "status", "is_valid_exposure"], ["error_code", "agent_action"])) return false;
   return (
     isNonEmptyString(value.impression_uuid) &&
     isStatus(value.status, ["ACCEPTED", "REPLAYED", "REJECTED"]) &&
     typeof value.is_valid_exposure === "boolean" &&
-    (value.error_code === undefined || isNonEmptyString(value.error_code))
+    (value.error_code === undefined || isNonEmptyString(value.error_code)) &&
+    (value.agent_action === undefined || isAgentAction(value.agent_action))
   );
 }
 
@@ -99,7 +120,7 @@ function isFeedbackReceipt(value: unknown): value is FeedbackReceipt {
     !hasOnlyKeys(
       value,
       ["feedback_uuid", "feedback_id", "status", "behavior_event_id", "profile_update_status"],
-      ["resource_state", "profile_version_before", "profile_version_after"],
+      ["resource_state", "profile_version_before", "profile_version_after", "agent_action"],
     )
   ) return false;
   return (
@@ -110,17 +131,19 @@ function isFeedbackReceipt(value: unknown): value is FeedbackReceipt {
     isStatus(value.profile_update_status, ["APPLIED", "PENDING", "NOT_REQUIRED"]) &&
     (value.resource_state === undefined || isResourceState(value.resource_state)) &&
     (value.profile_version_before === undefined || isPositiveInteger(value.profile_version_before)) &&
-    (value.profile_version_after === undefined || isPositiveInteger(value.profile_version_after))
+    (value.profile_version_after === undefined || isPositiveInteger(value.profile_version_after)) &&
+    (value.agent_action === undefined || isAgentAction(value.agent_action))
   );
 }
 
 function isBehaviorReceipt(value: unknown): value is BehaviorEventReceipt {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["event_uuid", "event_id", "status", "profile_update_status"])) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ["event_uuid", "event_id", "status", "profile_update_status"], ["agent_action"])) return false;
   return (
     isNonEmptyString(value.event_uuid) &&
     isPositiveInteger(value.event_id) &&
     isStatus(value.status, ["ACCEPTED", "APPLIED", "REPLAYED"]) &&
-    isStatus(value.profile_update_status, ["APPLIED", "PENDING", "NOT_REQUIRED"])
+    isStatus(value.profile_update_status, ["APPLIED", "PENDING", "NOT_REQUIRED"]) &&
+    (value.agent_action === undefined || isAgentAction(value.agent_action))
   );
 }
 
