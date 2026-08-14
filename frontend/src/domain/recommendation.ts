@@ -31,6 +31,7 @@ export interface RecommendationRequest {
   requested_resource_types: ResourceType[];
   requested_output_type: RecommendationOutputType;
   limit: number;
+  constraints?: Record<string, unknown>;
 }
 
 export interface RecommendationClient {
@@ -58,6 +59,17 @@ export interface ResourceSummary {
   authors: string[];
   publication_year?: number;
   availability_status: AvailabilityStatus;
+  difficulty_level?: number;
+}
+
+export interface RecommendationEvidence {
+  score: number;
+  channels: string[];
+  channel_scores: Record<string, number>;
+  channel_ranks: Record<string, number>;
+  primary_channel?: string;
+  evidence_refs: string[];
+  negative_penalty: number;
 }
 
 export interface RecommendationItem {
@@ -68,6 +80,7 @@ export interface RecommendationItem {
   reason_summary: string;
   evidence_confidence: number;
   unavailable_now: boolean;
+  evidence?: RecommendationEvidence;
 }
 
 export interface ClarificationQuestion {
@@ -110,6 +123,18 @@ export interface RecommendationExecution {
   items?: RecommendationItem[];
   questions?: ClarificationQuestion[];
   warnings: string[];
+  agent_actions?: Array<{
+    step_no?: number;
+    agent_name: string;
+    agent_version: string;
+    message_type?: string;
+    action: string;
+    target: string;
+    reason_code: string;
+    confidence: number;
+    parameters: Record<string, unknown>;
+    evidence_refs: string[];
+  }>;
   versions?: VersionBundle;
 }
 
@@ -145,8 +170,23 @@ export function isRecommendationExecution(value: unknown): value is Recommendati
     typeof candidate.context_version === "number" && candidate.context_version >= 1 &&
     typeof candidate.decision === "object" && candidate.decision !== null &&
     Array.isArray(candidate.warnings) && candidate.warnings.every((item) => typeof item === "string") &&
+    (candidate.agent_actions === undefined || (Array.isArray(candidate.agent_actions) && candidate.agent_actions.every(isAgentAction))) &&
     (candidate.items === undefined || (Array.isArray(candidate.items) && candidate.items.every(isRecommendationItem))) &&
     (candidate.questions === undefined || (Array.isArray(candidate.questions) && candidate.questions.every(isClarificationQuestion)))
+  );
+}
+
+function isAgentAction(value: unknown): boolean {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const action = value as Record<string, unknown>;
+  return (
+    typeof action.agent_name === "string" && action.agent_name.length > 0 &&
+    typeof action.agent_version === "string" && action.agent_version.length > 0 &&
+    typeof action.action === "string" && typeof action.target === "string" &&
+    typeof action.reason_code === "string" && typeof action.confidence === "number" &&
+    action.confidence >= 0 && action.confidence <= 1 &&
+    typeof action.parameters === "object" && action.parameters !== null &&
+    Array.isArray(action.evidence_refs)
   );
 }
 
@@ -165,7 +205,22 @@ function isRecommendationItem(value: unknown): value is RecommendationItem {
     (resource.resource_type === "BOOK" || resource.resource_type === "PAPER") &&
     typeof resource.title === "string" && resource.title.length > 0 &&
     Array.isArray(resource.authors) && resource.authors.every((author) => typeof author === "string") &&
-    typeof resource.availability_status === "string"
+    typeof resource.availability_status === "string" &&
+    (resource.difficulty_level === undefined || (typeof resource.difficulty_level === "number" && resource.difficulty_level >= 1 && resource.difficulty_level <= 4)) &&
+    (candidate.evidence === undefined || isRecommendationEvidence(candidate.evidence))
+  );
+}
+
+function isRecommendationEvidence(value: unknown): value is RecommendationEvidence {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<RecommendationEvidence>;
+  return (
+    typeof candidate.score === "number" && candidate.score >= 0 && candidate.score <= 1 &&
+    Array.isArray(candidate.channels) && candidate.channels.length > 0 && candidate.channels.every((item) => typeof item === "string") &&
+    typeof candidate.channel_scores === "object" && candidate.channel_scores !== null &&
+    typeof candidate.channel_ranks === "object" && candidate.channel_ranks !== null &&
+    Array.isArray(candidate.evidence_refs) && candidate.evidence_refs.every((item) => typeof item === "string") &&
+    typeof candidate.negative_penalty === "number" && candidate.negative_penalty >= 0 && candidate.negative_penalty <= 1
   );
 }
 
