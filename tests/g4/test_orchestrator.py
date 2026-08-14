@@ -50,6 +50,23 @@ class G4OrchestratorTest(unittest.TestCase):
         with self.assertRaises(AgentUnavailableError):
             registry.resolve("UnknownAgent")
 
+    def test_progress_sink_reflects_real_dispatches_without_internal_payloads(self) -> None:
+        events: list[tuple[str, dict[str, object]]] = []
+
+        class Sink:
+            def publish(self, event_type: str, payload: dict[str, object]) -> None:
+                events.append((event_type, payload))
+
+        result = asyncio.run(build_rule_orchestrator().run(self.request(), progress_sink=Sink()))
+
+        started = [payload for event_type, payload in events if event_type == "AGENT_STARTED"]
+        completed = [payload for event_type, payload in events if event_type == "AGENT_COMPLETED"]
+        self.assertEqual([step["agent_name"] for step in result.trace], [item["agent_name"] for item in completed])
+        self.assertEqual(len(started), len(completed))
+        self.assertIn("IntentUnderstandingAgent", {item["agent_name"] for item in started})
+        self.assertTrue(any(event_type == "STATE_CHANGED" for event_type, _ in events))
+        self.assertTrue(all("payload" not in item and "prompt" not in item for _, item in events))
+
     def test_direct_path_runs_recall_rank_explanation_and_is_reproducible(self) -> None:
         first = self.execute(self.request())
         second = self.execute(self.request())

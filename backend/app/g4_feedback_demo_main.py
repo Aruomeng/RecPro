@@ -21,12 +21,14 @@ from pathlib import Path
 from backend.app.catalog.runtime.g4_ports import build_g4_readonly_runtime
 from backend.app.composition import (
     build_research_behavior_service,
+    build_research_exploration_service,
     build_research_feedback_service,
     build_research_g4_http_app_from_runtime,
 )
 from backend.app.config import load_configuration
 
 from scripts.g4_operator_runtime import load_existing_chroma_collection
+from backend.app.recommendation.progress import RecommendationProgressBroker
 
 
 GRAPH_VERSION = "lib-books-v1-20260810"
@@ -119,10 +121,13 @@ def create_g4_feedback_app():
     )
 
     graph_port = _required("RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT")
+    graph_username = _required("RECPRO_NEO4J_ADMIN_USER")
+    graph_password = _required("RECPRO_NEO4J_ADMIN_PASSWORD")
+    graph_endpoint = f"http://127.0.0.1:{graph_port}/db/neo4j/tx/commit"
     runtime = build_g4_readonly_runtime(
-        graph_endpoint=f"http://127.0.0.1:{graph_port}/db/neo4j/tx/commit",
-        graph_username=_required("RECPRO_NEO4J_ADMIN_USER"),
-        graph_password=_required("RECPRO_NEO4J_ADMIN_PASSWORD"),
+        graph_endpoint=graph_endpoint,
+        graph_username=graph_username,
+        graph_password=graph_password,
         chroma_collection=loaded.collection,
         graph_version=GRAPH_VERSION,
         embedding_version=EMBEDDING_VERSION,
@@ -137,6 +142,14 @@ def create_g4_feedback_app():
     # an append-only fact or a controlled projection update.
     feedback_service = build_research_feedback_service(settings)
     behavior_service = build_research_behavior_service(settings)
+    exploration_service = build_research_exploration_service(
+        settings,
+        graph_endpoint=graph_endpoint,
+        graph_username=graph_username,
+        graph_password=graph_password,
+        graph_version=GRAPH_VERSION,
+    )
+    progress_broker = RecommendationProgressBroker(max_concurrent=8, retention_seconds=600.0)
     return build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
@@ -147,6 +160,8 @@ def create_g4_feedback_app():
         feedback_service=feedback_service,
         behavior_service=behavior_service,
         feedback_api_enabled=True,
+        exploration_service=exploration_service,
+        recommendation_progress_broker=progress_broker,
     )
 
 

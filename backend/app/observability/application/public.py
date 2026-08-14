@@ -49,7 +49,7 @@ class ReadinessService:
             raise ValueError("recommendation_version must not be blank")
         self._recommendation_enabled = recommendation_enabled
         self._recommendation_version = recommendation_version
-        allowed_components = {"chroma", "neo4j", "llm"}
+        allowed_components = {"chroma", "neo4j", "llm", "interaction_pipeline"}
         probes = dict(component_probes or {})
         overrides = dict(component_overrides or {})
         if set(probes) - allowed_components or set(overrides) - allowed_components:

@@ -1,0 +1,20 @@
+"""Read-only ports owned by the Exploration bounded context."""
+
+from __future__ import annotations
+
+from typing import Protocol
+
+
+class LibraryCatalogReadPort(Protocol):
+    async def overview(self) -> dict[str, object]: ...
+    async def resource(self, resource_id: int) -> dict[str, object]: ...
+    async def map_resource_ids(self, view: dict[str, object]) -> dict[str, object]: ...
+
+
+class PublicGraphReadPort(Protocol):
+    async def stats(self) -> dict[str, int]: ...
+    async def search(self, query: str, *, limit: int = 30) -> dict[str, object]: ...
+    async def neighbors(self, entity_id: str, *, limit: int = 40) -> dict[str, object]: ...
+
+
+__all__ = ["LibraryCatalogReadPort", "PublicGraphReadPort"]

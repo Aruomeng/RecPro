@@ -144,6 +144,17 @@ class ResourceSummaryResponse(StrictModel):
     authors: list[str]
     publication_year: int | None = Field(default=None, ge=1)
     availability_status: AvailabilityStatus
+    difficulty_level: int | None = Field(default=None, ge=1, le=4)
+
+
+class RecommendationEvidenceResponse(StrictModel):
+    score: float = Field(ge=0, le=1)
+    channels: list[str] = Field(min_length=1)
+    channel_scores: dict[str, float]
+    channel_ranks: dict[str, int]
+    primary_channel: str | None = None
+    evidence_refs: list[str] = Field(min_length=1)
+    negative_penalty: float = Field(ge=0, le=1)
 
 
 class RecommendationGroupResponse(StrictModel):
@@ -163,6 +174,7 @@ class RecommendationItemResponse(StrictModel):
     reason_summary: str = Field(min_length=1)
     evidence_confidence: float = Field(ge=0, le=1)
     unavailable_now: bool = False
+    evidence: RecommendationEvidenceResponse | None = None
 
 
 class InteractionDecisionResponse(StrictModel):

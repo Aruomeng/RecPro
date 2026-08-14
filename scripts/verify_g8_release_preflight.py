@@ -188,9 +188,9 @@ def inspect_fail_closed_defaults() -> dict[str, Any]:
         if values.get("RECPRO_LLM_PROVIDER") != "mock":
             issues.append(f"{env_name} RECPRO_LLM_PROVIDER is not mock")
 
-    app_source = (PROJECT_ROOT / "frontend/src/App.vue").read_text(encoding="utf-8")
-    if 'import.meta.env.VITE_G5_INTERACTION_ENABLED === "true"' not in app_source:
-        issues.append("frontend G5 interaction gate is not an explicit true-only check")
+    interaction_store_source = (PROJECT_ROOT / "frontend/src/stores/system.ts").read_text(encoding="utf-8")
+    if 'components.interaction_pipeline?.status === "UP"' not in interaction_store_source:
+        issues.append("frontend interaction gate is not derived from backend readiness UP")
     main_source = (PROJECT_ROOT / "backend/app/main.py").read_text(encoding="utf-8")
     if "app = create_app()" not in main_source:
         issues.append("default FastAPI app is not the health-only composition root")
@@ -204,7 +204,7 @@ def inspect_fail_closed_defaults() -> dict[str, Any]:
             "compose.yaml",
             ".env.compose.example",
             ".env.host.example",
-            "frontend/src/App.vue",
+            "frontend/src/stores/system.ts",
             "backend/app/main.py",
         ],
     }

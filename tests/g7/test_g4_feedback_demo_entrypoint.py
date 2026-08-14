@@ -5,7 +5,7 @@ import os
 import sys
 import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import ANY, patch
 
 
 MODULE = "backend.app.g4_feedback_demo_main"
@@ -63,6 +63,8 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
                     "/api/v1/recommendation-tasks": {},
                     "/api/v1/recommendation-impressions/batch": {},
                     "/api/v1/behavior-events": {},
+                    "/api/v1/explore/overview": {},
+                    "/api/v1/recommendation-runs": {},
                 }
             }
         )
@@ -102,11 +104,15 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             feedback_service=feedback,
             behavior_service=behavior,
             feedback_api_enabled=True,
+            exploration_service=ANY,
+            recommendation_progress_broker=ANY,
         )
         paths = set(module.app.openapi()["paths"])
         self.assertIn("/api/v1/recommendation-tasks", paths)
         self.assertIn("/api/v1/recommendation-impressions/batch", paths)
         self.assertIn("/api/v1/behavior-events", paths)
+        self.assertIn("/api/v1/explore/overview", paths)
+        self.assertIn("/api/v1/recommendation-runs", paths)
 
 
 if __name__ == "__main__":

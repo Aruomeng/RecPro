@@ -38,6 +38,7 @@ from backend.app.recommendation.application.persistent_orchestration import (
 )
 from backend.app.recommendation.agents.orchestrator import OrchestrationResult
 from backend.app.recommendation.agents.orchestrator import RecommendationOrchestrator
+from backend.app.recommendation.agents.orchestrator import AgentProgressSink
 from backend.app.recommendation.adapters.agent_logging_mysql import (
     MySQLAgentExecutionLogWriter,
 )
@@ -629,6 +630,11 @@ def _resource_projection(resource: Any) -> G4ResourceProjection:
             else None
         ),
         availability_status=str(resource.availability_status),
+        difficulty_level=(
+            int(getattr(resource, "difficulty_level"))
+            if getattr(resource, "difficulty_level", None) is not None
+            else None
+        ),
     )
 
 
@@ -695,6 +701,7 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
         command: RecommendationTaskCommand,
         *,
         idempotency_key: str,
+        progress_sink: AgentProgressSink | None = None,
     ) -> RecommendationTaskResult:
         if idempotency_key != str(command.request_id):
             raise ValueError("idempotency key must equal request id")
@@ -728,9 +735,13 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
                 evaluation_at=evaluation_at,
                 deadline_at=deadline_at,
             )
-            result = await self._orchestrator_factory(connection).run(
-                orchestration_request
-            )
+            orchestrator = self._orchestrator_factory(connection)
+            if progress_sink is None:
+                result = await orchestrator.run(orchestration_request)
+            else:
+                result = await orchestrator.run(
+                    orchestration_request, progress_sink=progress_sink
+                )
             catalog = self._catalog_repository_factory(connection)
             resource_values = await catalog.list_resources(available_at=evaluation_at)
             resources = {
@@ -801,6 +812,7 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
         answers: dict[str, str],
         idempotency_key: str,
         user_id: int,
+        progress_sink: AgentProgressSink | None = None,
     ) -> RecommendationTaskResult:
         """Resume one waiting G4 context through the same append-only transaction."""
 
@@ -870,9 +882,13 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
                 ),
                 initial_status=TaskStatus.WAITING_CLARIFICATION,
             )
-            result = await self._orchestrator_factory(connection).run(
-                orchestration_request
-            )
+            orchestrator = self._orchestrator_factory(connection)
+            if progress_sink is None:
+                result = await orchestrator.run(orchestration_request)
+            else:
+                result = await orchestrator.run(
+                    orchestration_request, progress_sink=progress_sink
+                )
             catalog = self._catalog_repository_factory(connection)
             resource_values = await catalog.list_resources(available_at=evaluation_at)
             resources = {

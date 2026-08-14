@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, Protocol
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from backend.app.recommendation.agents.registry import AgentRegistry
@@ -79,6 +79,12 @@ class OrchestrationDeadlineExceeded(TimeoutError):
     """The request deadline elapsed before a next Agent dispatch."""
 
 
+class AgentProgressSink(Protocol):
+    """Non-persistent observer for sanitized, ordered orchestration progress."""
+
+    def publish(self, event_type: str, payload: dict[str, object]) -> None: ...
+
+
 def _reconcile_runtime_degradation(
     policy: dict[str, object], *, degraded: bool
 ) -> dict[str, object]:
@@ -107,7 +113,12 @@ class RecommendationOrchestrator:
         self._registry = registry
         self._schema_version = schema_version
 
-    async def run(self, request: OrchestrationRequest) -> OrchestrationResult:
+    async def run(
+        self,
+        request: OrchestrationRequest,
+        *,
+        progress_sink: AgentProgressSink | None = None,
+    ) -> OrchestrationResult:
         now = datetime.now(UTC)
         deadline = request.deadline_at or now + timedelta(seconds=5)
         if deadline <= now:
@@ -134,6 +145,11 @@ class RecommendationOrchestrator:
                 }
             )
             current = target
+            if progress_sink is not None:
+                progress_sink.publish(
+                    "STATE_CHANGED",
+                    {"status": target.value, "reason_code": reason, "context_version": request.context_version},
+                )
 
         async def dispatch(
             *,
@@ -160,7 +176,31 @@ class RecommendationOrchestrator:
                 context_version=request.context_version,
                 created_at=now,
             )
-            result = await self._registry.dispatch(message)
+            if progress_sink is not None:
+                progress_sink.publish(
+                    "AGENT_STARTED",
+                    {
+                        "agent_name": receiver,
+                        "message_type": message_type.value,
+                        "attempt": attempt,
+                        "context_version": request.context_version,
+                    },
+                )
+            try:
+                result = await self._registry.dispatch(message)
+            except Exception as exc:
+                if progress_sink is not None:
+                    progress_sink.publish(
+                        "AGENT_COMPLETED",
+                        {
+                            "agent_name": receiver,
+                            "message_type": message_type.value,
+                            "outcome": "FAILED",
+                            "error_type": type(exc).__name__,
+                            "context_version": request.context_version,
+                        },
+                    )
+                raise
             results[receiver] = result
             dispatches.append(AgentDispatch(message=message, result=result))
             step = len(trace) + 1
@@ -180,6 +220,24 @@ class RecommendationOrchestrator:
                     "input_digest": f"message:{message.message_id}",
                 }
             )
+            if progress_sink is not None:
+                decision = result.decision.as_dict() if result.decision else {}
+                progress_sink.publish(
+                    "AGENT_COMPLETED",
+                    {
+                        "agent_name": result.agent_name,
+                        "agent_version": result.agent_version,
+                        "message_type": message_type.value,
+                        "outcome": result.status.value,
+                        "confidence": result.confidence,
+                        "duration_ms": result.duration_ms,
+                        "action": decision.get("action"),
+                        "target": decision.get("target"),
+                        "reason_code": decision.get("reason_code"),
+                        "fallback_used": result.fallback_used,
+                        "context_version": request.context_version,
+                    },
+                )
             if result.payload is None:
                 raise RuntimeError(f"Agent {receiver} returned no payload")
             return result.payload

@@ -77,6 +77,7 @@ class G4ResourceProjection:
     authors: tuple[str, ...]
     publication_year: int | None
     availability_status: str
+    difficulty_level: int | None = None
 
     def __post_init__(self) -> None:
         if isinstance(self.resource_id, bool) or self.resource_id < 1:
@@ -93,6 +94,8 @@ class G4ResourceProjection:
             isinstance(self.publication_year, bool) or self.publication_year < 1
         ):
             raise ValueError("publication_year must be null or positive")
+        if self.difficulty_level is not None and self.difficulty_level not in {1, 2, 3, 4}:
+            raise ValueError("difficulty_level must be null or between 1 and 4")
 
 
 def derive_task_identity(command: RecommendationTaskCommand) -> G4TaskIdentity:
@@ -340,6 +343,7 @@ def _candidate_items(
                     "authors": list(resource.authors),
                     "publication_year": resource.publication_year,
                     "availability_status": resource.availability_status,
+                    "difficulty_level": resource.difficulty_level,
                 },
                 "channels": list(channels),
                 "score": score,
@@ -461,6 +465,7 @@ def build_http_execution_payload(
         raise G4ProjectionError("policy_version must be non-blank")
     status = result.status.value
     projected_items: list[dict[str, Any]] = []
+    projected_groups: list[dict[str, Any]] | None = None
     questions = payload.get("questions")
     if status in {"COMPLETED", "DEGRADED_COMPLETED"}:
         candidate_projections = _candidate_items(result, resources=resources)
@@ -469,6 +474,13 @@ def build_http_execution_payload(
                 "completed HTTP projection requires persisted item_ids"
             )
         projected_items = []
+        reading_path = decision["output_type"] == "READING_PATH"
+        group_defs = {
+            1: ("入门", "建立主题基础概念与核心术语"),
+            2: ("进阶", "理解方法、系统与实践路径"),
+            3: ("深化", "进入综合研究与专题拓展"),
+        }
+        used_groups: set[int] = set()
         for candidate in candidate_projections:
             resource_id = int(candidate["resource_id"])
             item_id = item_ids.get(resource_id)
@@ -476,17 +488,53 @@ def build_http_execution_payload(
                 raise G4ProjectionError(
                     f"persisted item_id missing for resource {resource_id}"
                 )
+            difficulty = candidate["resource"].get("difficulty_level")
+            group_id: int | None = None
+            if reading_path:
+                if difficulty in {1, 2}:
+                    group_id = 1
+                elif difficulty == 3:
+                    group_id = 2
+                elif difficulty == 4:
+                    group_id = 3
+                else:
+                    group_id = 1 + min(
+                        2,
+                        ((int(candidate["rank_no"]) - 1) * 3) // max(1, len(candidate_projections)),
+                    )
+                used_groups.add(group_id)
             projected_items.append(
                 {
                     "item_id": item_id,
                     "resource": candidate["resource"],
                     "rank_no": candidate["rank_no"],
-                    "group_id": None,
+                    "group_id": group_id,
                     "reason_summary": candidate["reason_summary"],
                     "evidence_confidence": candidate["evidence_confidence"],
                     "unavailable_now": False,
+                    "evidence": {
+                        "score": candidate["score"],
+                        "channels": candidate["channels"],
+                        "channel_scores": candidate["channel_scores"] or {},
+                        "channel_ranks": candidate["channel_ranks"] or {},
+                        "primary_channel": candidate["primary_channel"],
+                        "evidence_refs": candidate["evidence_refs"],
+                        "negative_penalty": candidate["negative_penalty"],
+                    },
                 }
             )
+        if reading_path:
+            projected_groups = [
+                {
+                    "group_id": group_id,
+                    "group_type": "READING_STAGE",
+                    "group_key": ("FOUNDATION", "ADVANCED", "DEEP_DIVE")[group_id - 1],
+                    "title": group_defs[group_id][0],
+                    "goal": group_defs[group_id][1],
+                    "order_no": group_id,
+                }
+                for group_id in sorted(used_groups)
+            ]
         questions = None
     elif status == "WAITING_CLARIFICATION":
         if not isinstance(questions, Sequence) or isinstance(questions, (str, bytes, bytearray)):
@@ -515,7 +563,7 @@ def build_http_execution_payload(
             "decision_reason": reason,
             "policy_version": policy_version,
         },
-        "groups": None,
+        "groups": projected_groups,
         "items": projected_items or None,
         "questions": list(questions) if questions is not None else None,
         "warnings": list(warnings),

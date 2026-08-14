@@ -21,6 +21,9 @@ from backend.app.catalog.ports.public import (
     VectorRecallPort,
 )
 from backend.app.feedback.adapters.mysql import MySQLFeedbackStore
+from backend.app.exploration import ExplorationService
+from backend.app.exploration.graph_reader import PublicGraphReader
+from backend.app.exploration.mysql_reader import MySQLCatalogReader
 from backend.app.feedback.application.service import (
     BehaviorApplicationService,
     FeedbackApplicationService,
@@ -400,6 +403,8 @@ def build_research_g4_http_app(
     component_readiness_probes: dict[str, object] | None = None,
     component_readiness_overrides: dict[str, ComponentReadiness] | None = None,
     feedback_api_enabled: bool = False,
+    exploration_service: object | None = None,
+    recommendation_progress_broker: object | None = None,
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -437,6 +442,9 @@ def build_research_g4_http_app(
         behavior_service=behavior_service,
         feedback_api_enabled=feedback_api_enabled,
         debug_api_enabled=False,
+        exploration_service=exploration_service,
+        exploration_api_enabled=exploration_service is not None,
+        recommendation_progress_broker=recommendation_progress_broker,
     )
 
 
@@ -485,6 +493,8 @@ def build_research_g4_http_app_from_runtime(
     readiness_probe: object | None = None,
     config_bundle_probe: object | None = None,
     feedback_api_enabled: bool = False,
+    exploration_service: object | None = None,
+    recommendation_progress_broker: object | None = None,
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -539,7 +549,13 @@ def build_research_g4_http_app_from_runtime(
             required=False,
             active_version=settings.llm_model if llm_enabled else "mock-v1",
             provider=settings.llm_provider if llm_enabled else "MockLLMProvider",
-        )
+        ),
+        "interaction_pipeline": ComponentReadiness(
+            status=ComponentStatus.UP if feedback_api_enabled else ComponentStatus.DISABLED,
+            required=False,
+            active_version="feedback-g5-v1" if feedback_api_enabled else None,
+            provider="FeedbackLearningAgent" if feedback_api_enabled else None,
+        ),
     }
     return build_research_g4_http_app(
         settings,
@@ -551,6 +567,33 @@ def build_research_g4_http_app_from_runtime(
         component_readiness_probes=component_probes,
         component_readiness_overrides=component_overrides,
         feedback_api_enabled=feedback_api_enabled,
+        exploration_service=exploration_service,
+        recommendation_progress_broker=recommendation_progress_broker,
+    )
+
+
+def build_research_exploration_service(
+    settings: AppSettings,
+    *,
+    graph_endpoint: str,
+    graph_username: str,
+    graph_password: str,
+    graph_version: str,
+) -> ExplorationService:
+    """Compose read-only MySQL/Neo4j exploration without mounting routes."""
+
+    if settings.app_env == "production":
+        raise ValueError("research exploration requires a non-production environment")
+    return ExplorationService(
+        catalog_reader=MySQLCatalogReader(connection_factory=_mysql_connection_factory(settings)),
+        graph_reader=PublicGraphReader(
+            endpoint=graph_endpoint,
+            username=graph_username,
+            password=graph_password,
+            graph_version=graph_version,
+            timeout=3.0,
+        ),
+        cache_seconds=300.0,
     )
 
 
@@ -629,4 +672,5 @@ __all__ = [
     "build_research_g4_http_app",
     "build_research_g4_recommendation_service_from_runtime",
     "build_research_g4_http_app_from_runtime",
+    "build_research_exploration_service",
 ]

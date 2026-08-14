@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from typing import Any, AsyncIterator, Protocol
+from uuid import NAMESPACE_URL, UUID, uuid5
 
 from backend.app.catalog.domain.public import ResourceSummary, ResourceTagEvidence
 from backend.app.recommendation.application.intent import classify_intent
@@ -31,8 +33,51 @@ __all__ = [
     "RecommendationTaskService",
     "StaleContextVersionError",
     "TaskStateConflictError",
+    "RecommendationTaskCommand",
+    "RecommendationProgressBrokerPort",
+    "RunCapacityError",
+    "RunContextConflictError",
+    "RunIdempotencyConflictError",
+    "RunNotFoundError",
+    "derive_task_identity_values",
     "execute_recommendation",
 ]
+
+
+class RunCapacityError(RuntimeError):
+    """The bounded research runtime cannot accept another active run."""
+
+
+class RunNotFoundError(LookupError):
+    """The run is absent, expired, or outside the caller's identity scope."""
+
+
+class RunContextConflictError(RuntimeError):
+    """A different or stale context is already active for this task."""
+
+
+class RunIdempotencyConflictError(ValueError):
+    """A run identity was reused with a different public request payload."""
+
+
+class RecommendationProgressBrokerPort(Protocol):
+    """Public application port used by the async HTTP adapter."""
+
+    def reserve(self, *, task_id: UUID, trace_id: UUID, context_version: int, user_id: int, request_fingerprint: str) -> tuple[Any, bool]: ...
+    def attach_task(self, task_id: UUID, task: Any) -> None: ...
+    def complete(self, task_id: UUID, *, result: dict[str, object], replayed: bool) -> None: ...
+    def fail(self, task_id: UUID, *, error_code: str) -> None: ...
+    def state(self, task_id: UUID, *, user_id: int) -> dict[str, object]: ...
+    def events(self, task_id: UUID, *, user_id: int, after_sequence: int = 0) -> AsyncIterator[dict[str, object] | None]: ...
+
+
+def derive_task_identity_values(command: RecommendationTaskCommand) -> tuple[UUID, UUID]:
+    """Return replay-stable task and trace IDs without infrastructure access."""
+
+    return (
+        uuid5(NAMESPACE_URL, f"task:{command.user_id}:{command.request_id}"),
+        uuid5(NAMESPACE_URL, f"trace:{command.user_id}:{command.request_id}"),
+    )
 
 
 CHANNEL_WEIGHTS = {"PROFILE": 0.35, "KEYWORD": 0.25, "TRENDING": 0.20}

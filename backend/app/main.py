@@ -8,12 +8,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app.api.errors import register_exception_handlers
+from backend.app.api.exploration import create_exploration_router
 from backend.app.api.auth import PrincipalResolver
 from backend.app.api.debug import create_debug_router
 from backend.app.api.feedback import create_feedback_router
 from backend.app.api.health import create_health_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
+from backend.app.api.recommendation_runs import create_recommendation_run_router
 from backend.app.composition import build_formal_auth_resolver
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
@@ -49,6 +51,9 @@ def create_app(
     feedback_api_enabled: bool = False,
     principal_resolver: PrincipalResolver | None = None,
     debug_api_enabled: bool | None = None,
+    exploration_service: object | None = None,
+    exploration_api_enabled: bool = False,
+    recommendation_progress_broker: object | None = None,
 ) -> FastAPI:
     if recommendation_readiness_enabled and (
         recommendation_service is None or not recommendation_api_enabled
@@ -122,6 +127,8 @@ def create_app(
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
     if effective_principal_resolver is not None or effective_debug_api_enabled:
         cors_headers.append("Authorization")
+    if recommendation_progress_broker is not None:
+        cors_headers.append("Last-Event-ID")
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(runtime.cors_origins),
@@ -146,6 +153,17 @@ def create_app(
                 principal_resolver=effective_principal_resolver,
             )
         )
+        if recommendation_progress_broker is not None:
+            application.include_router(
+                create_recommendation_run_router(
+                    service=recommendation_service,
+                    broker=recommendation_progress_broker,
+                    app_env=runtime.app_env,
+                    demo_identity_enabled=runtime.app_env == "demo",
+                    pipeline_enabled=recommendation_api_enabled,
+                    principal_resolver=effective_principal_resolver,
+                )
+            )
         if effective_debug_api_enabled:
             application.include_router(
                 create_debug_router(
@@ -164,6 +182,8 @@ def create_app(
                 principal_resolver=effective_principal_resolver,
             )
         )
+    if exploration_service is not None and exploration_api_enabled:
+        application.include_router(create_exploration_router(service=exploration_service))
     return application
 
 
