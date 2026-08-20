@@ -55,6 +55,7 @@ API_FORBIDDEN_PARTS = {".adapters", ".infrastructure", ".platform", ".db", ".rep
 DETERMINISTIC_FORBIDDEN_PARTS = {".adapters", ".infrastructure", ".platform", ".db", ".repository", ".repositories"}
 AGENT_SHARED_MODULES = {"__init__", "base", "contracts", "public", "registry", "types"}
 BUSINESS_MODULES = {
+    "agent_workspace",
     "catalog",
     "profile",
     "recommendation",

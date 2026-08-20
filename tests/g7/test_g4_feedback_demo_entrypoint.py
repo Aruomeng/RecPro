@@ -106,6 +106,7 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             feedback_api_enabled=True,
             exploration_service=ANY,
             recommendation_progress_broker=ANY,
+            agent_workspace_broker=ANY,
         )
         paths = set(module.app.openapi()["paths"])
         self.assertIn("/api/v1/recommendation-tasks", paths)

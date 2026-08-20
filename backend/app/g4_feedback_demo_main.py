@@ -29,6 +29,7 @@ from backend.app.config import load_configuration
 
 from scripts.g4_operator_runtime import load_existing_chroma_collection
 from backend.app.recommendation.progress import RecommendationProgressBroker
+from backend.app.agent_workspace import AgentWorkspaceBroker
 
 
 GRAPH_VERSION = "lib-books-v1-20260810"
@@ -150,6 +151,7 @@ def create_g4_feedback_app():
         graph_version=GRAPH_VERSION,
     )
     progress_broker = RecommendationProgressBroker(max_concurrent=8, retention_seconds=600.0)
+    workspace_broker = AgentWorkspaceBroker(max_workspaces=32, retention_seconds=600.0)
     return build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
@@ -162,6 +164,7 @@ def create_g4_feedback_app():
         feedback_api_enabled=True,
         exploration_service=exploration_service,
         recommendation_progress_broker=progress_broker,
+        agent_workspace_broker=workspace_broker,
     )
 
 

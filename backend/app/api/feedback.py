@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Path, Response
@@ -276,6 +276,7 @@ def create_feedback_router(
     demo_identity_enabled: bool = False,
     pipeline_enabled: bool = False,
     principal_resolver: PrincipalResolver | None = None,
+    workspace_broker: Any | None = None,
 ) -> APIRouter:
     """Build opt-in interaction routes without opening persistence in the adapter."""
 
@@ -300,6 +301,7 @@ def create_feedback_router(
         idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=255),
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        agent_workspace_id: UUID | None = Header(default=None, alias="X-Agent-Workspace-Id"),
     ) -> ImpressionBatchResponse:
         _require_enabled(feedback_service, pipeline_enabled=pipeline_enabled)
         principal = await _principal(
@@ -309,6 +311,11 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        if workspace_broker is not None and agent_workspace_id is not None:
+            try:
+                workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
+            except LookupError as exc:
+                raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The Agent workspace was not found or has expired.", False, {}) from exc
         accepted = 0
         replayed = 0
         rejected = 0
@@ -353,18 +360,21 @@ def create_feedback_router(
             else:
                 accepted += 1
                 status = "ACCEPTED"
+            action = feedback_learning_decision(
+                event_type=BehaviorEventType.RECOMMENDATION_IMPRESSION.value,
+                replayed=receipt.replayed,
+                profile_update_pending=False,
+            )
             results.append(
                 ImpressionResult(
                     impression_uuid=receipt.impression_uuid,
                     status=status,
                     is_valid_exposure=receipt.is_valid_exposure,
-                    agent_action=feedback_learning_decision(
-                        event_type=BehaviorEventType.RECOMMENDATION_IMPRESSION.value,
-                        replayed=receipt.replayed,
-                        profile_update_pending=False,
-                    ),
+                    agent_action=action,
                 )
             )
+            if workspace_broker is not None and agent_workspace_id is not None:
+                workspace_broker.bridge_feedback_action(agent_workspace_id, user_id=principal.user_id, action=action)
         response.headers["Idempotency-Replayed"] = (
             "true" if replayed == len(results) and not rejected else "false"
         )
@@ -399,6 +409,7 @@ def create_feedback_router(
         idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=255),
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        agent_workspace_id: UUID | None = Header(default=None, alias="X-Agent-Workspace-Id"),
     ) -> FeedbackReceiptResponse:
         _require_enabled(feedback_service, pipeline_enabled=pipeline_enabled)
         if idempotency_key != str(request.feedback_uuid):
@@ -416,6 +427,11 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        if workspace_broker is not None and agent_workspace_id is not None:
+            try:
+                workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
+            except LookupError as exc:
+                raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The Agent workspace was not found or has expired.", False, {}) from exc
         try:
             receipt = await feedback_service.record_feedback(
                 FeedbackCommand(
@@ -442,7 +458,17 @@ def create_feedback_router(
             raise _api_error_for_value(exc) from exc
         response.status_code = 200 if receipt.replayed else 202
         response.headers["Idempotency-Replayed"] = "true" if receipt.replayed else "false"
-        return FeedbackReceiptResponse(
+        action = feedback_learning_decision(
+            event_type=_feedback_event_type(request.feedback_type, request.rating),
+            replayed=receipt.replayed,
+            profile_update_pending=receipt.outbox_id is not None,
+            state_type=(
+                str(receipt.resource_state.get("state_type"))
+                if receipt.resource_state is not None
+                else None
+            ),
+        )
+        result = FeedbackReceiptResponse(
             feedback_uuid=receipt.feedback_uuid,
             feedback_id=receipt.feedback_id,
             status="REPLAYED" if receipt.replayed else "ACCEPTED",
@@ -451,17 +477,11 @@ def create_feedback_router(
             profile_update_status="PENDING" if receipt.outbox_id is not None else "NOT_REQUIRED",
             profile_version_before=None,
             profile_version_after=None,
-            agent_action=feedback_learning_decision(
-                event_type=_feedback_event_type(request.feedback_type, request.rating),
-                replayed=receipt.replayed,
-                profile_update_pending=receipt.outbox_id is not None,
-                state_type=(
-                    str(receipt.resource_state.get("state_type"))
-                    if receipt.resource_state is not None
-                    else None
-                ),
-            ),
+            agent_action=action,
         )
+        if workspace_broker is not None and agent_workspace_id is not None:
+            workspace_broker.bridge_feedback_action(agent_workspace_id, user_id=principal.user_id, action=action)
+        return result
 
     @router.post(
         "/behavior-events",
@@ -486,6 +506,7 @@ def create_feedback_router(
         idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=255),
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        agent_workspace_id: UUID | None = Header(default=None, alias="X-Agent-Workspace-Id"),
     ) -> BehaviorEventReceiptResponse:
         _require_enabled(behavior_service, pipeline_enabled=pipeline_enabled)
         if request.event_type not in DIRECT_BEHAVIOR_TYPES:
@@ -511,6 +532,11 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        if workspace_broker is not None and agent_workspace_id is not None:
+            try:
+                workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
+            except LookupError as exc:
+                raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The Agent workspace was not found or has expired.", False, {}) from exc
         try:
             receipt = await behavior_service.append(
                 BehaviorAppendCommand(
@@ -540,17 +566,21 @@ def create_feedback_router(
             raise _api_error_for_value(exc) from exc
         response.status_code = 200 if receipt.replayed else 202
         response.headers["Idempotency-Replayed"] = "true" if receipt.replayed else "false"
-        return BehaviorEventReceiptResponse(
+        action = feedback_learning_decision(
+            event_type=request.event_type.value,
+            replayed=receipt.replayed,
+            profile_update_pending=receipt.outbox_id is not None,
+        )
+        result = BehaviorEventReceiptResponse(
             event_uuid=receipt.event_uuid,
             event_id=receipt.event_id,
             status="REPLAYED" if receipt.replayed else "ACCEPTED",
             profile_update_status="PENDING" if receipt.outbox_id is not None else "NOT_REQUIRED",
-            agent_action=feedback_learning_decision(
-                event_type=request.event_type.value,
-                replayed=receipt.replayed,
-                profile_update_pending=receipt.outbox_id is not None,
-            ),
+            agent_action=action,
         )
+        if workspace_broker is not None and agent_workspace_id is not None:
+            workspace_broker.bridge_feedback_action(agent_workspace_id, user_id=principal.user_id, action=action)
+        return result
 
     return router
 

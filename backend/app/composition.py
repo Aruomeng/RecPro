@@ -405,6 +405,7 @@ def build_research_g4_http_app(
     feedback_api_enabled: bool = False,
     exploration_service: object | None = None,
     recommendation_progress_broker: object | None = None,
+    agent_workspace_broker: object | None = None,
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -445,6 +446,7 @@ def build_research_g4_http_app(
         exploration_service=exploration_service,
         exploration_api_enabled=exploration_service is not None,
         recommendation_progress_broker=recommendation_progress_broker,
+        agent_workspace_broker=agent_workspace_broker,
     )
 
 
@@ -495,6 +497,7 @@ def build_research_g4_http_app_from_runtime(
     feedback_api_enabled: bool = False,
     exploration_service: object | None = None,
     recommendation_progress_broker: object | None = None,
+    agent_workspace_broker: object | None = None,
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -569,6 +572,7 @@ def build_research_g4_http_app_from_runtime(
         feedback_api_enabled=feedback_api_enabled,
         exploration_service=exploration_service,
         recommendation_progress_broker=recommendation_progress_broker,
+        agent_workspace_broker=agent_workspace_broker,
     )
 
 

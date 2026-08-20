@@ -12,6 +12,7 @@ from fastapi import APIRouter, Header, Query
 from fastapi.responses import StreamingResponse
 from pydantic import Field
 
+from backend.app.agent_workspace.application.public import WorkspaceNotFoundError
 from backend.app.api.auth import PrincipalResolver
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
@@ -104,6 +105,7 @@ def create_recommendation_run_router(
     demo_identity_enabled: bool,
     pipeline_enabled: bool,
     principal_resolver: PrincipalResolver | None,
+    workspace_broker: Any | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1/recommendation-runs", tags=["Recommendation Runs"])
     errors = {
@@ -121,14 +123,18 @@ def create_recommendation_run_router(
             principal_resolver=principal_resolver,
         )
 
-    async def execute(command: RecommendationTaskCommand, idempotency_key: str, sink: Any) -> None:
-        task_id, _ = derive_task_identity_values(command)
+    async def execute(command: RecommendationTaskCommand, idempotency_key: str, sink: Any, workspace_id: UUID | None, user_id: int) -> None:
+        task_id, trace_id = derive_task_identity_values(command)
         try:
             result = await service.create_task(command, idempotency_key=idempotency_key, progress_sink=sink)
             broker.complete(task_id, result=_public_result(dict(result.payload)), replayed=result.replayed)
+            if workspace_broker is not None and workspace_id is not None:
+                workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status=str(result.payload.get("status", "COMPLETED")), task_id=task_id, trace_id=trace_id)
         except Exception as exc:
             code = "REQUEST_DEADLINE_EXCEEDED" if isinstance(exc, TimeoutError) else "CORE_STORAGE_UNAVAILABLE"
             broker.fail(task_id, error_code=code)
+            if workspace_broker is not None and workspace_id is not None:
+                workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status="FAILED", task_id=task_id, trace_id=trace_id)
 
     @router.post(
         "",
@@ -143,6 +149,7 @@ def create_recommendation_run_router(
         idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=255),
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        agent_workspace_id: UUID | None = Header(default=None, alias="X-Agent-Workspace-Id"),
     ) -> RecommendationRunAccepted:
         if not pipeline_enabled:
             raise PublicAPIError(503, ErrorCode.CORE_STORAGE_UNAVAILABLE, "The recommendation pipeline is disabled.", False, {})
@@ -152,6 +159,11 @@ def create_recommendation_run_router(
         actor = await principal(demo_user_id, authorization)
         command = _command(request, user_id=actor.user_id)
         task_id, trace_id = derive_task_identity_values(command)
+        if workspace_broker is not None and agent_workspace_id is not None:
+            try:
+                workspace_broker.snapshot(agent_workspace_id, user_id=actor.user_id)
+            except WorkspaceNotFoundError as exc:
+                raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The Agent workspace was not found or has expired.", False, {}) from exc
         try:
             sink, replayed = broker.reserve(
                 task_id=task_id, trace_id=trace_id, context_version=1, user_id=actor.user_id,
@@ -161,8 +173,11 @@ def create_recommendation_run_router(
             raise _capacity_error(exc) from exc
         except (RunContextConflictError, RunIdempotencyConflictError) as exc:
             raise _run_conflict(exc) from exc
+        if workspace_broker is not None and agent_workspace_id is not None:
+            sink = workspace_broker.mirror_sink(sink, agent_workspace_id, user_id=actor.user_id)
+            workspace_broker.bridge_recommendation_event(agent_workspace_id, user_id=actor.user_id, event_type="STATE_CHANGED", payload={"status": "ACCEPTED", "task_id": str(task_id), "trace_id": str(trace_id)})
         if not replayed:
-            task = asyncio.create_task(execute(command, idempotency_key, sink), name=f"recommendation-run:{task_id}")
+            task = asyncio.create_task(execute(command, idempotency_key, sink, agent_workspace_id, actor.user_id), name=f"recommendation-run:{task_id}")
             broker.attach_task(task_id, task)
         return RecommendationRunAccepted(
             task_id=task_id,
@@ -174,7 +189,7 @@ def create_recommendation_run_router(
         )
 
     async def execute_clarification(
-        *, task_id: UUID, request: ClarificationRequest, idempotency_key: str, user_id: int, sink: Any
+        *, task_id: UUID, request: ClarificationRequest, idempotency_key: str, user_id: int, sink: Any, workspace_id: UUID | None
     ) -> None:
         try:
             result = await service.submit_clarification(
@@ -186,9 +201,13 @@ def create_recommendation_run_router(
                 progress_sink=sink,
             )
             broker.complete(task_id, result=_public_result(dict(result.payload)), replayed=result.replayed)
+            if workspace_broker is not None and workspace_id is not None:
+                workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status=str(result.payload.get("status", "COMPLETED")), task_id=task_id)
         except Exception as exc:
             code = "REQUEST_DEADLINE_EXCEEDED" if isinstance(exc, TimeoutError) else "CORE_STORAGE_UNAVAILABLE"
             broker.fail(task_id, error_code=code)
+            if workspace_broker is not None and workspace_id is not None:
+                workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status="FAILED", task_id=task_id)
 
     @router.post(
         "/{task_id}/clarifications",
@@ -203,6 +222,7 @@ def create_recommendation_run_router(
         idempotency_key: str = Header(..., alias="Idempotency-Key", min_length=8, max_length=255),
         demo_user_id: int | None = Header(default=None, alias="X-Demo-User-Id", ge=1),
         authorization: str | None = Header(default=None, alias="Authorization"),
+        agent_workspace_id: UUID | None = Header(default=None, alias="X-Agent-Workspace-Id"),
     ) -> RecommendationRunAccepted:
         actor = await principal(demo_user_id, authorization)
         try:
@@ -211,6 +231,11 @@ def create_recommendation_run_router(
             raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The recommendation task was not found.", False, {}) from exc
         trace_id = UUID(str(task_state["trace_id"]))
         next_context = request.context_version + 1
+        if workspace_broker is not None and agent_workspace_id is not None:
+            try:
+                workspace_broker.snapshot(agent_workspace_id, user_id=actor.user_id)
+            except WorkspaceNotFoundError as exc:
+                raise PublicAPIError(404, ErrorCode.NOT_FOUND, "The Agent workspace was not found or has expired.", False, {}) from exc
         try:
             sink, replayed = broker.reserve(
                 task_id=task_id, trace_id=trace_id, context_version=next_context, user_id=actor.user_id,
@@ -220,9 +245,11 @@ def create_recommendation_run_router(
             raise _capacity_error(exc) from exc
         except (RunContextConflictError, RunIdempotencyConflictError) as exc:
             raise _run_conflict(exc) from exc
+        if workspace_broker is not None and agent_workspace_id is not None:
+            sink = workspace_broker.mirror_sink(sink, agent_workspace_id, user_id=actor.user_id)
         if not replayed:
             task = asyncio.create_task(
-                execute_clarification(task_id=task_id, request=request, idempotency_key=idempotency_key, user_id=actor.user_id, sink=sink),
+                execute_clarification(task_id=task_id, request=request, idempotency_key=idempotency_key, user_id=actor.user_id, sink=sink, workspace_id=agent_workspace_id),
                 name=f"recommendation-clarification:{task_id}:{next_context}",
             )
             broker.attach_task(task_id, task)

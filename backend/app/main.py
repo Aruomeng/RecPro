@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from backend.app.api.agent_workspaces import create_agent_workspace_router
 from backend.app.api.errors import register_exception_handlers
 from backend.app.api.exploration import create_exploration_router
 from backend.app.api.auth import PrincipalResolver
@@ -54,6 +55,7 @@ def create_app(
     exploration_service: object | None = None,
     exploration_api_enabled: bool = False,
     recommendation_progress_broker: object | None = None,
+    agent_workspace_broker: object | None = None,
 ) -> FastAPI:
     if recommendation_readiness_enabled and (
         recommendation_service is None or not recommendation_api_enabled
@@ -127,8 +129,10 @@ def create_app(
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
     if effective_principal_resolver is not None or effective_debug_api_enabled:
         cors_headers.append("Authorization")
-    if recommendation_progress_broker is not None:
+    if recommendation_progress_broker is not None or agent_workspace_broker is not None:
         cors_headers.append("Last-Event-ID")
+    if agent_workspace_broker is not None:
+        cors_headers.append("X-Agent-Workspace-Id")
     application.add_middleware(
         CORSMiddleware,
         allow_origins=list(runtime.cors_origins),
@@ -162,6 +166,7 @@ def create_app(
                     demo_identity_enabled=runtime.app_env == "demo",
                     pipeline_enabled=recommendation_api_enabled,
                     principal_resolver=effective_principal_resolver,
+                    workspace_broker=agent_workspace_broker,
                 )
             )
         if effective_debug_api_enabled:
@@ -180,10 +185,20 @@ def create_app(
                 demo_identity_enabled=runtime.app_env == "demo",
                 pipeline_enabled=feedback_api_enabled,
                 principal_resolver=effective_principal_resolver,
+                workspace_broker=agent_workspace_broker,
             )
         )
     if exploration_service is not None and exploration_api_enabled:
         application.include_router(create_exploration_router(service=exploration_service))
+    if agent_workspace_broker is not None:
+        application.include_router(
+            create_agent_workspace_router(
+                broker=agent_workspace_broker,
+                app_env=runtime.app_env,
+                demo_identity_enabled=runtime.app_env == "demo",
+                principal_resolver=effective_principal_resolver,
+            )
+        )
     return application
 
 
