@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "5b74e016-900b-49c4-b091-156b0f5afb9d",
+  "created_at": "2026-08-20T13:06:15Z",
+  "git_commit": "cb7d37bd9ef6b0075b925046c9d855150d07eaa2",
+  "classification": "S1_APPEND",
+  "mode": "DRY_RUN",
+  "intent": "Create two new append-only Agent Workspace audit tables and, only after separate exact approval, append one bounded demo-profile acceptance trace. The run is limited to 12 public workspace-event facts, 4 directive-state facts, and 1 schema-migration marker. It cannot mutate or remove an existing fact, cannot write Neo4j or Chroma, and permits zero DeepSeek requests.",
+  "environment": {
+    "environment_id": "recpro_local_research_g10",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:4822618ae07023f4e3d5fd1dbb4b82991aa73d6e5f4cd05592b227c236d9ad45",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.agent_workspace_event:schema",
+      "operation": "CREATE",
+      "expected_before_count": 0,
+      "expected_after_min_count": 0
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.interaction_directive_fact:schema",
+      "operation": "CREATE",
+      "expected_before_count": 0,
+      "expected_after_min_count": 0
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.recpro_schema_migration:migration_id=g10-agent-workspace-audit-v1",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.agent_workspace_event:workspace_id=de6b0647-85f5-4e62-9be0-876dd9dd39e7",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 12
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.interaction_directive_fact:workspace_id=de6b0647-85f5-4e62-9be0-876dd9dd39e7",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 4
+    }
+  ],
+  "input_hashes": {
+    "infra/mysql/migrations/008_g10_agent_workspace_audit.sql": "f9f73b3aab14c6cca5bcf51dd6919e9f4c214599b5036d4560c124e25d69cd9a"
+  },
+  "idempotency_key": "g10-agent-workspace-audit-20260820-001",
+  "max_changes": 17,
+  "preconditions": [
+    "the reviewed implementation commit is exactly cb7d37bd9ef6b0075b925046c9d855150d07eaa2",
+    "the user separately approves this unchanged plan_id and canonical plan_hash before any database connection",
+    "database identity and host fingerprint match this plan and the two audit tables plus migration marker are absent",
+    "the runtime database role has no physical-delete privilege and the executor accepts CREATE and INSERT only",
+    "demo user_id is exactly 1001; workspace_id is de6b0647-85f5-4e62-9be0-876dd9dd39e7; session_id is 57f4cc50-2593-4c0d-952f-060b251f8521",
+    "directive_id is e9ab275f-b057-42ec-933a-e6a856bdc92e; first event_uuid is 81242004-18a6-42b8-8da8-5e43957496e6; acceptance_run_uuid is 217ebc0c-aa2d-498a-ba19-bb1d7328519d",
+    "DeepSeek request budget is exactly 0; external network requests, Neo4j writes, Chroma writes, and Outbox claims are all exactly 0",
+    "preflight reads exact table existence and per-workspace counts; any mismatch aborts before the first statement",
+    "rollback is fail-forward only: retain created objects and appended facts, disable the opt-in audit adapter, and append a failure report; no compensating removal is allowed"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "f7018fa3bd333a421072c4d63eb9d7c9ea078f6dc9c19e9b1c6eacc0b60879f8"
+}

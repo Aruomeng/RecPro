@@ -2152,6 +2152,26 @@ Gate：G7/G8 六个论文演示用户的浏览器业务验收
 下一步唯一动作：等待精确 plan_id/hash 执行批准；批准后先做每场景运行前计数与 UUID 预检，再按场景顺序执行并生成独立回读证据。
 ```
 
+## G10 全局 Agent Workspace 与蓝白交互重构
+
+```text
+交接ID：G10-GLOBAL-AGENT-WORKSPACE-20260820-001
+Gate：阶段 1—4 实现完成 / 阶段 5 数据执行待精确审批
+状态：CODE_COMPLETE / NO_WRITE_VALIDATION_PASS / DATABASE_APPLY_BLOCKED
+时间：2026-08-20（Asia/Shanghai）
+目标：让既有 8 个业务 Agent 贯穿所有一级页面，并以有界真实事件、白名单策略和全局工作栏驱动蓝白大屏交互。
+实现提交：39ca9a5（后端 Workspace）、98ef1cc（全局前端）、cb7d37b（未执行的前向审计结构）。
+核心产出：内存 Workspace、SSE 续传、observation/Directive 状态机、真实推荐与反馈桥接、readiness 降级映射、3 个 EXTERNAL_DEMO 情境源、全局 AgentRail、跨路由 Pinia、蓝白响应式页面。
+兼容边界：默认应用继续 fail-closed；缺少 X-Agent-Workspace-Id 的旧客户端不变；旧 AgentStage 文件保留。
+数据库状态：本轮写入 0；008 迁移仅作为未执行代码加入仓库；Neo4j/Chroma 写入 0；Outbox claim 0。
+模型状态：常驻环境感知 DeepSeek 请求 0；阶段 5 ChangePlan 也冻结为 0。
+安全状态：文件删除 0；数据库物理删除 0；既有事实修改 0；容器/数据卷删除 0。
+测试：Python 595 PASS；前端 57 PASS；生产构建 PASS；architecture/safety/contracts/docs PASS；四种目标视口无横向溢出且控制台无错误。
+运行限制：本机 Docker CLI 目标缺失且 MySQL 62306 不可达，因此没有伪造真实 MySQL/Neo4j/Chroma/DeepSeek 浏览器联调结果。
+阶段 5 计划：plan_id=5b74e016-900b-49c4-b091-156b0f5afb9d；plan_hash=f7018fa3bd333a421072c4d63eb9d7c9ea078f6dc9c19e9b1c6eacc0b60879f8；最多新增 17 行；DeepSeek=0；执行前必须再次精确批准。
+下一步唯一动作：等待上述 plan_id/hash 的精确批准；批准后先修复/恢复 Docker 数据面并做只读前检，再决定是否运行前向迁移与 bounded audit acceptance。
+```
+
 ## 阶段交接模板
 
 每个Gate结束时追加一条记录，不覆盖旧记录：

@@ -21,6 +21,16 @@
 
 ## 2. 通用约定
 
+### 2.0 全局 Agent Workspace（G10 追加契约）
+
+显式研究组合根可挂载会话级全局协作接口：`POST /agent-workspaces`、`GET /agent-workspaces/{workspace_id}`、`GET /agent-workspaces/{workspace_id}/events`、`POST /agent-workspaces/{workspace_id}/observations`、`POST /agent-workspaces/{workspace_id}/directives/{directive_id}/actions` 和 `GET /agents`。默认应用不注册这些路由。
+
+Workspace 默认驻留内存，每个会话固定 8 个既有业务 Agent；Orchestrator 单列但不计入 Agent 数量。事件流通过 Fetch SSE 携带身份 Header，并支持 `Last-Event-ID`。observation 必须使用白名单类型和等于 `observation_id` 的 `Idempotency-Key`；Directive action 只接受 `ACCEPT`、`DISMISS`、`UNDO`。
+
+推荐、澄清、曝光、反馈与行为接口可选接受 `X-Agent-Workspace-Id`。提供时，服务会先验证 Workspace 身份边界，再把真实业务 Agent 动作镜像到全局事件流；未提供时保持原契约。该 Header 不授予权限，也不能绕过业务幂等或持久化事务。
+
+公开事件不得携带 Prompt、模型原文、凭证、完整画像、SQL、Cypher 或数据库内部字段。常驻 Workspace 策略不调用 LLM，也不能自动导航或自动发送业务写请求。
+
 ### 2.1 内容与编码
 
 ```text
