@@ -6,6 +6,7 @@ import type { AgentProgressEvent, RunAccepted } from "../api/recommendationRunCl
 import type { RecommendationExecution, RecommendationOutputType } from "../domain/recommendation";
 import { createRequestId } from "../domain/recommendation";
 import { useSessionStore } from "./session";
+import { useAgentWorkspaceStore } from "./agentWorkspace";
 
 export const AGENT_ROLES = [
   ["IntentUnderstandingAgent", "意图理解"], ["UserProfileAgent", "用户画像"],
@@ -16,6 +17,7 @@ export const AGENT_ROLES = [
 
 export const useRecommendationStore = defineStore("recommendation", () => {
   const session = useSessionStore();
+  const workspace = useAgentWorkspaceStore();
   const query = ref("多智能体系统与智慧图书馆");
   const outputType = ref<RecommendationOutputType>("TOPIC_RESOURCES");
   const phase = ref<"idle" | "starting" | "streaming" | "clarification" | "success" | "error">("idle");
@@ -66,11 +68,13 @@ export const useRecommendationStore = defineStore("recommendation", () => {
     error.value = "";
     session.setBusy(true);
     try {
+      await workspace.observe("QUERY_SUBMITTED", { query: input, output_type: selectedOutput });
+      await workspace.observe("RECOMMENDATION_STARTED", { query: input, output_type: selectedOutput });
       const accepted = await recommendationRunClient.create({
         request_id: createRequestId(), session_id: session.sessionId, scene: "SEARCH_AFTER", input_text: input,
         requested_resource_types: ["BOOK"], requested_output_type: selectedOutput, limit: selectedOutput === "READING_PATH" ? 8 : 8,
         constraints: { personalization_mode: session.mode === "demo" ? "PROFILE" : "ANONYMOUS" },
-      }, session.userId, controller.signal);
+      }, session.userId, controller.signal, workspace.workspaceId);
       await consume(accepted);
     } catch (caught) {
       if (!controller.signal.aborted) { phase.value = "error"; error.value = caught instanceof Error ? caught.message : "推荐任务暂时失败。"; }
@@ -82,7 +86,7 @@ export const useRecommendationStore = defineStore("recommendation", () => {
     session.setBusy(true);
     controller = new AbortController();
     try {
-      const accepted = await recommendationRunClient.clarify(result.value.task_id, result.value.context_version, answers.value, createRequestId(), session.userId);
+      const accepted = await recommendationRunClient.clarify(result.value.task_id, result.value.context_version, answers.value, createRequestId(), session.userId, workspace.workspaceId);
       events.value = [];
       await consume(accepted);
     } catch (caught) { phase.value = "error"; error.value = caught instanceof Error ? caught.message : "澄清提交失败。"; }

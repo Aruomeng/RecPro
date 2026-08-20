@@ -7,10 +7,12 @@ import type { RecommendationItem } from "../domain/recommendation";
 import { createRequestId } from "../domain/recommendation";
 import { useSessionStore } from "./session";
 import { useSystemStore } from "./system";
+import { useAgentWorkspaceStore } from "./agentWorkspace";
 
 export const useInteractionStore = defineStore("interaction", () => {
   const session = useSessionStore();
   const system = useSystemStore();
+  const workspace = useAgentWorkspaceStore();
   const localFeedback = ref<string[]>([]);
   const receipt = ref<FeedbackReceipt | null>(null);
   const state = ref<"idle" | "sending" | "done" | "error">("idle");
@@ -32,7 +34,7 @@ export const useInteractionStore = defineStore("interaction", () => {
     impressionUuid.value = createRequestId();
     exposureTimer = window.setTimeout(async () => {
       try {
-        const client = createInteractionClient({ demoUserId: session.userId });
+        const client = createInteractionClient({ demoUserId: session.userId, workspaceId: workspace.workspaceId });
         await client.recordImpressions({ impressions: [{
           impression_uuid: impressionUuid.value,
           recommendation_item_id: item.item_id,
@@ -52,11 +54,12 @@ export const useInteractionStore = defineStore("interaction", () => {
     const label = type === "FAVORITE" ? "已喜欢" : type === "BORROW" ? "已标记借阅意向" : "已减少类似推荐";
     if (!canWrite.value || !item) {
       if (!localFeedback.value.includes(label)) localFeedback.value.push(label);
+      await workspace.observe("FEEDBACK_RECORDED", { feedback_type: type, persistence: "SESSION_ONLY", resource_id: item?.resource.resource_id ?? null });
       return;
     }
     state.value = "sending";
     try {
-      receipt.value = await createInteractionClient({ demoUserId: session.userId }).recordFeedback(item.item_id, {
+      receipt.value = await createInteractionClient({ demoUserId: session.userId, workspaceId: workspace.workspaceId }).recordFeedback(item.item_id, {
         feedback_uuid: createRequestId(), impression_uuid: impressionUuid.value || undefined,
         feedback_type: type, reason_code: type === "NOT_INTERESTED" ? "TOPIC_NOT_INTERESTED" : undefined,
       });

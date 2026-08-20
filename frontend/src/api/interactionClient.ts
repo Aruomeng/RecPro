@@ -200,6 +200,7 @@ async function post<T>(params: {
   demoUserId: number;
   signal?: AbortSignal;
   timeoutMs: number;
+  workspaceId?: string;
   validate: (value: unknown) => value is T;
 }): Promise<T> {
   if (params.idempotencyKey.trim().length < 8) throw new TypeError("idempotencyKey must contain at least 8 characters");
@@ -221,6 +222,7 @@ async function post<T>(params: {
         "Content-Type": "application/json",
         "Idempotency-Key": params.idempotencyKey,
         "X-Demo-User-Id": String(params.demoUserId),
+        ...(params.workspaceId ? { "X-Agent-Workspace-Id": params.workspaceId } : {}),
       },
       body: JSON.stringify(params.body),
       signal: controller.signal,
@@ -256,11 +258,13 @@ export function createInteractionClient(params: {
   fetcher?: Fetcher;
   timeoutMs?: number;
   demoUserId?: number;
+  workspaceId?: string;
 } = {}): InteractionClient {
   const baseUrl = normalizeBaseUrl(params.baseUrl ?? "");
   const fetcher = params.fetcher ?? globalThis.fetch.bind(globalThis);
   const timeoutMs = params.timeoutMs ?? DEFAULT_INTERACTION_TIMEOUT_MS;
   const demoUserId = params.demoUserId ?? 1001;
+  const workspaceId = params.workspaceId;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive finite number");
   if (!Number.isInteger(demoUserId) || demoUserId < 1) throw new RangeError("demoUserId must be a positive integer");
 
@@ -277,6 +281,7 @@ export function createInteractionClient(params: {
         demoUserId,
         signal: options.signal,
         timeoutMs,
+        workspaceId,
         validate: isImpressionBatchResponse,
       });
     },
@@ -291,6 +296,7 @@ export function createInteractionClient(params: {
         demoUserId,
         signal: options.signal,
         timeoutMs,
+        workspaceId,
         validate: isFeedbackReceipt,
       });
     },
@@ -304,6 +310,7 @@ export function createInteractionClient(params: {
         demoUserId,
         signal: options.signal,
         timeoutMs,
+        workspaceId,
         validate: isBehaviorReceipt,
       });
     },

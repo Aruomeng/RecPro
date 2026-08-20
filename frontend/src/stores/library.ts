@@ -3,8 +3,10 @@ import { defineStore } from "pinia";
 
 import { explorationClient } from "../api/explorationClient";
 import type { GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
+import { useAgentWorkspaceStore } from "./agentWorkspace";
 
 export const useLibraryStore = defineStore("library", () => {
+  const workspace = useAgentWorkspaceStore();
   const overview = ref<LibraryOverview | null>(null);
   const graph = ref<GraphView | null>(null);
   const graphQuery = ref("人工智能");
@@ -48,7 +50,10 @@ export const useLibraryStore = defineStore("library", () => {
   async function openResource(resourceId: number): Promise<void> {
     detailOpen.value = true;
     selectedResource.value = null;
-    try { selectedResource.value = await explorationClient.resource(resourceId); }
+    try {
+      selectedResource.value = await explorationClient.resource(resourceId);
+      await workspace.observe("RESOURCE_OPENED", { resource_id: resourceId, title: selectedResource.value.title, category: selectedResource.value.category_code ?? "" });
+    }
     catch { error.value = "图书详情暂时无法读取。"; }
   }
 

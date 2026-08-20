@@ -40,12 +40,13 @@ async function jsonResponse(response: Response): Promise<Record<string, unknown>
   return value as Record<string, unknown>;
 }
 
-function headers(userId: number, idempotencyKey?: string): HeadersInit {
+function headers(userId: number, idempotencyKey?: string, workspaceId?: string): HeadersInit {
   return {
     Accept: "application/json",
     "Content-Type": "application/json",
     "X-Demo-User-Id": String(userId),
     ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
+    ...(workspaceId ? { "X-Agent-Workspace-Id": workspaceId } : {}),
   };
 }
 
@@ -58,16 +59,16 @@ function accepted(value: Record<string, unknown>): RunAccepted {
 }
 
 export const recommendationRunClient = {
-  async create(request: RecommendationRequest, userId: number, signal?: AbortSignal): Promise<RunAccepted> {
+  async create(request: RecommendationRequest, userId: number, signal?: AbortSignal, workspaceId?: string): Promise<RunAccepted> {
     const response = await fetch(`${baseUrl}/api/v1/recommendation-runs`, {
-      method: "POST", headers: headers(userId, request.request_id), body: JSON.stringify(request), signal,
+      method: "POST", headers: headers(userId, request.request_id, workspaceId), body: JSON.stringify(request), signal,
     });
     return accepted(await jsonResponse(response));
   },
 
-  async clarify(taskId: string, contextVersion: number, answers: Record<string, string>, idempotencyKey: string, userId: number): Promise<RunAccepted> {
+  async clarify(taskId: string, contextVersion: number, answers: Record<string, string>, idempotencyKey: string, userId: number, workspaceId?: string): Promise<RunAccepted> {
     const response = await fetch(`${baseUrl}/api/v1/recommendation-runs/${encodeURIComponent(taskId)}/clarifications`, {
-      method: "POST", headers: headers(userId, idempotencyKey), body: JSON.stringify({ context_version: contextVersion, answers }),
+      method: "POST", headers: headers(userId, idempotencyKey, workspaceId), body: JSON.stringify({ context_version: contextVersion, answers }),
     });
     return accepted(await jsonResponse(response));
   },

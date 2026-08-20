@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import ResourceDrawer from "./components/ResourceDrawer.vue";
 import SystemStatus from "./components/SystemStatus.vue";
+import AgentRail from "./components/AgentRail.vue";
+import { useAgentWorkspaceStore } from "./stores/agentWorkspace";
 import { useLibraryStore } from "./stores/library";
 import { useSessionStore } from "./stores/session";
 import { useSystemStore } from "./stores/system";
@@ -11,17 +13,28 @@ const route = useRoute();
 const session = useSessionStore();
 const system = useSystemStore();
 const library = useLibraryStore();
+const agentWorkspace = useAgentWorkspaceStore();
 const nav = [
   ["/", "⌂", "探索首页"], ["/recommend", "✦", "智能推荐"], ["/graph", "⌘", "知识图谱"], ["/path", "↝", "阅读路径"], ["/insights", "◫", "馆藏洞察"],
 ] as const;
 const pageTitle = computed(() => nav.find(([path]) => path === route.path)?.[2] ?? "系统状态");
 
-onMounted(() => { session.start(); void Promise.all([system.refresh(), library.loadOverview()]); });
-onBeforeUnmount(session.stop);
+onMounted(async () => {
+  session.start();
+  await Promise.all([system.refresh(), library.loadOverview(), agentWorkspace.initialize()]);
+  await agentWorkspace.observe("ROUTE_CHANGED", { route: route.path, page_title: pageTitle.value });
+});
+watch(() => route.path, (path) => { void agentWorkspace.observe("ROUTE_CHANGED", { route: path, page_title: pageTitle.value }); });
+watch(() => system.readiness, (readiness) => {
+  if (readiness.phase !== "success") return;
+  const degraded = Object.entries(readiness.value.components).filter(([, component]) => component.status !== "UP").map(([name]) => name);
+  void agentWorkspace.observe("READINESS_CHANGED", { degraded, can_recommend: readiness.value.can_recommend });
+});
+onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
 </script>
 
 <template>
-  <div class="kiosk-shell">
+  <div class="kiosk-shell" :class="{ 'agent-panel-open': agentWorkspace.expanded }">
     <aside class="nav-rail" aria-label="主导航">
       <RouterLink class="brand-mark" to="/" aria-label="LibraMAS 首页"><span>LM</span><i /></RouterLink>
       <nav>
@@ -44,6 +57,7 @@ onBeforeUnmount(session.stop);
       </header>
       <main class="kiosk-content"><RouterView v-slot="{ Component }"><Transition name="page" mode="out-in"><component :is="Component" /></Transition></RouterView></main>
     </div>
+    <AgentRail />
 
     <ResourceDrawer />
     <Transition name="drawer">

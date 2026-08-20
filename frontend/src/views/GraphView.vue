@@ -5,14 +5,22 @@ import GraphCanvas from "../components/GraphCanvas.vue";
 import type { GraphNode } from "../domain/exploration";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
+import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 
 const library = useLibraryStore();
 const recommendation = useRecommendationStore();
 const router = useRouter();
+const workspace = useAgentWorkspaceStore();
 const selected = ref<GraphNode | null>(null);
 const typeCounts = computed(() => Object.entries((library.graph?.nodes ?? []).reduce<Record<string, number>>((acc, node) => { acc[node.type] = (acc[node.type] ?? 0) + 1; return acc; }, {})));
 onMounted(() => { if (!library.graph) void library.searchGraph(); });
-function select(node: GraphNode): void { selected.value = node; void library.expandNode(node.id); }
+function select(node: GraphNode): void {
+  selected.value = node;
+  void Promise.all([
+    library.expandNode(node.id),
+    workspace.observe("GRAPH_NODE_SELECTED", { entity_id: node.id, entity_type: node.type, label: node.label }),
+  ]);
+}
 function recommend(): void { if (!selected.value) return; recommendation.query = selected.value.label; void router.push("/recommend"); }
 </script>
 <template>

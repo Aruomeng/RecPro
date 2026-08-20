@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import AgentStage from "../components/AgentStage.vue";
 import BookCover from "../components/BookCover.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
+import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 
 const recommendation = useRecommendationStore();
 const library = useLibraryStore();
+const workspace = useAgentWorkspaceStore();
 const outputs = [
   ["TOPIC_RESOURCES", "主题书单"], ["PERSONALIZED_FEED", "个性推荐"], ["READING_PATH", "阅读路径"],
 ] as const;
@@ -22,6 +23,7 @@ const errorText = computed(() => recommendation.error === "INVALID_RUN_RESULT"
       <div class="panel-heading"><div><span class="kicker">INTELLIGENT RECOMMENDATION</span><h1>智能推荐</h1></div><span class="phase-chip">{{ phaseText }}</span></div>
       <label class="query-box"><span>告诉智能体你想了解什么</span><textarea v-model="recommendation.query" rows="3" placeholder="输入一个主题、问题或阅读目标…" /></label>
       <div class="output-modes"><button v-for="([value, label]) in outputs" :key="value" type="button" :class="{ active: recommendation.outputType === value }" @click="recommendation.outputType = value">{{ label }}</button></div>
+      <p v-if="workspace.preferredOutputType && workspace.preferredOutputType !== recommendation.outputType" class="policy-hint">策略 Agent 建议本情境使用 {{ workspace.preferredOutputType }}；你当前的明确选择不会被覆盖。</p>
       <button class="primary-action" type="button" :disabled="recommendation.phase === 'streaming' || recommendation.phase === 'starting'" @click="recommendation.start()">
         <span>{{ recommendation.phase === 'streaming' ? '协作进行中' : '启动多智能体推荐' }}</span><b>→</b>
       </button>
@@ -32,7 +34,17 @@ const errorText = computed(() => recommendation.error === "INVALID_RUN_RESULT"
         <span><i class="chroma" />Chroma<small>语义相似</small></span>
       </div>
     </section>
-    <AgentStage />
+    <section class="recommend-context-card">
+      <div><span>GLOBAL AGENT WORKSPACE</span><h2>协作过程已移至全局右侧工作栏</h2><p>推荐链中的意图理解、语义探测、策略规划、三通道召回、排序、解释和反馈学习都会通过真实事件流持续更新。</p></div>
+      <div class="recommend-process-overview" aria-label="推荐协作过程">
+        <article><b>01</b><span>理解与探测</span><small>解析目标 · 检查语义证据</small></article>
+        <article><b>02</b><span>策略与召回</span><small>选择 MySQL / Neo4j / Chroma</small></article>
+        <article><b>03</b><span>排序与解释</span><small>稳定重排 · 证据校验</small></article>
+        <article><b>04</b><span>反馈与调整</span><small>会话学习 · 受约束重规划</small></article>
+      </div>
+      <div class="recommend-policy-summary"><span>当前解释密度</span><b>{{ workspace.explanationDensity === 'DETAILED' ? '详细引导' : '平衡展示' }}</b><span>Agent 事件</span><b>{{ workspace.state === 'online' ? '实时连接' : '降级观察' }}</b></div>
+      <button type="button" @click="workspace.expanded = true">查看 8 个 Agent 的详细状态 →</button>
+    </section>
 
     <section v-if="recommendation.phase === 'clarification'" class="clarification-stage glass-panel full-span">
       <span class="eyebrow">CLARIFICATION</span><h2>再告诉我们一点</h2>

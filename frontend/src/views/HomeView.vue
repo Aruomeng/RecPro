@@ -7,11 +7,13 @@ import EChart from "../components/EChart.vue";
 import GraphCanvas from "../components/GraphCanvas.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
+import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 
 const library = useLibraryStore();
 const recommendation = useRecommendationStore();
 const router = useRouter();
-const topics = ["多智能体", "人工智能", "知识图谱", "图书馆学"];
+const workspace = useAgentWorkspaceStore();
+const topics = computed(() => workspace.suggestedTopics.length ? workspace.suggestedTopics : ["多智能体", "人工智能", "知识图谱", "图书馆学"]);
 const stats = computed(() => [
   ["馆藏资源", library.overview?.totals.resources ?? null, "册/项", "可检索的真实馆藏总量"],
   ["图书", library.overview?.totals.books ?? null, "册", "已完成书目结构化"],
@@ -24,9 +26,10 @@ const availableCount = computed(() => (library.overview?.availability ?? [])
   .reduce((total, item) => total + item.count, 0));
 const categoryOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item" },
+  color: ["#2563eb", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8"],
   series: [{
     type: "pie", radius: ["58%", "82%"], center: ["50%", "52%"], padAngle: 3,
-    itemStyle: { borderRadius: 8, borderColor: "#102c24", borderWidth: 2 },
+    itemStyle: { borderRadius: 8, borderColor: "#ffffff", borderWidth: 2 },
     label: { show: false },
     data: (library.overview?.categories ?? []).slice(0, 6).map((item) => ({ name: item.name, value: item.count })),
   }],
@@ -34,7 +37,7 @@ const categoryOption = computed<EChartsOption>(() => ({
 
 onMounted(async () => {
   await library.loadOverview();
-  const topic = topics[1];
+  const topic = topics.value[1] ?? "人工智能";
   if (!library.graph) await library.searchGraph(topic);
 });
 
@@ -65,6 +68,11 @@ function explore(topic: string, route = "/recommend"): void {
           <span><b>02</b><strong>连接知识</strong><small>三通道检索真实馆藏</small></span>
           <span><b>03</b><strong>给出依据</strong><small>每本书都有推荐证据</small></span>
         </div>
+        <button class="adaptive-summary" type="button" @click="workspace.expanded = true">
+          <span><i :class="workspace.state" />全局 Agent Workspace</span>
+          <b>{{ workspace.activeCount ? `${workspace.activeCount} 位 Agent 正在协作` : '已感知当前会话与馆藏状态' }}</b>
+          <small>{{ workspace.guidanceMessage }} →</small>
+        </button>
       </div>
       <div class="hero-knowledge glass-panel">
         <div class="mini-panel-title"><span>LIVE KNOWLEDGE MAP</span><b>{{ library.graph?.nodes.length ?? 0 }} 个局部节点</b></div>
@@ -89,10 +97,14 @@ function explore(topic: string, route = "/recommend"): void {
         </div>
       </div>
       <div class="quick-actions">
-        <button type="button" class="quick-card is-primary" @click="explore(recommendation.query, '/recommend')"><span>01 · REAL AGENTS</span><strong>8 位</strong><b>为我推荐</b><p>看见智能体如何理解问题、召回馆藏并解释每一本书。</p><small>MySQL · Neo4j · Chroma</small><i>↗</i></button>
+        <button type="button" class="quick-card is-primary" @click="explore(recommendation.query, workspace.primaryEntry.route)"><span>01 · REAL AGENTS</span><strong>8 位</strong><b>{{ workspace.primaryEntry.label }}</b><p>看见智能体如何理解问题、召回馆藏并解释每一本书。</p><small>MySQL · Neo4j · Chroma</small><i>↗</i></button>
         <button type="button" class="quick-card" @click="explore(recommendation.query, '/graph')"><span>02 · LIVE GRAPH</span><strong>{{ (library.overview?.graph.nodes ?? 0).toLocaleString('zh-CN') }}</strong><b>探索知识图谱</b><p>搜索真实实体，点击节点展开作者、主题、分类和出版关系。</p><small>最多显示 60 个局部节点</small><i>↗</i></button>
         <button type="button" class="quick-card" @click="explore(recommendation.query, '/path')"><span>03 · READING PATH</span><strong>3 阶段</strong><b>生成阅读路径</b><p>从入门到深化，把推荐书目组织成可继续探索的学习路线。</p><small>{{ availableCount.toLocaleString('zh-CN') }} 项当前可借或在线</small><i>↗</i></button>
       </div>
+    </section>
+    <section class="home-agent-guidance">
+      <div><span>动态交互策略</span><h2>系统会理解你正在做什么，但决定权始终在你手中。</h2><p>Agent 会结合当前页面、真实馆藏、知识图谱、系统健康和已标注的演示外部情境给出建议；不会自动跳转、不会擅自发起推荐，也不会在后台持续调用大模型。</p></div>
+      <button type="button" @click="workspace.expanded = true">查看当前策略与依据</button>
     </section>
   </div>
 </template>
