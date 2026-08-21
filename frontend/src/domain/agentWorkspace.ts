@@ -62,7 +62,7 @@ export interface WorkspaceContextSummary {
     status: string;
     observed_at: string;
     expires_at: string;
-    values: Record<string, string | number | boolean | null>;
+    values: Record<string, string | number | boolean | null | string[]>;
   }>;
 }
 
@@ -117,5 +117,5 @@ export function isAgentWorkspaceSnapshot(value: unknown): value is AgentWorkspac
   if (!Array.isArray(value.directives) || !value.directives.every(isDirective) || !Array.isArray(value.recent_events) || !value.recent_events.every(isWorkspaceEvent)) return false;
   if (!Array.isArray(value.sources) || !value.sources.every((source) => isRecord(source) && typeof source.source_id === "string" && ["INTERNAL", "EXTERNAL_DEMO"].includes(String(source.kind)) && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string")) return false;
   if (!isRecord(value.context_summary) || typeof value.context_summary.route !== "string" || typeof value.context_summary.query !== "string" || !Array.isArray(value.context_summary.external)) return false;
-  return value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item)));
+  return value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item) || (Array.isArray(item) && item.length <= 20 && item.every((entry) => typeof entry === "string"))));
 }

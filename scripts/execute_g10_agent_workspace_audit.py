@@ -30,6 +30,15 @@ from scripts.validate_runtime_env import read_env
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = PROJECT_ROOT / "infra/mysql/migrations/008_g10_agent_workspace_audit.sql"
 DEFAULT_PLAN = PROJECT_ROOT / "plans/agent-workspace-audit-successor.json"
+REQUIRED_INPUT_PATHS = frozenset({
+    "backend/app/agent_workspace/adapters/mysql_audit.py",
+    "backend/app/agent_workspace/application/audit_worker.py",
+    "backend/app/agent_workspace/audit.py",
+    "backend/app/agent_workspace/ports/audit.py",
+    "infra/mysql/migrations/008_g10_agent_workspace_audit.sql",
+    "scripts/execute_g10_agent_workspace_audit.py",
+    "scripts/reconcile_g10_agent_workspace_audit.py",
+})
 WORKSPACE_ID = UUID("de6b0647-85f5-4e62-9be0-876dd9dd39e7")
 SESSION_ID = UUID("57f4cc50-2593-4c0d-952f-060b251f8521")
 USER_ID = 1001
@@ -52,6 +61,28 @@ def current_commit() -> str:
         capture_output=True, text=True,
     )
     return result.stdout.strip()
+
+
+def reviewed_commit_is_ancestor(reviewed_commit: str) -> bool:
+    """Allow only additive plan/document commits after the reviewed executor."""
+    if re.fullmatch(r"[0-9a-f]{40}", reviewed_commit) is None:
+        return False
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", reviewed_commit, "HEAD"],
+        cwd=PROJECT_ROOT, capture_output=True, text=True,
+    )
+    return result.returncode == 0
+
+
+def expected_host_fingerprint(plan: dict[str, object]) -> str:
+    environment = plan.get("environment")
+    if not isinstance(environment, dict):
+        raise ValueError("ChangePlan environment is malformed")
+    payload = (
+        f"{environment.get('environment_id')}:{environment.get('database_identity')}:"
+        f"{PROJECT_ROOT}:{plan.get('git_commit')}"
+    ).encode()
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 def validate_migration_statements(text: str) -> tuple[str, ...]:
@@ -164,12 +195,21 @@ def validate_plan(path: Path, *, plan_id: str, approved_hash: str) -> dict[str, 
     unsigned.pop("plan_hash", None)
     if hashlib.sha256(canonical(unsigned)).hexdigest() != approved_hash:
         raise ValueError("ChangePlan canonical hash does not match")
-    if plan.get("git_commit") != current_commit():
-        raise ValueError("ChangePlan is not bound to the current executor commit")
-    if plan.get("classification") != "S1_APPEND" or plan.get("max_changes") != 17:
+    reviewed_commit = str(plan.get("git_commit", ""))
+    if not reviewed_commit_is_ancestor(reviewed_commit):
+        raise ValueError("ChangePlan is not bound to an ancestor of the current revision")
+    if plan.get("classification") != "S1_APPEND" or plan.get("mode") != "APPLY" or plan.get("max_changes") != 17:
         raise ValueError("ChangePlan operation or maximum change budget is invalid")
-    if plan.get("input_hashes", {}).get(MIGRATION.relative_to(PROJECT_ROOT).as_posix()) != file_sha256(MIGRATION):
-        raise ValueError("migration hash does not match ChangePlan")
+    input_hashes = plan.get("input_hashes")
+    if not isinstance(input_hashes, dict) or set(input_hashes) != REQUIRED_INPUT_PATHS:
+        raise ValueError("ChangePlan input hash set is incomplete or contains an unexpected path")
+    for relative_path in sorted(REQUIRED_INPUT_PATHS):
+        candidate = (PROJECT_ROOT / relative_path).resolve(strict=True)
+        if not candidate.is_relative_to(PROJECT_ROOT) or input_hashes.get(relative_path) != file_sha256(candidate):
+            raise ValueError(f"input hash does not match ChangePlan: {relative_path}")
+    environment = plan.get("environment")
+    if not isinstance(environment, dict) or environment.get("host_fingerprint") != expected_host_fingerprint(plan):
+        raise ValueError("host fingerprint does not match ChangePlan")
     if any(target.get("operation") not in {"CREATE", "APPEND"} for target in plan.get("targets", [])):
         raise ValueError("ChangePlan contains a non-append operation")
     return plan
@@ -194,6 +234,16 @@ async def _workspace_count(connection: object, table: str) -> int:
     return int(row[0])
 
 
+async def _migration_count(connection: object) -> int:
+    async with connection.cursor() as cursor:  # type: ignore[attr-defined]
+        await cursor.execute(
+            "SELECT COUNT(*) FROM recpro_schema_migration WHERE migration_id = %s",
+            ("g10-agent-workspace-audit-v1",),
+        )
+        row = await cursor.fetchone()
+    return int(row[0])
+
+
 async def apply_approved_plan(args: argparse.Namespace) -> dict[str, object]:
     plan = validate_plan(args.plan.resolve(strict=True), plan_id=args.plan_id, approved_hash=args.approved_plan_hash)
     statements = validate_migration_statements(MIGRATION.read_text(encoding="utf-8"))
@@ -204,17 +254,22 @@ async def apply_approved_plan(args: argparse.Namespace) -> dict[str, object]:
     password = values.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
     if not user or not password:
         raise ValueError("migration credentials are required")
-    expected_identity = f"mysql://127.0.0.1:{values['RECPRO_MYSQL_HOST_PORT']}/{values['RECPRO_MYSQL_DATABASE']}"
+    port = values.get("RECPRO_MYSQL_HOST_PORT") or values.get("RECPRO_MYSQL_PORT")
+    if not port:
+        raise ValueError("MySQL host port is required")
+    expected_identity = f"mysql://127.0.0.1:{port}/{values['RECPRO_MYSQL_DATABASE']}"
     if plan["environment"].get("database_identity") != expected_identity:
         raise ValueError("database identity does not match approved plan")
     connection = await asyncmy.connect(
-        host="127.0.0.1", port=int(values["RECPRO_MYSQL_HOST_PORT"]), user=user,
+        host="127.0.0.1", port=int(port), user=user,
         password=password, db=values["RECPRO_MYSQL_DATABASE"], autocommit=False,
     )
     try:
         before_exists = {table: await _table_exists(connection, table) for table in ALLOWED_TABLES if table != "recpro_schema_migration"}
         if any(before_exists.values()):
             raise ValueError("audit tables already exist; successor plan expected an absent schema")
+        if await _migration_count(connection) != 0:
+            raise ValueError("audit migration marker already exists")
         async with connection.cursor() as cursor:
             for statement in statements:
                 await cursor.execute(statement)
@@ -227,8 +282,9 @@ async def apply_approved_plan(args: argparse.Namespace) -> dict[str, object]:
         after = {
             "agent_workspace_event": await _workspace_count(connection, "agent_workspace_event"),
             "interaction_directive_fact": await _workspace_count(connection, "interaction_directive_fact"),
+            "migration_marker": await _migration_count(connection),
         }
-        if after != {"agent_workspace_event": 11, "interaction_directive_fact": 5}:
+        if after != {"agent_workspace_event": 11, "interaction_directive_fact": 5, "migration_marker": 1}:
             raise RuntimeError("post-append reconciliation exceeded or missed the approved count")
         return {
             "status": "APPLIED", "plan_id": args.plan_id, "plan_hash": args.approved_plan_hash,
@@ -271,4 +327,3 @@ def main(argv: Sequence[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

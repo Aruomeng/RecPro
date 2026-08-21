@@ -31,8 +31,9 @@
 .breadcrumb { color: var(--v2-muted); font-size: 14px; }
 .breadcrumb b { color: var(--v2-text); }
 .session-label { color: var(--v2-muted); font-size: 12px; }
-.mode-switch { height: 44px; border-color: var(--v2-border); background: var(--v2-surface-soft); }
-.mode-switch button { min-width: 88px; min-height: 36px; color: var(--v2-muted); }
+.mode-switch { height: 52px; padding: 0; border-color: var(--v2-border); background: var(--v2-surface-soft); }
+.mode-switch button { min-width: 88px; min-height: 50px; color: var(--v2-muted); }
+.rail-status { width: 52px; }
 .mode-switch button.active { background: #fff; color: var(--v2-primary); box-shadow: 0 1px 5px rgba(15, 23, 42, .09); }
 .system-dot { min-height: 52px; color: var(--v2-muted); }
 .rail-status i, .system-dot i { box-shadow: none; }

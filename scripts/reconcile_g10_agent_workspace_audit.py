@@ -17,9 +17,14 @@ from scripts.validate_runtime_env import read_env
 
 async def reconcile(env_file: Path) -> dict[str, object]:
     values = read_env(env_file.resolve(strict=True))
+    port = values.get("RECPRO_MYSQL_HOST_PORT") or values.get("RECPRO_MYSQL_PORT")
+    user = values.get("RECPRO_MYSQL_READONLY_USER") or values.get("RECPRO_MYSQL_USER")
+    password = values.get("RECPRO_MYSQL_READONLY_PASSWORD") or values.get("RECPRO_MYSQL_PASSWORD")
+    if not port or not user or not password:
+        raise ValueError("MySQL read credentials and host port are required")
     connection = await asyncmy.connect(
-        host="127.0.0.1", port=int(values["RECPRO_MYSQL_HOST_PORT"]),
-        user=values["RECPRO_MYSQL_READONLY_USER"], password=values["RECPRO_MYSQL_READONLY_PASSWORD"],
+        host="127.0.0.1", port=int(port),
+        user=user, password=password,
         db=values["RECPRO_MYSQL_DATABASE"], autocommit=True,
     )
     try:

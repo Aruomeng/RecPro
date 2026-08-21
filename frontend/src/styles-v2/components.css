@@ -38,5 +38,33 @@
 .handoff-list ol { list-style:none; margin:0; padding:0; }.handoff-list li { display:grid; grid-template-columns:minmax(0,1fr) 14px minmax(0,1fr); gap:4px; padding:8px 0; border-top:1px solid var(--v2-border); font-size:10px; }.handoff-list li:first-child { border-top:0; }.handoff-list li span,.handoff-list li b { overflow-wrap:anywhere; }.handoff-list li i { color:var(--v2-primary); font-style:normal; }.handoff-list li small { grid-column:1/-1; color:var(--v2-muted); }
 .data-sources > div:last-child > span { grid-template-columns:8px minmax(0,1fr) auto; gap:3px 6px; min-height:52px; }.data-sources > div > span b { min-width:0; font-size:10px; overflow-wrap:anywhere; }.data-sources > div > span em { color:var(--v2-success); font-size:9px; font-style:normal; font-weight:750; }.data-sources > div > span small { grid-column:2/-1; }.data-sources > div > span.status-degraded i,.data-sources > div > span.status-unknown i { background:var(--v2-warning); }.data-sources > div > span.status-degraded em,.data-sources > div > span.status-unknown em { color:var(--v2-warning); }
 .agent-timeline li > i.replayed { background:var(--v2-indigo); }.agent-timeline li > i.directive { background:var(--v2-cyan); }.agent-timeline li > i.readiness { background:var(--v2-warning); }.agent-timeline li > span em { color:var(--v2-primary); font-size:8px; font-style:normal; }
+
+/* Keep the global Agent workspace readable as an information surface, not a
+   miniature operations console. The compact rail remains dense, while every
+   interactive target still respects the kiosk touch boundary. */
+.rail-agent-list button span { font-size:12px; }
+.agent-panel-section .section-caption b,
+.agent-roster > button b,
+.agent-timeline li b { font-size:13px; }
+.agent-panel-section .section-caption span,
+.agent-roster > button em,
+.agent-detail dt,
+.agent-timeline li small,
+.agent-detail .agent-tools span,
+.agent-detail .agent-evidence span { font-size:11px; }
+.agent-roster > button small { font-size:10px; }
+.agent-detail dd,
+.agent-detail > p,
+.agent-panel-error { font-size:13px; }
+
+@media (max-width:620px) {
+  .rail-agent-list button {
+    flex:0 0 52px;
+    width:52px;
+    min-width:52px;
+    height:52px;
+  }
+}
+.rail-summary span { font-size: 12px; }
 @media (max-width: 1099px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr; }.metric-card { padding: 16px; } }

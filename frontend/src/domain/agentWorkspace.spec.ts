@@ -35,6 +35,17 @@ describe("Agent Workspace public decoders", () => {
     expect(isWorkspaceEvent({ ...event, sequence: 0 })).toBe(false);
   });
 
+  it("accepts bounded string arrays in whitelisted external context values", () => {
+    const snapshot = {
+      schema_version: "agent-workspace-v1", workspace_id: event.workspace_id,
+      session_id: "00000000-0000-4000-8000-000000000003", mode: "guest", context_version: 2,
+      orchestrator: { name: "RecommendationOrchestrator", role: "编排器", state: "OBSERVING", current_route: "/" },
+      agents: names.map(agent), directives: [directive], recent_events: [event], sources: [],
+      context_summary: { route: "/", query: "", external: [{ source_id: "calendar", kind: "EXTERNAL_DEMO", label: "演示学术日历", status: "UP", observed_at: "2026-08-20T00:00:00Z", expires_at: "2026-08-20T00:05:00Z", values: { suggested_topics: ["多智能体", "知识图谱"] } }] },
+    };
+    expect(isAgentWorkspaceSnapshot(snapshot)).toBe(true);
+  });
+
   it("rejects snapshots that hide or invent Agent roles", () => {
     expect(isAgentWorkspaceSnapshot({
       schema_version: "agent-workspace-v1", workspace_id: event.workspace_id,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { AriaComponent, GridComponent, LegendComponent, TooltipComponent } from "echarts/components";
+import { AriaComponent, GridComponent, LegendComponent, TitleComponent, TooltipComponent } from "echarts/components";
 import { init, registerTheme, use } from "echarts/core";
 import type { ECharts, EChartsCoreOption as EChartsOption } from "echarts/core";
 import { CanvasRenderer } from "echarts/renderers";
@@ -20,7 +20,7 @@ let observer: ResizeObserver | undefined;
 let resizeFrame: number | undefined;
 
 use([
-  AriaComponent, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer,
+  AriaComponent, GridComponent, LegendComponent, TitleComponent, TooltipComponent, CanvasRenderer,
 ]);
 registerTheme("libramas-blue", {
   color: ["#2563eb", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8", "#38bdf8"],

@@ -1,17 +1,26 @@
 from __future__ import annotations
 
 import unittest
+import hashlib
+import json
+from pathlib import Path
+import tempfile
 from uuid import UUID
 
 from backend.app.agent_workspace import AgentWorkspaceAuditBuffer, AgentWorkspaceBroker, AuditCapacityError
 from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
 from scripts.execute_g10_agent_workspace_audit import (
+    REQUIRED_INPUT_PATHS,
     SESSION_ID,
     WORKSPACE_ID,
     build_acceptance_buffer,
+    canonical,
+    current_commit,
     dry_run_report,
+    validate_plan,
     validate_migration_statements,
 )
+from scripts.build_g10_agent_workspace_audit_successor_plan import build_plan
 
 
 class _Connection:
@@ -122,6 +131,32 @@ class AgentWorkspaceAuditRuntimeTests(unittest.IsolatedAsyncioTestCase):
                 "CREATE TABLE IF NOT EXISTS interaction_directive_fact (id INT);"
                 "DELETE FROM recpro_schema_migration;"
             )
+
+    def test_successor_plan_binds_all_runtime_inputs_and_validates(self) -> None:
+        plan = build_plan(reviewed_commit=current_commit(), created_at="2026-08-21T05:00:00Z")
+        self.assertEqual(set(plan["input_hashes"]), REQUIRED_INPUT_PATHS)
+        self.assertEqual("APPLY", plan["mode"])
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "successor.json"
+            path.write_text(json.dumps(plan), encoding="utf-8")
+            validated = validate_plan(
+                path, plan_id=str(plan["plan_id"]), approved_hash=str(plan["plan_hash"])
+            )
+        self.assertEqual(plan["plan_id"], validated["plan_id"])
+
+    def test_successor_plan_rejects_any_changed_runtime_input_hash(self) -> None:
+        plan = build_plan(reviewed_commit=current_commit(), created_at="2026-08-21T05:00:00Z")
+        plan["input_hashes"]["scripts/reconcile_g10_agent_workspace_audit.py"] = "0" * 64
+        unsigned = dict(plan)
+        unsigned.pop("plan_hash")
+        plan["plan_hash"] = hashlib.sha256(canonical(unsigned)).hexdigest()
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "tampered.json"
+            path.write_text(json.dumps(plan), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "input hash"):
+                validate_plan(
+                    path, plan_id=str(plan["plan_id"]), approved_hash=str(plan["plan_hash"])
+                )
 
 
 if __name__ == "__main__":
