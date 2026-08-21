@@ -1,6 +1,7 @@
 """Session-scoped, in-memory Agent workspace for the research kiosk."""
 
 from .context import ContextObservation, ContextProvider, LocalDemoExternalContextProvider
+from .audit import AgentWorkspaceAuditBuffer, AuditCapacityError
 from .runtime import (
     AGENT_NAMES,
     AgentWorkspaceBroker,
@@ -18,4 +19,6 @@ __all__ = [
     "ContextObservation",
     "ContextProvider",
     "LocalDemoExternalContextProvider",
+    "AgentWorkspaceAuditBuffer",
+    "AuditCapacityError",
 ]

@@ -2,8 +2,9 @@
 
 The workspace deliberately stays in memory.  It observes public kiosk events,
 dispatches a small set of existing Agent roles through explicit handlers, and
-emits allow-listed interaction directives.  It never calls an LLM and never
-opens a persistence connection.
+emits allow-listed interaction directives.  It never calls an LLM or opens a
+persistence connection.  An optional demo-only audit buffer can receive the
+already-sanitised public facts; a separately gated worker owns persistence.
 """
 
 from __future__ import annotations
@@ -15,10 +16,11 @@ from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 import json
 import time
-from typing import AsyncIterator, Mapping
+from typing import AsyncIterator, Callable, Mapping
 from uuid import UUID, uuid4
 
 from backend.app.agent_workspace.context import ContextProvider, default_external_context_providers
+from backend.app.agent_workspace.audit import AgentWorkspaceAuditBuffer
 from backend.app.shared_kernel.contracts.autonomy import ROLE_PROFILES
 
 
@@ -148,10 +150,16 @@ class AgentWorkspaceBroker:
         max_workspaces: int = 32,
         retention_seconds: float = 600.0,
         context_providers: tuple[ContextProvider, ...] | None = None,
+        audit_buffer: AgentWorkspaceAuditBuffer | None = None,
+        workspace_id_factory: Callable[[], UUID] = uuid4,
+        directive_id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
         self._max_workspaces = max_workspaces
         self._retention_seconds = retention_seconds
         self._context_providers = context_providers or default_external_context_providers()
+        self._audit_buffer = audit_buffer
+        self._workspace_id_factory = workspace_id_factory
+        self._directive_id_factory = directive_id_factory
         self._workspaces: dict[UUID, _Workspace] = {}
         self._by_session: dict[tuple[UUID, int, str], UUID] = {}
 
@@ -166,7 +174,7 @@ class AgentWorkspaceBroker:
         if len(self._workspaces) >= self._max_workspaces:
             raise WorkspaceCapacityError("agent workspace capacity reached")
         now = time.monotonic()
-        workspace = _Workspace(uuid4(), session_id, user_id, mode, now, now)
+        workspace = _Workspace(self._workspace_id_factory(), session_id, user_id, mode, now, now)
         workspace.agents = {name: _public_agent(name) for name in AGENT_NAMES}
         workspace.external_context = self._read_external_context()
         self._workspaces[workspace.workspace_id] = workspace
@@ -244,6 +252,7 @@ class AgentWorkspaceBroker:
         if action in {"DISMISS", "UNDO"}:
             workspace.suppressed_until[str(directive["type"])] = time.monotonic() + 600.0
         self._publish(workspace, "DIRECTIVE_ACTIONED", {"directive_id": str(directive_id), "directive_type": directive["type"], "action": action})
+        self._capture_directive(workspace, directive)
         return dict(directive)
 
     def mirror_sink(self, primary: object, workspace_id: UUID, *, user_id: int) -> MirroredProgressSink:
@@ -369,7 +378,7 @@ class AgentWorkspaceBroker:
         if behavior == "AUTO_APPLY" and confidence >= 0.75 and stable_count >= 2 and now - workspace.last_auto_apply.get(directive_type, -1000) >= 30:
             status = "AUTO_APPLIED"
             workspace.last_auto_apply[directive_type] = now
-        directive_id = uuid4()
+        directive_id = self._directive_id_factory()
         directive = {
             "directive_id": str(directive_id), "directive_version": 1, "type": directive_type,
             "scope": scope[:80], "behavior": behavior, "payload": self._sanitize_payload(payload),
@@ -379,6 +388,7 @@ class AgentWorkspaceBroker:
         }
         workspace.directives[str(directive_id)] = directive
         self._publish(workspace, "DIRECTIVE_PROPOSED", {"directive": directive})
+        self._capture_directive(workspace, directive)
 
     def _set_agent(self, workspace: _Workspace, name: str, state: str, *, action: str, target: str, reason: str, confidence: object = None, duration_ms: object = None, evidence_refs: object = ()) -> None:
         if name not in workspace.agents or state not in AGENT_STATES:
@@ -405,12 +415,31 @@ class AgentWorkspaceBroker:
         }
         workspace.events.append(event)
         workspace.last_active_at = time.monotonic()
+        if self._audit_buffer is not None:
+            self._audit_buffer.capture_event(
+                mode=workspace.mode,
+                session_id=workspace.session_id,
+                user_id=workspace.user_id,
+                event=event,
+                replayed=bool(event.get("replayed", False)),
+            )
         for queue in tuple(workspace.subscribers):
             try:
                 queue.put_nowait(event)
             except asyncio.QueueFull:
                 workspace.subscribers.discard(queue)
         return event
+
+    def _capture_directive(self, workspace: _Workspace, directive: Mapping[str, object]) -> None:
+        if self._audit_buffer is None:
+            return
+        self._audit_buffer.capture_directive(
+            mode=workspace.mode,
+            workspace_id=workspace.workspace_id,
+            session_id=workspace.session_id,
+            user_id=workspace.user_id,
+            directive=directive,
+        )
 
     @staticmethod
     def _sanitize_payload(payload: Mapping[str, object]) -> dict[str, object]:
