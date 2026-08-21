@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
 from typing import Callable
-from uuid import UUID, uuid4
+from uuid import UUID, uuid4, uuid5
 
 from backend.app.identity.domain import (
     AccountProvisioningResult,
@@ -345,18 +345,18 @@ class IdentityService:
         if not 8 <= len(idempotency_key) <= 128 or not reason_code:
             raise IdentityError("INVALID_STATUS_ACTION")
         now = self._now()
+        event_uuid = uuid5(
+            UUID("208a9e72-9e7f-5adc-a8d7-f92f74dff87a"),
+            f"status:{actor.user_id}:{target_user_id}:{idempotency_key}",
+        )
         updated, replayed = await self._repo.set_account_status(
             user_id=target_user_id, action=action, reason_code=reason_code,
-            idempotency_key=idempotency_key, now=now,
+            idempotency_key=idempotency_key, event_uuid=event_uuid,
+            actor_user_id=actor.user_id, now=now,
         )
         if not replayed:
             await self._repo.revoke_user_sessions(
                 target_user_id, reason="ACCOUNT_STATUS_CHANGED", now=now,
-            )
-            await self._event(
-                event_type=f"ACCOUNT_{action.value}", outcome="SUCCESS",
-                user_id=target_user_id, actor_user_id=actor.user_id,
-                reason_code=reason_code[:64],
             )
         return updated
 

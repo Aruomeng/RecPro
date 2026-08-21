@@ -6,6 +6,7 @@ import asyncio
 from collections import defaultdict
 from copy import deepcopy
 from datetime import UTC, datetime, timedelta
+import hashlib
 from uuid import UUID, uuid4
 
 from backend.app.identity.domain import (
@@ -47,7 +48,6 @@ class InMemoryIdentityRepository:
         self.consents: list[ConsentFact] = []
         self.security_events: list[SecurityEvent] = []
         self.idempotency: dict[str, AccountProvisioningResult] = {}
-        self.status_idempotency: dict[str, int] = {}
 
     async def provision_reader(
         self, *, display_name: str, identifier_type: IdentifierType,
@@ -229,12 +229,15 @@ class InMemoryIdentityRepository:
 
     async def set_account_status(
         self, *, user_id: int, action: AccountStatusAction, reason_code: str,
-        idempotency_key: str, now: datetime,
+        idempotency_key: str, event_uuid: UUID, actor_user_id: int, now: datetime,
     ) -> tuple[UserAccount, bool]:
         async with self._lock:
             account = self._require_account(user_id)
-            if idempotency_key in self.status_idempotency:
-                if self.status_idempotency[idempotency_key] != user_id:
+            prior = next(
+                (event for event in self.security_events if event.event_uuid == event_uuid), None,
+            )
+            if prior is not None:
+                if prior.user_id != user_id or prior.actor_user_id != actor_user_id:
                     raise IdentityError("IDEMPOTENCY_KEY_CONFLICT")
                 return deepcopy(account), True
             target_status = (
@@ -248,7 +251,13 @@ class InMemoryIdentityRepository:
             account.disabled_reason = None if target_status is AccountStatus.ACTIVE else reason_code[:64]
             account.auth_version += 1
             account.updated_at = now
-            self.status_idempotency[idempotency_key] = user_id
+            self.security_events.append(SecurityEvent(
+                event_uuid=event_uuid, event_type=f"ACCOUNT_{action.value}",
+                outcome="SUCCESS", user_id=user_id, actor_user_id=actor_user_id,
+                session_uuid=None, identifier_hash=None, request_id=event_uuid,
+                reason_code=reason_code[:64], occurred_at=now,
+                metadata={"idempotency_key_hash": _idempotency_hash(idempotency_key)},
+            ))
             return deepcopy(account), False
 
     async def append_consent(self, fact: ConsentFact) -> None:
@@ -296,6 +305,10 @@ def _time(value: object) -> datetime:
     if not isinstance(value, datetime):
         raise TypeError("repository time must be datetime")
     return value.astimezone(UTC)
+
+
+def _idempotency_hash(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
 
 
 __all__ = ["InMemoryIdentityRepository"]
