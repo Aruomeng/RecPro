@@ -18,6 +18,7 @@ import subprocess
 from typing import Sequence
 
 import asyncmy
+from jsonschema import Draft202012Validator, FormatChecker
 
 from scripts.validate_runtime_env import read_env
 
@@ -25,6 +26,7 @@ from scripts.validate_runtime_env import read_env
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = PROJECT_ROOT / "infra/mysql/migrations/009_g11_identity_access.sql"
 DEFAULT_PLAN = PROJECT_ROOT / "plans/g11-identity-access.json"
+SCHEMA = PROJECT_ROOT / "contracts/safety/change-plan.schema.json"
 MIGRATION_ID = "g11-identity-access-v1"
 IAM_TABLES = (
     "iam_user_account",
@@ -59,6 +61,7 @@ REQUIRED_INPUT_PATHS = frozenset({
     "backend/app/identity/ports.py",
     "backend/app/identity/security.py",
     "infra/mysql/migrations/009_g11_identity_access.sql",
+    "scripts/build_g11_identity_change_plan.py",
     "scripts/execute_g11_identity_migration.py",
 })
 _HASH = re.compile(r"^[0-9a-f]{64}$")
@@ -156,6 +159,10 @@ def dry_run_report() -> dict[str, object]:
 
 def validate_plan(path: Path, *, plan_id: str, approved_hash: str) -> dict[str, object]:
     plan = json.loads(path.read_text(encoding="utf-8"))
+    Draft202012Validator(
+        json.loads(SCHEMA.read_text(encoding="utf-8")),
+        format_checker=FormatChecker(),
+    ).validate(plan)
     if str(plan.get("plan_id")) != plan_id or str(plan.get("plan_hash")) != approved_hash:
         raise ValueError("approved plan identity does not match the plan file")
     if _HASH.fullmatch(approved_hash) is None:
@@ -171,8 +178,25 @@ def validate_plan(path: Path, *, plan_id: str, approved_hash: str) -> dict[str, 
         raise ValueError("ChangePlan operation classification is invalid")
     if plan.get("max_changes") != MAXIMUM_ROWS:
         raise ValueError("ChangePlan row budget is invalid")
-    if plan.get("new_tables") != list(IAM_TABLES) or plan.get("new_views") != list(IAM_VIEWS):
-        raise ValueError("ChangePlan schema target set is invalid")
+    expected_targets = {
+        *(f"recpro.{name}:schema" for name in IAM_TABLES),
+        *(f"recpro.{name}:schema" for name in IAM_VIEWS),
+        "recpro.iam_role:fixed-role-seed",
+        "recpro.iam_permission:fixed-permission-seed",
+        "recpro.iam_role_permission_fact:fixed-grant-seed",
+        f"recpro.recpro_schema_migration:migration_id={MIGRATION_ID}",
+    }
+    targets = plan.get("targets")
+    if not isinstance(targets, list) or {
+        str(item.get("identifier")) for item in targets if isinstance(item, dict)
+    } != expected_targets:
+        raise ValueError("ChangePlan schema and seed target set is invalid")
+    if any(
+        not isinstance(item, dict) or item.get("kind") != "MYSQL"
+        or item.get("operation") not in {"CREATE", "APPEND"}
+        for item in targets
+    ):
+        raise ValueError("ChangePlan contains an operation outside the G11 allowlist")
     input_hashes = plan.get("input_hashes")
     if not isinstance(input_hashes, dict) or set(input_hashes) != REQUIRED_INPUT_PATHS:
         raise ValueError("ChangePlan input hash set is incomplete")
@@ -181,6 +205,13 @@ def validate_plan(path: Path, *, plan_id: str, approved_hash: str) -> dict[str, 
         if not candidate.is_relative_to(PROJECT_ROOT) or input_hashes.get(relative) != file_sha256(candidate):
             raise ValueError(f"ChangePlan input hash mismatch: {relative}")
     return plan
+
+
+def expected_host_fingerprint(*, database_identity: str, reviewed_commit: str) -> str:
+    payload = (
+        f"recpro_local_research_g11:{database_identity}:{PROJECT_ROOT}:{reviewed_commit}"
+    ).encode()
+    return "sha256:" + hashlib.sha256(payload).hexdigest()
 
 
 async def _object_count(connection: object, *, object_type: str, name: str) -> int:
@@ -225,8 +256,15 @@ async def apply_approved_plan(args: argparse.Namespace) -> dict[str, object]:
     if not user or not password or not port or not database:
         raise ValueError("explicit migration connection settings are required")
     expected_identity = f"mysql://127.0.0.1:{port}/{database}"
-    if plan.get("database_identity") != expected_identity:
+    environment = plan.get("environment")
+    if not isinstance(environment, dict) or environment.get("database_identity") != expected_identity:
         raise ValueError("runtime database identity does not match ChangePlan")
+    if environment.get("environment_id") != "recpro_local_research_g11" or environment.get(
+        "host_fingerprint"
+    ) != expected_host_fingerprint(
+        database_identity=expected_identity, reviewed_commit=str(plan["git_commit"]),
+    ):
+        raise ValueError("runtime host fingerprint does not match ChangePlan")
     connection = await asyncmy.connect(
         host="127.0.0.1", port=int(port), user=user, password=password,
         db=database, autocommit=False,
