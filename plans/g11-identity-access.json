@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "8e9d0b95-3dac-5ceb-87ed-7838deb8b667",
+  "created_at": "2026-08-21T08:15:00Z",
+  "git_commit": "26c36a89b885e341e3ec887ecee80d1764ea5dcf",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "intent": "Create exactly 12 new IAM tables and 3 read-only effective-state views, then append the four fixed roles, 15 fixed permissions, 17 initial role-permission grant facts, and one migration marker. No user account, credential, session, consent, behavior, recommendation, graph, vector, or model fact is created by this plan.",
+  "environment": {
+    "environment_id": "recpro_local_research_g11",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:65820cc15eaf32b7b7c368fc304654ad432844ae5533782efab760a084438bc3",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {"kind": "MYSQL", "identifier": "recpro.iam_user_account:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_login_identifier:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_password_credential:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_permission:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role_permission_fact:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_user_role_fact:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_auth_session:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_refresh_token:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_action_token:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_security_event:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.user_personalization_consent_fact:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_effective_role_permission_v:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_effective_user_role_v:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.user_effective_personalization_consent_v:schema", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role:fixed-role-seed", "operation": "APPEND", "expected_before_count": 0, "expected_after_min_count": 4},
+    {"kind": "MYSQL", "identifier": "recpro.iam_permission:fixed-permission-seed", "operation": "APPEND", "expected_before_count": 0, "expected_after_min_count": 15},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role_permission_fact:fixed-grant-seed", "operation": "APPEND", "expected_before_count": 0, "expected_after_min_count": 17},
+    {"kind": "MYSQL", "identifier": "recpro.recpro_schema_migration:migration_id=g11-identity-access-v1", "operation": "APPEND", "expected_before_count": 0, "expected_after_min_count": 1}
+  ],
+  "input_hashes": {
+    "backend/app/identity/adapters/mysql.py": "633de80fdf4e04940faea85b5ac97340b0c56915394f81d0fccb45a1e907ecb7",
+    "backend/app/identity/application.py": "5134a0187da97fcbf8c5048cd6d851c3a11e550666b63d13387efe733ccf33c9",
+    "backend/app/identity/domain.py": "f348d67bb0013b323492d9ba0600d02d982cfa5efa9b3037979fba6e35c18f8e",
+    "backend/app/identity/ports.py": "3c9b0e85ccf30cfcecf582e04118d8d454593bb49da371ba3aec972ac0127f86",
+    "backend/app/identity/security.py": "4d867bfb147f7e455b4297b82d12e480d2cc57dc2e544511bb2d7c070e886743",
+    "infra/mysql/migrations/009_g11_identity_access.sql": "7a924ebdce35cc4d8832c5725f31e9e26402ed6ff2ae1a612ce97103f6aeda19",
+    "scripts/build_g11_identity_change_plan.py": "3730d468af53da9323a571aa3d6567efc82726ae815c8accf4586b99d43f1299",
+    "scripts/execute_g11_identity_migration.py": "2e2611fdb3b245faf3266c4f729b0f85543ea467eafa97fcff5ab5461a4a84c5"
+  },
+  "idempotency_key": "g11-identity-schema-26c36a89b885",
+  "max_changes": 37,
+  "preconditions": [
+    "reviewed identity implementation commit is exactly 26c36a89b885e341e3ec887ecee80d1764ea5dcf and remains an ancestor of the execution revision",
+    "the user separately approves this unchanged plan_id and canonical plan_hash before the executor opens any database connection",
+    "the target is exactly the local recpro MySQL database named by environment.database_identity",
+    "all 12 IAM tables, all 3 effective-state views, and the G11 migration marker are absent before the first statement; any partial schema fails closed",
+    "all identity domain, MySQL adapter, password/JWT security, migration, builder, and executor input hashes match",
+    "the executor accepts only CREATE TABLE, CREATE VIEW, and fixed INSERT IGNORE statements; UPDATE, DELETE, DROP, TRUNCATE, ALTER, RENAME, REPLACE, and cascading foreign keys are rejected",
+    "the maximum appended row budget is exactly 37: 4 roles, 15 permissions, 17 role-permission facts, and 1 migration marker",
+    "bootstrap administrator rows, real reader rows, security events, consents, sessions, refresh tokens, and action tokens are exactly 0",
+    "DeepSeek and all external model requests, Neo4j writes, Chroma writes, container changes, volume changes, and file deletions are exactly 0",
+    "failure recovery is fail-forward only: retain any implicitly committed schema, keep the identity composition disabled, and report the partial state; never compensate by deleting objects or rows"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "aa1f06a0e4cc4975c8f45b76189464cd22148b5eb641b2420184c633195c2441"
+}
