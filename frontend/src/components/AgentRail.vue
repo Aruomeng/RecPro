@@ -19,6 +19,10 @@ const eventText: Record<string, string> = {
   DIRECTIVE_PROPOSED: "提出交互建议", DIRECTIVE_ACTIONED: "用户处理建议",
 };
 const selected = computed(() => workspace.selectedAgent);
+const stateDistribution = computed(() => Object.entries(workspace.agents.reduce<Record<string, number>>((acc, agent) => { acc[agent.state] = (acc[agent.state] ?? 0) + 1; return acc; }, {})).sort((a,b) => b[1]-a[1]));
+const handoffs = computed(() => workspace.events.filter((event) => event.agent_name && event.target).slice(-6).reverse());
+const currentDirective = computed(() => [...workspace.directives].reverse().find((directive) => ["AUTO_APPLIED","ACCEPTED","PROPOSED"].includes(directive.status)));
+const replayCount = computed(() => workspace.events.filter((event) => event.replayed).length);
 
 function shortName(agent: WorkspaceAgent): string {
   return agent.name.replace("Agent", "").replace("Recommendation", "Policy").slice(0, 2).toUpperCase();
@@ -60,6 +64,13 @@ async function accept(directive: InteractionDirective): Promise<void> {
           <span><i :class="workspace.state" />{{ workspace.state === 'online' ? '事件流已连接' : workspace.state === 'connecting' ? '正在连接' : '协作流降级' }}</span>
           <b>{{ workspace.activeCount }} 位工作中</b><em v-if="workspace.degradedCount">{{ workspace.degradedCount }} 位需关注</em>
         </div>
+        <section class="workspace-overview-grid">
+          <div><span>状态分布</span><p><b v-for="([state,count]) in stateDistribution" :key="state">{{ stateText[state] || state }} {{ count }}</b></p></div>
+          <div><span>历史回放</span><strong>{{ replayCount }} 条</strong><small>明确区别于实时 dispatch</small></div>
+        </section>
+        <section v-if="currentDirective" class="current-policy-card">
+          <span>当前策略 · {{ currentDirective.status }}</span><h3>{{ currentDirective.type }}</h3><p>{{ currentDirective.reason_codes.join(' · ') }}</p><small>置信度 {{ Math.round(currentDirective.confidence * 100) }}% · 证据 {{ currentDirective.evidence_refs.join(' / ') || '公开会话上下文' }}</small>
+        </section>
 
         <section class="agent-panel-section agent-roster">
           <div class="section-caption"><b>协作角色</b><span>8 个真实业务 Agent</span></div>
@@ -91,16 +102,21 @@ async function accept(directive: InteractionDirective): Promise<void> {
           </article>
         </section>
 
+        <section v-if="handoffs.length" class="agent-panel-section handoff-list">
+          <div class="section-caption"><b>最近任务转交</b><span>真实事件目标</span></div>
+          <ol><li v-for="event in handoffs" :key="event.sequence"><span>{{ event.agent_name }}</span><i>→</i><b>{{ event.target }}</b><small>{{ event.action || event.reason_code }}</small></li></ol>
+        </section>
+
         <section class="agent-panel-section data-sources">
           <div class="section-caption"><b>情境数据源</b><span>5 分钟有效期</span></div>
-          <div><span v-for="source in workspace.sources" :key="source.source_id" :class="source.kind.toLowerCase()"><i />{{ source.label }}<small>{{ source.kind === 'EXTERNAL_DEMO' ? '演示外部情境' : '内部数据' }}</small></span></div>
+          <div><span v-for="source in workspace.sources" :key="source.source_id" :class="[source.kind.toLowerCase(), `status-${source.status.toLowerCase()}`]"><i /><b>{{ source.label }}</b><em>{{ source.status }}</em><small>{{ source.kind === 'EXTERNAL_DEMO' ? '演示外部情境' : '内部数据' }} · {{ new Date(source.observed_at).toLocaleTimeString('zh-CN', {hour:'2-digit',minute:'2-digit'}) }}</small></span></div>
         </section>
 
         <section class="agent-panel-section agent-timeline">
           <div class="section-caption"><b>真实事件时间线</b><span>最近 {{ workspace.events.length }} 条</span></div>
           <ol>
             <li v-for="event in [...workspace.events].reverse().slice(0, 24)" :key="event.sequence">
-              <time>{{ time(event) }}</time><i /><span><b>{{ event.agent_name || eventText[event.event_type] || event.event_type }}</b><small>{{ event.reason_code || event.action || event.observation_type || '已记录公开协作事实' }}</small></span>
+              <time>{{ time(event) }}</time><i :class="{ replayed: event.replayed, directive: event.event_type.startsWith('DIRECTIVE'), readiness: event.observation_type === 'READINESS_CHANGED' }" /><span><b>{{ event.agent_name || eventText[event.event_type] || event.event_type }}</b><em>{{ event.replayed ? '历史真实动作回放' : event.event_type.startsWith('DIRECTIVE') ? '交互策略' : event.observation_type === 'READINESS_CHANGED' ? '运行状态' : '实时/会话事件' }}</em><small>{{ event.reason_code || event.action || event.observation_type || '已记录公开协作事实' }}</small></span>
             </li>
           </ol>
         </section>

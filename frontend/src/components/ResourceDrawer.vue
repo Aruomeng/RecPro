@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, watch } from "vue";
+import { useRouter } from "vue-router";
 import type { FeedbackType } from "../domain/interaction";
 import { useLibraryStore } from "../stores/library";
 import { useInteractionStore } from "../stores/interaction";
@@ -11,6 +12,7 @@ const library = useLibraryStore();
 const recommendation = useRecommendationStore();
 const session = useSessionStore();
 const interaction = useInteractionStore();
+const router = useRouter();
 
 const item = computed(() => recommendation.items.find(
   (candidate) => candidate.resource.resource_id === library.selectedResource?.resource_id,
@@ -25,6 +27,12 @@ watch(() => [library.detailOpen, library.selectedResource?.resource_id, session.
 onBeforeUnmount(interaction.clearExposure);
 
 function close(): void { library.detailOpen = false; }
+function openGraph(): void {
+  if (!library.selectedResource) return;
+  library.graphQuery = library.selectedResource.title;
+  close();
+  void router.push("/graph");
+}
 
 async function feedback(type: FeedbackType): Promise<void> {
   await interaction.submit(item.value, type);
@@ -50,6 +58,7 @@ async function feedback(type: FeedbackType): Promise<void> {
                   <span>{{ library.selectedResource.publisher || '出版社未知' }}</span>
                   <span>{{ library.selectedResource.borrowable_copies > 0 ? `可借 ${library.selectedResource.borrowable_copies} 册` : '馆内/在线阅览' }}</span>
                 </div>
+                <button class="drawer-graph-link" type="button" @click="openGraph">在知识图谱中查看关联 →</button>
               </div>
             </div>
             <section class="drawer-section">
@@ -59,12 +68,13 @@ async function feedback(type: FeedbackType): Promise<void> {
             <section v-if="item" class="drawer-section evidence-panel">
               <h3>为什么推荐给你</h3>
               <p>{{ item.reason_summary }}</p>
-              <div class="evidence-meters">
+              <div v-if="item.evidence" class="evidence-meters">
                 <span v-for="(score, channel) in item.evidence?.channel_scores" :key="channel">
                   <i :style="{ width: `${Math.round(score * 100)}%` }" />
                   <b>{{ channel }}</b><em>{{ Math.round(score * 100) }}%</em>
                 </span>
               </div>
+              <div v-else class="evidence-empty"><b>历史结果未保存增强通道分数</b><span>上方解释与置信度来自已持久化公开结果；页面不会补造缺失证据。</span></div>
             </section>
             <section class="drawer-section">
               <h3>主题与馆藏信息</h3>
@@ -76,6 +86,8 @@ async function feedback(type: FeedbackType): Promise<void> {
                 <div><dt>索书号</dt><dd>{{ library.selectedResource.call_number || '—' }}</dd></div>
                 <div><dt>馆藏位置</dt><dd>{{ library.selectedResource.location || '馆藏位置待确认' }}</dd></div>
                 <div><dt>难度</dt><dd>{{ library.selectedResource.difficulty_level ? `${library.selectedResource.difficulty_level} / 4` : '未标注' }}</dd></div>
+                <div><dt>资源状态</dt><dd>{{ library.selectedResource.availability_status }}</dd></div>
+                <div><dt>资源类型</dt><dd>{{ library.selectedResource.resource_type }}</dd></div>
               </dl>
             </section>
             <section class="drawer-section feedback-block">
@@ -93,6 +105,7 @@ async function feedback(type: FeedbackType): Promise<void> {
                 <span>{{ feedbackAgent.action }} · {{ feedbackAgent.reason_code }}</span>
                 <small>画像版本 {{ interaction.receipt?.profile_version_before ?? '—' }} → {{ interaction.receipt?.profile_version_after ?? '—' }}</small>
               </div>
+              <div v-if="interaction.receipt?.resource_state" class="feedback-resource-state"><b>资源抑制状态</b><span>{{ interaction.receipt.resource_state.state_type }}</span><small v-if="interaction.receipt.resource_state.suppress_until">有效至 {{ new Date(interaction.receipt.resource_state.suppress_until).toLocaleString('zh-CN') }}</small></div>
             </section>
           </template>
         </aside>
