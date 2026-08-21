@@ -22,6 +22,8 @@ const stats = computed(() => [
   ["知识关系", library.overview?.graph.relationships ?? null, "条", "可交互的一跳关联"],
 ]);
 const topCategories = computed(() => (library.overview?.categories ?? []).slice(0, 4));
+const categoryTotal = computed(() => (library.overview?.categories ?? []).reduce((sum, item) => sum + item.count, 0));
+const externalContext = computed(() => workspace.snapshot?.context_summary.external ?? []);
 const availableCount = computed(() => (library.overview?.availability ?? [])
   .filter((item) => item.name === "AVAILABLE_BORROW" || item.name === "AVAILABLE_ONLINE")
   .reduce((total, item) => total + item.count, 0));
@@ -34,6 +36,7 @@ const categoryOption = computed<EChartsOption>(() => ({
     label: { show: false },
     data: (library.overview?.categories ?? []).slice(0, 6).map((item) => ({ name: item.name, value: item.count })),
   }],
+  title: { text: categoryTotal.value.toLocaleString("zh-CN"), subtext: "分类资源", left: "center", top: "42%", textStyle: { fontSize: 22, fontWeight: 750 }, subtextStyle: { fontSize: 12 } },
 }));
 
 onMounted(async () => {
@@ -92,9 +95,9 @@ function explore(topic: string, route = "/recommend"): void {
       </div>
       <div class="category-mini glass-panel">
         <div class="mini-panel-title"><span>馆藏分类分布</span><b>真实只读数据</b></div>
-        <EChart :option="categoryOption" aria-label="馆藏分类分布图" />
+        <EChart :option="categoryOption" :loading="library.loadingOverview" :empty="!library.loadingOverview && !library.overview" :error="library.error && !library.overview ? library.error : ''" aria-label="馆藏分类占比环形图" />
         <div class="category-legend">
-          <span v-for="(item, index) in topCategories" :key="item.name"><i :class="`tone-${index + 1}`" /><b>{{ item.name }}</b><em>{{ item.count.toLocaleString('zh-CN') }}</em></span>
+          <span v-for="(item, index) in topCategories" :key="item.name"><i :class="`tone-${index + 1}`" /><b>{{ item.name }}</b><em>{{ item.count.toLocaleString('zh-CN') }} · {{ categoryTotal ? Math.round(item.count / categoryTotal * 100) : 0 }}%</em></span>
         </div>
       </div>
       <div class="quick-actions">
@@ -106,6 +109,16 @@ function explore(topic: string, route = "/recommend"): void {
     <section class="home-agent-guidance">
       <div><span>动态交互策略</span><h2>系统会理解你正在做什么，但决定权始终在你手中。</h2><p>Agent 会结合当前页面、真实馆藏、知识图谱、系统健康和已标注的演示外部情境给出建议；不会自动跳转、不会擅自发起推荐，也不会在后台持续调用大模型。</p></div>
       <button type="button" @click="workspace.expanded = true">查看当前策略与依据</button>
+    </section>
+    <section class="external-context-card">
+      <div class="section-title-row"><div><span>EXTERNAL_DEMO</span><h2>今日图书馆情境</h2></div><small>仅用于动态引导，不触发 DeepSeek 或业务写入</small></div>
+      <div class="external-context-grid">
+        <article v-for="source in externalContext" :key="source.source_id">
+          <span>{{ source.label }}</span><strong>{{ String(Object.values(source.values)[0] ?? '情境已更新') }}</strong>
+          <small>观测 {{ new Date(source.observed_at).toLocaleString('zh-CN') }}</small><small>有效至 {{ new Date(source.expires_at).toLocaleString('zh-CN') }}</small>
+        </article>
+        <div v-if="!externalContext.length" class="context-empty"><b>外部演示情境暂不可用</b><span>核心馆藏、图谱和推荐功能不会受到影响。</span></div>
+      </div>
     </section>
   </div>
 </template>

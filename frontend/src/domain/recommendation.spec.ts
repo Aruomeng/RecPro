@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { isRecommendationExecution, isUuid } from "./recommendation";
+import { decodeRecommendationExecution, isRecommendationExecution, isUuid, RecommendationDecodeError } from "./recommendation";
+import realCompletedFixture from "../fixtures/recommendation-completed-public.json";
 
 describe("recommendation identity", () => {
   it("accepts deterministic UUIDv5 identities used by approved replay plans", () => {
@@ -15,6 +16,12 @@ describe("recommendation identity", () => {
 });
 
 describe("recommendation execution contract", () => {
+  it("accepts the sanitized public response captured from the persisted real replay", () => {
+    const decoded = decodeRecommendationExecution(realCompletedFixture);
+    expect(decoded.task_id).toBe("228c1064-7267-54f1-a68b-6584c11dae51");
+    expect(decoded.items).toHaveLength(8);
+    expect(decoded.items?.every((item) => item.evidence === null)).toBe(true);
+  });
   it("accepts nullable optional fields emitted by the real FastAPI response", () => {
     expect(isRecommendationExecution({
       task_id: "208f35ac-80ae-54ea-93ab-458e6a3b6bd4",
@@ -58,5 +65,22 @@ describe("recommendation execution contract", () => {
       questions: null,
       warnings: [],
     })).toBe(true);
+  });
+
+  it("reports the exact invalid public field path without exposing a payload", () => {
+    const malformed = {
+      task_id: "208f35ac-80ae-54ea-93ab-458e6a3b6bd4", trace_id: "ccad4c86-8951-52cb-82af-de7e56c68201",
+      status: "COMPLETED", context_version: 1,
+      decision: { output_type: "TOPIC_RESOURCES", delivery_strategy: "DIRECT", explanation_level: "EVIDENCE", adaptation_state: "NORMAL", decision_reason_codes: ["DIRECT_PATH"], decision_reason: "ok", policy_version: "v1" },
+      warnings: [],
+      items: [{ item_id: 1, rank_no: 1, reason_summary: "依据", evidence_confidence: "0.8", unavailable_now: false, resource: { resource_id: 1, resource_type: "BOOK", title: "书", authors: [], availability_status: "AVAILABLE_BORROW" } }],
+    };
+    try { decodeRecommendationExecution(malformed); throw new Error("decoder unexpectedly accepted malformed result"); }
+    catch (error) {
+      expect(error).toBeInstanceOf(RecommendationDecodeError);
+      expect((error as RecommendationDecodeError).path).toBe("$.items[0].evidence_confidence");
+      expect((error as RecommendationDecodeError).expected).toContain("finite number");
+      expect((error as RecommendationDecodeError).actualType).toBe("string");
+    }
   });
 });

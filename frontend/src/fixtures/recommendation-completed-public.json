@@ -1,0 +1,84 @@
+{
+  "task_id": "228c1064-7267-54f1-a68b-6584c11dae51",
+  "record_id": 28,
+  "trace_id": "868529ef-550f-5fad-8364-fc76d57c9af5",
+  "status": "COMPLETED",
+  "context_version": 1,
+  "evaluation_at": "2026-08-12T11:56:51.398000Z",
+  "decision": {
+    "output_type": "TOPIC_RESOURCES",
+    "delivery_strategy": "DIRECT",
+    "explanation_level": "EVIDENCE",
+    "adaptation_state": "NORMAL",
+    "decision_reason_codes": ["EXPLICIT_OUTPUT_TYPE_OVERRIDE", "DIRECT_PATH"],
+    "decision_reason": "输入和资源覆盖满足直接推荐条件。",
+    "policy_version": "policy-rule-v1"
+  },
+  "groups": null,
+  "items": [
+    {
+      "item_id": 154,
+      "resource": {"resource_id": 1, "resource_type": "BOOK", "title": "人工智能基础与实践", "authors": ["LibraMAS Synthetic Author"], "publication_year": 2024, "availability_status": "AVAILABLE_BORROW", "difficulty_level": null},
+      "rank_no": 1, "group_id": null,
+      "reason_summary": "该资源由 MySQL 召回通道获取，并排在排序位置第 1 位 [catalog:resource:1:metadata:1]",
+      "evidence_confidence": 0.678, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 155,
+      "resource": {"resource_id": 2, "resource_type": "BOOK", "title": "多智能体系统导论", "authors": ["LibraMAS Synthetic Author"], "publication_year": 2025, "availability_status": "AVAILABLE_BORROW", "difficulty_level": null},
+      "rank_no": 2, "group_id": null,
+      "reason_summary": "该资源通过MYSQL召回通道获得，排序位置为2 [catalog:resource:2:metadata:1]。",
+      "evidence_confidence": 0.667, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 156,
+      "resource": {"resource_id": 3, "resource_type": "BOOK", "title": "智慧图书馆服务设计", "authors": ["LibraMAS Synthetic Author"], "publication_year": 2023, "availability_status": "AVAILABLE_BORROW", "difficulty_level": null},
+      "rank_no": 3, "group_id": null,
+      "reason_summary": "该资源通过MYSQL召回通道被召回，排序位置为3。[catalog:resource:3:metadata:1]",
+      "evidence_confidence": 0.6615, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 157,
+      "resource": {"resource_id": 6452, "resource_type": "BOOK", "title": "智慧图书馆服务模式与阅读推广研究", "authors": ["吴飞", "杨倩"], "publication_year": 2024, "availability_status": "REFERENCE_ONLY", "difficulty_level": null},
+      "rank_no": 4, "group_id": null,
+      "reason_summary": "该资源通过 MYSQL+VECTOR 召回，排序位置为 4 [catalog:resource:6452:metadata:1:vector:lib-books-vector-v1-20260811]。",
+      "evidence_confidence": 0.822653, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 158,
+      "resource": {"resource_id": 6850, "resource_type": "BOOK", "title": "智慧图书馆与阅读推广", "authors": ["周宛"], "publication_year": 2024, "availability_status": "REFERENCE_ONLY", "difficulty_level": null},
+      "rank_no": 5, "group_id": null,
+      "reason_summary": "该结果来自书库向量召回通道，排序位置为第 5 位 [catalog:resource:6850:metadata:1:vector:lib-books-vector-v1-20260811]。",
+      "evidence_confidence": 0.868053, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 159,
+      "resource": {"resource_id": 11695, "resource_type": "BOOK", "title": "智慧图书馆建设与阅读推广研究", "authors": ["张静等", "王志红"], "publication_year": 2021, "availability_status": "REFERENCE_ONLY", "difficulty_level": null},
+      "rank_no": 6, "group_id": null,
+      "reason_summary": "根据多路召回中的向量检索结果，该资源被推荐。[catalog:resource:11695:metadata:1:vector:lib-books-vector-v1-20260811]",
+      "evidence_confidence": 0.864953, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 160,
+      "resource": {"resource_id": 6322, "resource_type": "BOOK", "title": "智慧图书馆阅读推广服务创新策略研究", "authors": ["郭雪山"], "publication_year": 2025, "availability_status": "REFERENCE_ONLY", "difficulty_level": null},
+      "rank_no": 7, "group_id": null,
+      "reason_summary": "该资源通过混合召回通道获得，排序位置为7 [catalog:resource:6322:metadata:1:vector:lib-books-vector-v1-20260811]",
+      "evidence_confidence": 0.86131, "unavailable_now": false, "evidence": null
+    },
+    {
+      "item_id": 161,
+      "resource": {"resource_id": 10774, "resource_type": "BOOK", "title": "数字时代图书馆管理与阅读推广探索", "authors": ["万晶晶"], "publication_year": 2025, "availability_status": "REFERENCE_ONLY", "difficulty_level": null},
+      "rank_no": 8, "group_id": null,
+      "reason_summary": "根据已验证的目录元数据，该资源通过 MYSQL 召回通道获得，排序位置为第 8 位 [catalog:resource:10774:metadata:1]。",
+      "evidence_confidence": 0.612155, "unavailable_now": false, "evidence": null
+    }
+  ],
+  "questions": null,
+  "warnings": [],
+  "agent_actions": [],
+  "versions": {
+    "config_bundle": "rec-1.0.0", "policy": "policy-rule-v1", "ranking": "ranking-g4-v1",
+    "behavior_formula": "profile-g4-v1", "embedding": "hash-char-ngram-v1",
+    "graph": "lib-books-v1-20260810", "prompt": "prompt-v1", "dataset": "lib-books-v1-20260810"
+  }
+}

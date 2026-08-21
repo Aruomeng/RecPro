@@ -129,6 +129,13 @@ def create_recommendation_run_router(
             result = await service.create_task(command, idempotency_key=idempotency_key, progress_sink=sink)
             broker.complete(task_id, result=_public_result(dict(result.payload)), replayed=result.replayed)
             if workspace_broker is not None and workspace_id is not None:
+                if result.replayed:
+                    workspace_broker.bridge_historical_actions(
+                        workspace_id,
+                        user_id=user_id,
+                        task_id=task_id,
+                        actions=result.payload.get("agent_actions", []),
+                    )
                 workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status=str(result.payload.get("status", "COMPLETED")), task_id=task_id, trace_id=trace_id)
         except Exception as exc:
             code = "REQUEST_DEADLINE_EXCEEDED" if isinstance(exc, TimeoutError) else "CORE_STORAGE_UNAVAILABLE"
@@ -202,6 +209,13 @@ def create_recommendation_run_router(
             )
             broker.complete(task_id, result=_public_result(dict(result.payload)), replayed=result.replayed)
             if workspace_broker is not None and workspace_id is not None:
+                if result.replayed:
+                    workspace_broker.bridge_historical_actions(
+                        workspace_id,
+                        user_id=user_id,
+                        task_id=task_id,
+                        actions=result.payload.get("agent_actions", []),
+                    )
                 workspace_broker.bridge_task_terminal(workspace_id, user_id=user_id, status=str(result.payload.get("status", "COMPLETED")), task_id=task_id)
         except Exception as exc:
             code = "REQUEST_DEADLINE_EXCEEDED" if isinstance(exc, TimeoutError) else "CORE_STORAGE_UNAVAILABLE"

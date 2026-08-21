@@ -48,7 +48,22 @@ export interface WorkspaceEvent {
   duration_ms?: number;
   outcome?: string;
   directive?: InteractionDirective;
+  replayed?: boolean;
   [key: string]: unknown;
+}
+
+export interface WorkspaceContextSummary {
+  route: string;
+  query: string;
+  external: Array<{
+    source_id: string;
+    kind: "EXTERNAL_DEMO";
+    label: string;
+    status: string;
+    observed_at: string;
+    expires_at: string;
+    values: Record<string, string | number | boolean | null>;
+  }>;
 }
 
 export interface AgentWorkspaceSnapshot {
@@ -62,6 +77,7 @@ export interface AgentWorkspaceSnapshot {
   directives: InteractionDirective[];
   recent_events: WorkspaceEvent[];
   sources: Array<{ source_id: string; kind: "INTERNAL" | "EXTERNAL_DEMO"; label: string; status: string; observed_at: string; expires_at: string }>;
+  context_summary: WorkspaceContextSummary;
 }
 
 export const workspaceAgentStates: AgentWorkspaceState[] = ["IDLE", "OBSERVING", "PLANNING", "WORKING", "WAITING_USER", "COMPLETED", "DEGRADED", "FAILED"];
@@ -91,11 +107,15 @@ export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
   if (!isRecord(value)) return false;
   return value.schema_version === "agent-workspace-event-v1" && Number.isInteger(value.sequence) && Number(value.sequence) >= 1 &&
     typeof value.event_type === "string" && typeof value.workspace_id === "string" && Number.isInteger(value.context_version) && typeof value.occurred_at === "string" &&
+    (value.replayed === undefined || typeof value.replayed === "boolean") &&
     (value.directive === undefined || isDirective(value.directive));
 }
 
 export function isAgentWorkspaceSnapshot(value: unknown): value is AgentWorkspaceSnapshot {
   if (!isRecord(value) || value.schema_version !== "agent-workspace-v1" || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo"].includes(String(value.mode))) return false;
   if (!isRecord(value.orchestrator) || !Array.isArray(value.agents) || value.agents.length !== 8 || !value.agents.every(isWorkspaceAgent)) return false;
-  return Array.isArray(value.directives) && value.directives.every(isDirective) && Array.isArray(value.recent_events) && value.recent_events.every(isWorkspaceEvent) && Array.isArray(value.sources);
+  if (!Array.isArray(value.directives) || !value.directives.every(isDirective) || !Array.isArray(value.recent_events) || !value.recent_events.every(isWorkspaceEvent)) return false;
+  if (!Array.isArray(value.sources) || !value.sources.every((source) => isRecord(source) && typeof source.source_id === "string" && ["INTERNAL", "EXTERNAL_DEMO"].includes(String(source.kind)) && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string")) return false;
+  if (!isRecord(value.context_summary) || typeof value.context_summary.route !== "string" || typeof value.context_summary.query !== "string" || !Array.isArray(value.context_summary.external)) return false;
+  return value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item)));
 }

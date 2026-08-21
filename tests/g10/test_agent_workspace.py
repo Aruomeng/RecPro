@@ -104,6 +104,28 @@ class AgentWorkspaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("DEGRADED", agents["ResourceSemanticAgent"])
         self.assertEqual("DEGRADED", agents["ExplanationAgent"])
 
+    def test_historical_actions_are_marked_replayed_idempotent_and_not_audited(self) -> None:
+        from backend.app.agent_workspace import AgentWorkspaceAuditBuffer
+
+        audit = AgentWorkspaceAuditBuffer(enabled=True)
+        broker = AgentWorkspaceBroker(audit_buffer=audit)
+        snapshot, _ = broker.create(session_id=uuid4(), user_id=1001, mode="demo")
+        workspace_id = UUID(str(snapshot["workspace_id"]))
+        before = audit.pending_count
+        task_id = uuid4()
+        actions = [{
+            "agent_name": "RankingAgent", "action": "RETURN_RESULT",
+            "target": "RecommendationOrchestrator", "reason_code": "RANKED_PERSISTED",
+            "confidence": 0.91, "evidence_refs": ["record:1"],
+        }]
+        self.assertEqual(1, broker.bridge_historical_actions(workspace_id, user_id=1001, task_id=task_id, actions=actions))
+        self.assertEqual(0, broker.bridge_historical_actions(workspace_id, user_id=1001, task_id=task_id, actions=actions))
+        current = broker.snapshot(workspace_id, user_id=1001)
+        replay = [event for event in current["recent_events"] if event["event_type"] == "RECOMMENDATION_HISTORY_REPLAY"]
+        self.assertEqual(1, len(replay))
+        self.assertTrue(replay[0]["replayed"])
+        self.assertEqual(before, audit.pending_count)
+
     async def test_event_stream_resumes_after_sequence(self) -> None:
         after = self.snapshot["recent_events"][-2]["sequence"]
         stream = self.broker.events(self.workspace_id, user_id=9000001, after_sequence=after)

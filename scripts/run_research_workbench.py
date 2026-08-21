@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from http.client import HTTPConnection
 import os
 from pathlib import Path
 import shutil
@@ -13,7 +14,7 @@ import subprocess
 import sys
 import time
 from typing import Mapping, Sequence
-from urllib.request import urlopen
+from urllib.parse import urlsplit
 
 from scripts.validate_runtime_env import read_env
 
@@ -69,12 +70,17 @@ def require_tcp(host: str, port: int, *, label: str) -> None:
 
 
 def require_http(url: str, *, label: str) -> None:
+    target = urlsplit(url)
+    connection = HTTPConnection(target.hostname, target.port, timeout=5)
     try:
-        with urlopen(url, timeout=5) as response:  # noqa: S310 - loopback only
-            if response.status >= 500:
-                raise RuntimeError(f"{label} returned HTTP {response.status}")
+        connection.request("GET", target.path or "/")
+        response = connection.getresponse()
+        if response.status >= 500:
+            raise RuntimeError(f"{label} returned HTTP {response.status}")
     except OSError as exc:
         raise RuntimeError(f"{label} is unavailable at {url}") from exc
+    finally:
+        connection.close()
 
 
 def preflight(
@@ -117,14 +123,19 @@ def preflight(
 
 
 def wait_for_url(url: str, *, timeout: float) -> None:
+    target = urlsplit(url)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
+        connection = HTTPConnection(target.hostname, target.port, timeout=2)
         try:
-            with urlopen(url, timeout=2) as response:  # noqa: S310 - loopback only
-                if response.status < 500:
-                    return
+            connection.request("GET", target.path or "/")
+            response = connection.getresponse()
+            if response.status < 500:
+                return
         except OSError:
             time.sleep(0.5)
+        finally:
+            connection.close()
     raise RuntimeError(f"startup timed out waiting for {url}")
 
 

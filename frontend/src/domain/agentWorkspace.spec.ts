@@ -26,6 +26,7 @@ describe("Agent Workspace public decoders", () => {
       session_id: "00000000-0000-4000-8000-000000000003", mode: "guest", context_version: 2,
       orchestrator: { name: "RecommendationOrchestrator", role: "编排器", state: "OBSERVING", current_route: "/" },
       agents: names.map(agent), directives: [directive], recent_events: [event], sources: [],
+      context_summary: { route: "/", query: "", external: [] },
     })).toBe(true);
   });
 
@@ -39,6 +40,7 @@ describe("Agent Workspace public decoders", () => {
       schema_version: "agent-workspace-v1", workspace_id: event.workspace_id,
       session_id: event.workspace_id, mode: "guest", context_version: 2,
       orchestrator: {}, agents: names.slice(0, 7).map(agent), directives: [], recent_events: [], sources: [],
+      context_summary: { route: "/", query: "", external: [] },
     })).toBe(false);
   });
 });

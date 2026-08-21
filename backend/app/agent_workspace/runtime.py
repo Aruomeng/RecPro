@@ -82,6 +82,7 @@ class _Workspace:
         default_factory=lambda: {"mysql": "UNKNOWN", "neo4j": "UNKNOWN", "chroma": "UNKNOWN", "llm": "UNKNOWN"}
     )
     external_context: list[dict[str, object]] = field(default_factory=list)
+    replayed_task_ids: set[str] = field(default_factory=set)
 
 
 def _utc_now() -> datetime:
@@ -287,6 +288,60 @@ class AgentWorkspaceBroker:
         workspace.orchestrator_status = "FAILED" if status == "FAILED" else "COMPLETED"
         self._publish(workspace, "RECOMMENDATION_COMPLETED", {"status": status, "task_id": str(task_id), **({"trace_id": str(trace_id)} if trace_id else {})})
         self._dispatch_policy(workspace, "RECOMMENDATION_COMPLETED", {"status": status})
+
+    def bridge_historical_actions(
+        self,
+        workspace_id: UUID,
+        *,
+        user_id: int,
+        task_id: UUID,
+        actions: object,
+    ) -> int:
+        """Restore persisted public Agent actions without dispatch or audit.
+
+        This bridge is read-only and idempotent per Workspace/task.  Its events
+        carry ``replayed=true`` so the kiosk cannot confuse them with live work.
+        """
+        workspace = self._visible(workspace_id, user_id)
+        task_key = str(task_id)
+        if task_key in workspace.replayed_task_ids or not isinstance(actions, list):
+            return 0
+        restored = 0
+        for raw in actions[:32]:
+            if not isinstance(raw, Mapping):
+                continue
+            clean = self._sanitize_payload(raw)
+            name = str(clean.get("agent_name", ""))
+            if name not in workspace.agents:
+                continue
+            self._set_agent(
+                workspace,
+                name,
+                "COMPLETED",
+                action=str(clean.get("action", "RETURN_RESULT")),
+                target=str(clean.get("target", "RecommendationOrchestrator")),
+                reason=str(clean.get("reason_code", "PERSISTED_ACTION_REPLAY")),
+                confidence=clean.get("confidence"),
+                duration_ms=None,
+                evidence_refs=clean.get("evidence_refs"),
+            )
+            self._publish(
+                workspace,
+                "RECOMMENDATION_HISTORY_REPLAY",
+                {
+                    "replayed": True,
+                    "task_id": task_key,
+                    "agent_name": name,
+                    "action": clean.get("action", "RETURN_RESULT"),
+                    "target": clean.get("target", "RecommendationOrchestrator"),
+                    "reason_code": clean.get("reason_code", "PERSISTED_ACTION_REPLAY"),
+                    "confidence": clean.get("confidence"),
+                    "evidence_refs": clean.get("evidence_refs", []),
+                },
+            )
+            restored += 1
+        workspace.replayed_task_ids.add(task_key)
+        return restored
 
     def bridge_feedback_action(self, workspace_id: UUID, *, user_id: int, action: Mapping[str, object]) -> None:
         workspace = self._visible(workspace_id, user_id)

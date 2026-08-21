@@ -1,4 +1,4 @@
-import { isRecommendationExecution } from "../domain/recommendation";
+import { decodeRecommendationExecution } from "../domain/recommendation";
 import type { RecommendationExecution, RecommendationRequest } from "../domain/recommendation";
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -77,7 +77,7 @@ export const recommendationRunClient = {
     const response = await fetch(`${baseUrl}/api/v1/recommendation-runs/${encodeURIComponent(taskId)}`, { headers: headers(userId), cache: "no-store" });
     const payload = await jsonResponse(response);
     const result = payload.result;
-    if (result !== null && result !== undefined && !isRecommendationExecution(result)) throw new Error("INVALID_RUN_RESULT");
+    if (result !== null && result !== undefined) payload.result = decodeRecommendationExecution(result);
     if (typeof payload.terminal !== "boolean" || typeof payload.status !== "string") throw new Error("INVALID_RUN_STATE");
     return payload as unknown as { terminal: boolean; status: string; result?: RecommendationExecution; error_code?: string };
   },
