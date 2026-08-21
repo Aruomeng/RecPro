@@ -39,6 +39,15 @@ from backend.app.platform.auth import (
     HMACBearerTokenResolver,
     build_formal_principal_resolver,
 )
+from backend.app.identity import IdentityService
+from backend.app.identity.adapters import MySQLIdentityRepository
+from backend.app.identity.security import (
+    Argon2idPasswordService,
+    HMACIdentifierService,
+    HMACSecretTokenService,
+    LocalJWTIssuer,
+    VersionedPrincipalResolver,
+)
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.adapters.g4_mysql import (
     MySQLG4RecommendationTaskService,
@@ -73,6 +82,27 @@ def _mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
     return connect
 
 
+def _identity_mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
+    if settings.identity_mysql_user is None or settings.identity_mysql_password is None:
+        raise ValueError("identity MySQL credentials are not configured")
+    options = {
+        "host": settings.mysql_host,
+        "port": settings.mysql_port,
+        "db": settings.mysql_database,
+        "user": settings.identity_mysql_user,
+        "password": settings.identity_mysql_password.get_secret_value(),
+        "connect_timeout": settings.mysql_connect_timeout_seconds,
+        "read_timeout": max(settings.mysql_connect_timeout_seconds, 3.0),
+        "charset": "utf8mb4",
+        "autocommit": False,
+    }
+
+    async def connect() -> Any:
+        return await asyncmy.connect(**options)
+
+    return connect
+
+
 def build_formal_auth_resolver(
     settings: AppSettings,
 ) -> HMACBearerTokenResolver | None:
@@ -85,6 +115,46 @@ def build_formal_auth_resolver(
     """
 
     return build_formal_principal_resolver(settings)
+
+
+def build_local_identity_service(
+    settings: AppSettings, *, connection_factory: ConnectionFactory | None = None,
+) -> IdentityService:
+    """Construct local IAM without opening a database connection."""
+
+    if not settings.local_identity_api_enabled or not settings.auth_enabled:
+        raise ValueError("local identity service is disabled by configuration")
+    if (
+        settings.auth_jwt_secret is None or settings.auth_identifier_pepper is None
+        or settings.auth_token_pepper is None
+    ):
+        raise ValueError("local identity cryptographic secrets are incomplete")
+    factory = connection_factory or _identity_mysql_connection_factory(settings)
+    return IdentityService(
+        repository=MySQLIdentityRepository(factory),
+        passwords=Argon2idPasswordService(),
+        identifiers=HMACIdentifierService(
+            settings.auth_identifier_pepper.get_secret_value().encode(),
+        ),
+        secrets=HMACSecretTokenService(
+            settings.auth_token_pepper.get_secret_value().encode(),
+        ),
+        access_tokens=LocalJWTIssuer(
+            secret=settings.auth_jwt_secret.get_secret_value().encode(),
+            issuer=settings.auth_jwt_issuer, audience=settings.auth_jwt_audience,
+            ttl_seconds=settings.auth_access_ttl_seconds,
+        ),
+        refresh_ttl_seconds=settings.auth_refresh_ttl_seconds,
+    )
+
+
+def build_local_identity_principal_resolver(
+    settings: AppSettings, service: IdentityService,
+) -> VersionedPrincipalResolver:
+    token_resolver = build_formal_auth_resolver(settings)
+    if token_resolver is None:
+        raise ValueError("formal JWT resolver is unavailable")
+    return VersionedPrincipalResolver(token_resolver, service)
 
 
 def build_production_http_app(
@@ -406,6 +476,7 @@ def build_research_g4_http_app(
     exploration_service: object | None = None,
     recommendation_progress_broker: object | None = None,
     agent_workspace_broker: object | None = None,
+    identity_service: IdentityService | None = None,
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -426,6 +497,12 @@ def build_research_g4_http_app(
         raise ValueError(
             "G4 feedback API requires both feedback and behavior services"
         )
+    if identity_service is not None and not settings.local_identity_api_enabled:
+        raise ValueError("identity service requires the explicit local identity API switch")
+    principal_resolver = (
+        build_local_identity_principal_resolver(settings, identity_service)
+        if identity_service is not None else None
+    )
 
     from backend.app.main import create_app
 
@@ -447,6 +524,9 @@ def build_research_g4_http_app(
         exploration_api_enabled=exploration_service is not None,
         recommendation_progress_broker=recommendation_progress_broker,
         agent_workspace_broker=agent_workspace_broker,
+        identity_service=identity_service,
+        identity_api_enabled=identity_service is not None,
+        principal_resolver=principal_resolver,
     )
 
 
@@ -498,6 +578,7 @@ def build_research_g4_http_app_from_runtime(
     exploration_service: object | None = None,
     recommendation_progress_broker: object | None = None,
     agent_workspace_broker: object | None = None,
+    identity_service: IdentityService | None = None,
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -573,6 +654,7 @@ def build_research_g4_http_app_from_runtime(
         exploration_service=exploration_service,
         recommendation_progress_broker=recommendation_progress_broker,
         agent_workspace_broker=agent_workspace_broker,
+        identity_service=identity_service,
     )
 
 

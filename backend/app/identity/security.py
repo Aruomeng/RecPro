@@ -18,6 +18,8 @@ from argon2.exceptions import InvalidHashError, VerificationError
 from argon2.low_level import Type
 
 from backend.app.identity.domain import IdentifierType, RoleCode, UserAccount
+from backend.app.identity.application import IdentityService
+from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 
 
 _IDENTIFIER = re.compile(r"^[A-Z0-9._-]{3,64}$")
@@ -138,7 +140,24 @@ class LocalJWTIssuer:
         return f"{header}.{body}.{encoded_signature}", self._ttl_seconds
 
 
+class VersionedPrincipalResolver:
+    """Fail closed unless both JWT and mutable account/session state are valid."""
+
+    def __init__(self, token_resolver: object, identity_service: IdentityService) -> None:
+        self._token_resolver = token_resolver
+        self._identity_service = identity_service
+
+    async def __call__(self, token: str) -> AuthenticatedPrincipal | None:
+        candidate = self._token_resolver(token)  # type: ignore[operator]
+        if not isinstance(candidate, AuthenticatedPrincipal):
+            return None
+        try:
+            return await self._identity_service.validate_principal(candidate)
+        except Exception:
+            return None
+
+
 __all__ = [
     "Argon2idPasswordService", "HMACIdentifierService", "HMACSecretTokenService",
-    "LocalJWTIssuer",
+    "LocalJWTIssuer", "VersionedPrincipalResolver",
 ]

@@ -25,6 +25,7 @@ from backend.app.identity.domain import (
     RefreshTokenRecord,
     RoleAction,
     RoleCode,
+    ROLE_PERMISSIONS,
     SecurityEvent,
     UserAccount,
     UserRoleFact,
@@ -166,10 +167,10 @@ class IdentityService:
                 identifier_hash=identifier_hash,
             )
             raise IdentityError("INVALID_CREDENTIALS")
-        account = await self._repo.complete_login(account.user_id, now=now)
         roles = await self._repo.effective_roles(account.user_id)
-        if not roles or (account.account_kind.value == "HUMAN" and roles == {RoleCode.SERVICE_WORKER}):
+        if not roles or RoleCode.SERVICE_WORKER in roles:
             raise IdentityError("INTERACTIVE_LOGIN_FORBIDDEN")
+        account = await self._repo.complete_login(account.user_id, now=now)
         result = await self._new_session(account, roles, device_type=device_type)
         await self._event(
             event_type="LOGIN", outcome="SUCCESS", user_id=account.user_id,
@@ -210,9 +211,16 @@ class IdentityService:
             token_hash=self._secrets.digest(raw_refresh), parent_token_uuid=record.token_uuid,
             issued_at=now, expires_at=session.absolute_expires_at,
         )
-        await self._repo.rotate_refresh(
-            consumed_uuid=record.token_uuid, replacement=replacement, now=now,
-        )
+        try:
+            await self._repo.rotate_refresh(
+                consumed_uuid=record.token_uuid, replacement=replacement, now=now,
+            )
+        except IdentityError as exc:
+            if exc.code == "REFRESH_TOKEN_REUSED":
+                await self._repo.revoke_session(
+                    session.session_uuid, reason="TOKEN_REUSE", now=now,
+                )
+            raise
         roles = await self._repo.effective_roles(account.user_id)
         access_token, expires_in = self._access_tokens.issue(
             account=account, roles=roles, session_id=session.session_uuid,
@@ -242,6 +250,7 @@ class IdentityService:
         account = await self._repo.get_account(target_user_id)
         if account is None or account.account_kind.value != "HUMAN":
             raise IdentityError("ACCOUNT_NOT_FOUND")
+        await self._require_manageable_reader_target(actor, target_user_id)
         raw_code = self._secrets.generate()
         now = self._now()
         await self._repo.append_action_token(ActionTokenRecord(
@@ -252,6 +261,31 @@ class IdentityService:
         ))
         await self._event(
             event_type="PASSWORD_RESET_CODE_ISSUED", outcome="SUCCESS",
+            user_id=target_user_id, actor_user_id=actor.user_id,
+            reason_code="LIBRARIAN_REQUESTED",
+        )
+        return raw_code
+
+    async def issue_activation_code(
+        self, *, target_user_id: int, actor: AuthenticatedPrincipal,
+    ) -> str:
+        _require_any_role(actor, RoleCode.LIBRARIAN, RoleCode.RESEARCH_ADMIN)
+        account = await self._repo.get_account(target_user_id)
+        if account is None or account.account_kind.value != "HUMAN":
+            raise IdentityError("ACCOUNT_NOT_FOUND")
+        if account.status is not AccountStatus.PENDING_ACTIVATION:
+            raise IdentityError("ACCOUNT_NOT_PENDING")
+        await self._require_manageable_reader_target(actor, target_user_id)
+        raw_code = self._secrets.generate()
+        now = self._now()
+        await self._repo.append_action_token(ActionTokenRecord(
+            token_uuid=uuid4(), user_id=target_user_id,
+            purpose=ActionTokenPurpose.ACTIVATE_ACCOUNT,
+            token_hash=self._secrets.digest(raw_code), issued_by_user_id=actor.user_id,
+            expires_at=now + timedelta(hours=24), created_at=now,
+        ))
+        await self._event(
+            event_type="ACTIVATION_CODE_ISSUED", outcome="SUCCESS",
             user_id=target_user_id, actor_user_id=actor.user_id,
             reason_code="LIBRARIAN_REQUESTED",
         )
@@ -377,6 +411,70 @@ class IdentityService:
             session_uuid=actor.session_id, occurred_at=self._now(),
         ))
         return await self._repo.effective_consents(actor.user_id)
+
+    async def validate_principal(
+        self, principal: AuthenticatedPrincipal,
+    ) -> AuthenticatedPrincipal:
+        if (
+            principal.session_id is None or principal.auth_version is None
+            or principal.role_version is None
+        ):
+            raise IdentityError("SESSION_REQUIRED")
+        now = self._now()
+        account = await self._repo.get_account(principal.user_id)
+        session = await self._repo.get_session(principal.session_id)
+        roles = await self._repo.effective_roles(principal.user_id)
+        if (
+            account is None or account.status is not AccountStatus.ACTIVE
+            or session is None or session.user_id != principal.user_id
+            or session.revoked_at is not None or session.absolute_expires_at <= now
+            or account.auth_version != principal.auth_version
+            or account.role_version != principal.role_version
+            or session.auth_version_at_issue != account.auth_version
+            or session.role_version_at_issue != account.role_version
+            or {role.value for role in roles} != set(principal.roles)
+        ):
+            raise IdentityError("AUTHENTICATION_INVALID")
+        permissions = frozenset(
+            permission for role in roles for permission in ROLE_PERMISSIONS[role]
+        )
+        consents = await self._repo.effective_consents(principal.user_id)
+        dynamic_permissions: set[str] = set()
+        if consents[ConsentScope.PERSONALIZED_RECOMMENDATION]:
+            dynamic_permissions.add("personalization.profile.use")
+        if consents[ConsentScope.BEHAVIOR_LEARNING]:
+            dynamic_permissions.add("personalization.behavior.write")
+        return AuthenticatedPrincipal(
+            user_id=principal.user_id, roles=principal.roles,
+            token_id=principal.token_id, session_id=principal.session_id,
+            auth_version=principal.auth_version, role_version=principal.role_version,
+            expires_at=principal.expires_at,
+            permissions=permissions | frozenset(dynamic_permissions),
+        )
+
+    async def account_summary(
+        self, *, target_user_id: int, actor: AuthenticatedPrincipal,
+    ) -> tuple[UserAccount, frozenset[RoleCode], dict[ConsentScope, bool]]:
+        if actor.user_id != target_user_id:
+            _require_any_role(actor, RoleCode.LIBRARIAN, RoleCode.RESEARCH_ADMIN)
+            await self._require_manageable_reader_target(actor, target_user_id)
+        account = await self._repo.get_account(target_user_id)
+        if account is None:
+            raise IdentityError("ACCOUNT_NOT_FOUND")
+        return (
+            account,
+            await self._repo.effective_roles(target_user_id),
+            await self._repo.effective_consents(target_user_id),
+        )
+
+    async def _require_manageable_reader_target(
+        self, actor: AuthenticatedPrincipal, target_user_id: int,
+    ) -> None:
+        if actor.has_role(RoleCode.RESEARCH_ADMIN.value):
+            return
+        roles = await self._repo.effective_roles(target_user_id)
+        if not roles or not roles.issubset({RoleCode.USER}):
+            raise IdentityError("TARGET_ROLE_FORBIDDEN")
 
     async def _new_session(
         self, account: UserAccount, roles: frozenset[RoleCode], *, device_type: str,

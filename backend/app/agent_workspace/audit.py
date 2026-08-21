@@ -106,7 +106,7 @@ class AgentWorkspaceAuditBuffer:
         event: Mapping[str, object],
         replayed: bool = False,
     ) -> WorkspaceEventFact | None:
-        if not self.enabled or mode != "demo" or user_id != self.demo_user_id or replayed:
+        if not self._eligible(mode=mode, user_id=user_id, replayed=replayed):
             return None
         workspace_id = UUID(str(event["workspace_id"]))
         sequence = int(event["sequence"])
@@ -148,7 +148,7 @@ class AgentWorkspaceAuditBuffer:
         occurred_at: object | None = None,
         replayed: bool = False,
     ) -> DirectiveStateFact | None:
-        if not self.enabled or mode != "demo" or user_id != self.demo_user_id or replayed:
+        if not self._eligible(mode=mode, user_id=user_id, replayed=replayed):
             return None
         fact_state = str(state or directive.get("status", ""))
         if fact_state not in DIRECTIVE_FACT_STATES:
@@ -177,6 +177,13 @@ class AgentWorkspaceAuditBuffer:
         )
         self._append(fact_uuid, fact)
         return fact
+
+    def _eligible(self, *, mode: str, user_id: int, replayed: bool) -> bool:
+        if not self.enabled or replayed or mode == "guest":
+            return False
+        if mode == "demo":
+            return user_id == self.demo_user_id
+        return mode == "authenticated" and user_id >= 10_000
 
     def acknowledge(self, fact_ids: set[UUID]) -> None:
         """Remove only successfully appended in-memory queue entries."""

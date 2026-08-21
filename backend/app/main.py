@@ -14,6 +14,7 @@ from backend.app.api.auth import PrincipalResolver
 from backend.app.api.debug import create_debug_router
 from backend.app.api.feedback import create_feedback_router
 from backend.app.api.health import create_health_router
+from backend.app.api.identity import create_identity_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
 from backend.app.api.recommendation_runs import create_recommendation_run_router
@@ -56,6 +57,8 @@ def create_app(
     exploration_api_enabled: bool = False,
     recommendation_progress_broker: object | None = None,
     agent_workspace_broker: object | None = None,
+    identity_service: object | None = None,
+    identity_api_enabled: bool = False,
 ) -> FastAPI:
     if recommendation_readiness_enabled and (
         recommendation_service is None or not recommendation_api_enabled
@@ -63,6 +66,8 @@ def create_app(
         raise ValueError(
             "recommendation readiness requires an explicit service and API enable flag"
         )
+    if identity_api_enabled and identity_service is None:
+        raise ValueError("identity API requires an explicit identity service")
     state = configuration_state or (
         ConfigurationState(settings=settings, is_valid=True)
         if settings is not None
@@ -127,6 +132,10 @@ def create_app(
     if (recommendation_service is not None and recommendation_api_enabled) or interaction_api_enabled:
         cors_methods.append("POST")
         cors_headers.extend(["Idempotency-Key", "X-Demo-User-Id"])
+    if identity_service is not None and identity_api_enabled:
+        if "POST" not in cors_methods:
+            cors_methods.append("POST")
+        cors_headers.extend(["Idempotency-Key", "X-CSRF-Token"])
     if effective_principal_resolver is not None or effective_debug_api_enabled:
         cors_headers.append("Authorization")
     if recommendation_progress_broker is not None or agent_workspace_broker is not None:
@@ -197,6 +206,16 @@ def create_app(
                 app_env=runtime.app_env,
                 demo_identity_enabled=runtime.app_env == "demo",
                 principal_resolver=effective_principal_resolver,
+            )
+        )
+    if identity_service is not None and identity_api_enabled:
+        if effective_principal_resolver is None:
+            raise ValueError("identity API requires a formal principal resolver")
+        application.include_router(
+            create_identity_router(
+                service=identity_service,  # type: ignore[arg-type]
+                principal_resolver=effective_principal_resolver,
+                secure_cookies=runtime.auth_cookie_secure,
             )
         )
     return application

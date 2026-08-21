@@ -89,6 +89,11 @@ class AppSettings(BaseSettings):
         max_length=48,
         pattern=r"^[a-z0-9][a-z0-9_-]{2,47}$",
     )
+    identity_mysql_user: str | None = Field(
+        default=None, min_length=3, max_length=32,
+        pattern=r"^[a-z][a-z0-9_]{2,31}$",
+    )
+    identity_mysql_password: SecretStr | None = None
 
     # The worker process is part of the Compose skeleton, but its controlled
     # write capability must never be enabled by merely starting the stack.
@@ -153,7 +158,13 @@ class AppSettings(BaseSettings):
     # runtime has no bearer secret and therefore cannot accidentally expose a
     # credential-backed route.
     auth_enabled: bool = False
+    local_identity_api_enabled: bool = False
     auth_jwt_secret: SecretStr | None = None
+    auth_identifier_pepper: SecretStr | None = None
+    auth_token_pepper: SecretStr | None = None
+    auth_cookie_secure: bool = True
+    auth_access_ttl_seconds: int = Field(default=600, ge=60, le=3600)
+    auth_refresh_ttl_seconds: int = Field(default=8 * 60 * 60, ge=3600, le=7 * 24 * 3600)
     auth_jwt_issuer: str = Field(
         default="libramas-local",
         min_length=1,
@@ -208,7 +219,20 @@ class AppSettings(BaseSettings):
             )
         return value
 
-    @field_validator("auth_jwt_secret")
+    @field_validator("identity_mysql_password")
+    @classmethod
+    def validate_identity_mysql_password(
+        cls, value: SecretStr | None,
+    ) -> SecretStr | None:
+        if value is None:
+            return None
+        if not LOCAL_SECRET_PATTERN.fullmatch(value.get_secret_value()):
+            raise ValueError(
+                "identity MySQL password must contain 16-128 approved local characters"
+            )
+        return value
+
+    @field_validator("auth_jwt_secret", "auth_identifier_pepper", "auth_token_pepper")
     @classmethod
     def validate_auth_jwt_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None:
@@ -228,6 +252,18 @@ class AppSettings(BaseSettings):
             raise ValueError(
                 "auth JWT secret is required when formal authentication is enabled"
             )
+        if self.local_identity_api_enabled and not self.auth_enabled:
+            raise ValueError("local identity API requires formal authentication")
+        if self.local_identity_api_enabled and (
+            self.auth_identifier_pepper is None or self.auth_token_pepper is None
+        ):
+            raise ValueError("local identity API requires identifier and token peppers")
+        if self.local_identity_api_enabled and (
+            self.identity_mysql_user is None or self.identity_mysql_password is None
+        ):
+            raise ValueError("local identity API requires its least-privilege MySQL account")
+        if self.app_env == "production" and not self.auth_cookie_secure:
+            raise ValueError("production identity cookies must be secure")
         return self
 
     @field_validator("llm_base_url")

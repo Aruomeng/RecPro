@@ -20,6 +20,7 @@ from backend.app.api.auth import PrincipalResolver, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.models import ErrorResponse, StrictModel
 from backend.app.shared_kernel.contracts.errors import ErrorCode
+from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 
 
 ObservationType = Literal[
@@ -31,14 +32,14 @@ ObservationType = Literal[
 
 class WorkspaceCreateRequest(StrictModel):
     session_id: UUID
-    mode: Literal["guest", "demo"]
+    mode: Literal["guest", "demo", "authenticated"]
 
 
 class WorkspaceSnapshotResponse(StrictModel):
     schema_version: Literal["agent-workspace-v1"]
     workspace_id: UUID
     session_id: UUID
-    mode: Literal["guest", "demo"]
+    mode: Literal["guest", "demo", "authenticated"]
     context_version: int = Field(ge=1)
     orchestrator: dict[str, Any]
     agents: list[dict[str, Any]] = Field(min_length=8, max_length=8)
@@ -88,11 +89,14 @@ def create_agent_workspace_router(
     app_env: str,
     demo_identity_enabled: bool,
     principal_resolver: PrincipalResolver | None,
+    guest_user_id: int = 9_000_001,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["Agent Workspace"])
     errors = {code: {"model": ErrorResponse} for code in (401, 404, 409, 422, 429, 503)}
 
     async def principal(demo_user_id: int | None, authorization: str | None):
+        if authorization is None and demo_user_id in {None, guest_user_id}:
+            return AuthenticatedPrincipal(user_id=guest_user_id, roles=frozenset())
         return await resolve_user_principal(
             authorization=authorization,
             demo_user_id=demo_user_id,
@@ -112,6 +116,15 @@ def create_agent_workspace_router(
         authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> WorkspaceCreatedResponse:
         actor = await principal(demo_user_id, authorization)
+        expected_mode = (
+            "authenticated" if actor.session_id is not None
+            else "guest" if not actor.roles else "demo"
+        )
+        if request.mode != expected_mode:
+            raise PublicAPIError(
+                403, ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
+                "The workspace mode does not match the active identity.", False, {},
+            )
         try:
             snapshot, replayed = broker.create(session_id=request.session_id, user_id=actor.user_id, mode=request.mode)
         except WorkspaceCapacityError as exc:

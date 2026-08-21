@@ -432,6 +432,14 @@ def create_recommendation_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        effective_constraints = dict(request.constraints)
+        effective_constraints["_personalization_enabled"] = (
+            principal.has_permission("personalization.profile.use")
+            or (app_env == "demo" and principal.session_id is None)
+        )
+        effective_constraints["profile_empty"] = not bool(
+            effective_constraints["_personalization_enabled"]
+        )
         try:
             result = await service.create_task(
                 RecommendationTaskCommand(
@@ -449,7 +457,7 @@ def create_recommendation_router(
                     source_resource_id=request.source_resource_id,
                     source_item_id=request.source_item_id,
                     evaluation_at=None,
-                    constraints=dict(request.constraints),
+                    constraints=effective_constraints,
                     limit=request.limit,
                 ),
                 idempotency_key=idempotency_key,

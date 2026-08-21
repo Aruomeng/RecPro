@@ -245,6 +245,19 @@ async def _principal(
     )
 
 
+def _require_behavior_consent(principal: object) -> None:
+    session_id = getattr(principal, "session_id", None)
+    has_permission = getattr(principal, "has_permission", lambda _value: False)
+    if session_id is not None and not has_permission("personalization.behavior.write"):
+        raise PublicAPIError(
+            status_code=403,
+            code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
+            message="Behavior learning requires explicit personalization consent.",
+            retryable=False,
+            details={"required_consent": "BEHAVIOR_LEARNING"},
+        )
+
+
 def _require_enabled(service: object | None, *, pipeline_enabled: bool) -> None:
     if service is None or not pipeline_enabled:
         raise PublicAPIError(
@@ -311,6 +324,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_behavior_consent(principal)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
@@ -427,6 +441,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_behavior_consent(principal)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
@@ -532,6 +547,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_behavior_consent(principal)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)

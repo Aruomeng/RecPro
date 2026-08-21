@@ -24,6 +24,9 @@ from backend.app.identity.security import (
 )
 from backend.app.platform.auth import HMACBearerTokenResolver
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
+from backend.app.recommendation.agents.real_agents import MySQLProfileAgent
+from backend.app.shared_kernel.contracts.agent import AgentMessage
+from backend.app.shared_kernel.contracts.enums import MessageType
 
 
 class IdentityRuntimeTests(unittest.IsolatedAsyncioTestCase):
@@ -240,6 +243,33 @@ class IdentityRuntimeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(0, len(self.repo.accounts))
         self.assertEqual(0, len(self.repo.sessions))
         self.assertEqual(0, len(self.repo.security_events))
+
+    async def test_absent_personalization_consent_never_reads_profile_port(self) -> None:
+        class ForbiddenProfileReader:
+            calls = 0
+
+            async def get_snapshot(self, **_kwargs):
+                self.calls += 1
+                raise AssertionError("long-term profile must not be read")
+
+        reader = ForbiddenProfileReader()
+        agent = MySQLProfileAgent(reader)
+        result = await agent.handle(AgentMessage(
+            schema_version="agent-message-v1", message_id=uuid4(), trace_id=uuid4(),
+            task_id=uuid4(), sender="RecommendationOrchestrator",
+            receiver="UserProfileAgent", message_type=MessageType.PROFILE_BUILD,
+            payload={
+                "user_id": 10_000,
+                "constraints": {"_personalization_enabled": False},
+                "evaluation_at": self.now.isoformat(),
+            },
+            deadline_at=self.now + timedelta(seconds=5),
+            idempotency_key="no-consent-profile", context_version=1,
+            created_at=self.now,
+        ))
+        self.assertEqual(0, reader.calls)
+        self.assertEqual("session-anonymous-v1", result.payload["profile_version"])
+        self.assertEqual((), result.tool_calls)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,7 @@ from backend.app.composition import (
     build_research_exploration_service,
     build_research_feedback_service,
     build_research_g4_http_app_from_runtime,
+    build_local_identity_service,
 )
 from backend.app.config import load_configuration
 
@@ -152,6 +153,10 @@ def create_g4_feedback_app():
     )
     progress_broker = RecommendationProgressBroker(max_concurrent=8, retention_seconds=600.0)
     workspace_broker = AgentWorkspaceBroker(max_workspaces=32, retention_seconds=600.0)
+    identity_service = (
+        build_local_identity_service(settings)
+        if settings.local_identity_api_enabled else None
+    )
     return build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
@@ -165,6 +170,7 @@ def create_g4_feedback_app():
         exploration_service=exploration_service,
         recommendation_progress_broker=progress_broker,
         agent_workspace_broker=workspace_broker,
+        identity_service=identity_service,
     )
 
 

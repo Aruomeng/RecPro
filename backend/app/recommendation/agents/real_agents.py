@@ -105,6 +105,31 @@ class MySQLProfileAgent:
 
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
         as_of = _evaluation_at(message)
+        constraints = message.payload.get("constraints")
+        if isinstance(constraints, dict) and constraints.get("_personalization_enabled") is False:
+            return _result(
+                message,
+                agent_name=self.name,
+                agent_version=self.version,
+                payload={
+                    "profile_version": "session-anonymous-v1",
+                    "confidence": 1.0,
+                    "event_count": 0,
+                    "signals": [],
+                    "negative_signals": [],
+                    "profile_empty": True,
+                },
+                confidence=1.0,
+                warnings=("PERSONALIZATION_CONSENT_ABSENT",),
+                fallback_used=False,
+                tool_calls=(),
+                decision=AgentDecision(
+                    action=AgentActionType.READ_PROFILE,
+                    target="RecommendationOrchestrator",
+                    reason_code="PERSONALIZATION_CONSENT_ABSENT",
+                    confidence=1.0,
+                ),
+            )
         try:
             snapshot, attempts = await call_with_retry(
                 lambda: self._reader.get_snapshot(

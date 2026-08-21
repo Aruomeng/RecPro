@@ -165,8 +165,8 @@ class AgentWorkspaceBroker:
         self._by_session: dict[tuple[UUID, int, str], UUID] = {}
 
     def create(self, *, session_id: UUID, user_id: int, mode: str) -> tuple[dict[str, object], bool]:
-        if mode not in {"guest", "demo"}:
-            raise ValueError("workspace mode must be guest or demo")
+        if mode not in {"guest", "demo", "authenticated"}:
+            raise ValueError("workspace mode must be guest, demo, or authenticated")
         self._prune()
         key = (session_id, user_id, mode)
         existing_id = self._by_session.get(key)
