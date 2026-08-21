@@ -68,3 +68,88 @@
 .rail-summary span { font-size: 12px; }
 @media (max-width: 1099px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr; }.metric-card { padding: 16px; } }
+
+/* Identity is deliberately presented as a reader-facing library service, not
+   an administrative console. Tokens remain in memory and the dialog never
+   exposes credential or session internals. */
+.login-entry,
+.account-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  border: 1px solid var(--v2-border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--v2-text);
+}
+.login-entry { gap: 12px; padding: 0 16px; cursor: pointer; }
+.login-entry span { color: var(--v2-muted); font-size: 14px; }
+.login-entry b { color: var(--v2-primary); font-size: 15px; }
+.account-chip { gap: 12px; padding: 5px 6px 5px 14px; }
+.account-chip > span { display: grid; min-width: 112px; }
+.account-chip > span b { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.account-chip > span small { margin-top: 2px; color: var(--v2-muted); font-size: 11px; }
+.account-chip button {
+  min-height: 40px; padding: 0 12px; border: 0; border-radius: 9px;
+  background: var(--v2-primary-soft); color: var(--v2-primary-strong); font-weight: 700; cursor: pointer;
+}
+.account-chip button:last-child { background: var(--v2-surface-soft); color: var(--v2-muted); }
+
+.auth-layer {
+  position: fixed; inset: 0; z-index: 100;
+  display: grid; place-items: center; padding: 24px;
+  overflow: auto; background: rgba(15, 23, 42, .42);
+}
+.auth-dialog {
+  position: relative; width: min(680px, 100%); max-height: calc(100vh - 48px); overflow: auto;
+  padding: clamp(26px, 4vw, 42px); border: 1px solid var(--v2-border); border-radius: 20px;
+  background: #fff; color: var(--v2-text); box-shadow: 0 28px 80px rgba(15, 23, 42, .2);
+}
+.auth-dialog h2 { margin: 8px 48px 0 0; font-size: clamp(28px, 3vw, 38px); line-height: 1.16; }
+.auth-close { position: absolute; top: 18px; right: 18px; min-width: 52px; min-height: 52px; }
+.auth-intro { margin: 14px 0 22px; color: var(--v2-muted); font-size: 16px; line-height: 1.7; }
+.auth-tabs {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px;
+  margin-bottom: 22px; padding: 5px; border: 1px solid var(--v2-border); border-radius: 14px; background: var(--v2-surface-soft);
+}
+.auth-tabs button { min-height: 48px; border: 0; border-radius: 10px; background: transparent; color: var(--v2-muted); font-size: 15px; cursor: pointer; }
+.auth-tabs button.active { background: #fff; color: var(--v2-primary); font-weight: 750; box-shadow: 0 2px 8px rgba(15, 23, 42, .08); }
+.auth-form { display: grid; gap: 16px; }
+.auth-form label { display: grid; gap: 7px; color: var(--v2-text-2); font-size: 15px; font-weight: 700; }
+.auth-form input,
+.auth-form select {
+  width: 100%; min-height: 54px; padding: 0 15px; border: 1px solid var(--v2-border-strong); border-radius: 11px;
+  outline: none; background: #fff; color: var(--v2-text); font: inherit;
+}
+.auth-form input:focus,
+.auth-form select:focus { border-color: var(--v2-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .13); }
+.auth-submit { width: 100%; margin-top: 4px; font-size: 16px; }
+.auth-message { margin: 0; padding: 12px 14px; border-radius: 10px; background: #fff7ed; color: #9a3412; font-size: 15px; }
+.auth-security-note { margin: 18px 0 0; color: var(--v2-muted); font-size: 13px; line-height: 1.6; }
+.consent-list { display: grid; gap: 12px; }
+.consent-card {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 18px;
+  padding: 17px; border: 1px solid var(--v2-border); border-radius: 14px; background: var(--v2-surface-soft);
+}
+.consent-card h3 { margin: 0; font-size: 18px; }
+.consent-card p { margin: 5px 0 0; color: var(--v2-muted); font-size: 14px; line-height: 1.55; }
+.consent-card button {
+  min-width: 176px; min-height: 52px; padding: 0 14px; border: 1px solid #bfdbfe; border-radius: 10px;
+  background: #fff; color: var(--v2-primary); font-weight: 700; cursor: pointer;
+}
+.consent-card button.granted { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
+.auth-finish { width: 100%; margin-top: 18px; }
+
+@media (max-width: 960px) {
+  .account-chip > span { display: none; }
+  .account-chip { gap: 5px; padding-left: 6px; }
+}
+@media (max-width: 620px) {
+  .auth-layer { align-items: end; padding: 0; }
+  .auth-dialog { width: 100%; max-height: 92vh; padding: 24px 18px calc(24px + env(safe-area-inset-bottom)); border-radius: 20px 20px 0 0; }
+  .auth-dialog h2 { font-size: 28px; }
+  .consent-card { grid-template-columns: 1fr; }
+  .consent-card button { width: 100%; }
+  .account-chip button:first-of-type { display: none; }
+  .login-entry span { display: none; }
+}

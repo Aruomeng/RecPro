@@ -1,5 +1,7 @@
 import { decodeRecommendationExecution } from "../domain/recommendation";
 import type { RecommendationExecution, RecommendationRequest } from "../domain/recommendation";
+import { identityHeaders } from "./authHeaders";
+import type { RequestIdentity } from "./authHeaders";
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -40,11 +42,11 @@ async function jsonResponse(response: Response): Promise<Record<string, unknown>
   return value as Record<string, unknown>;
 }
 
-function headers(userId: number, idempotencyKey?: string, workspaceId?: string): HeadersInit {
+function headers(identity: RequestIdentity, idempotencyKey?: string, workspaceId?: string): HeadersInit {
   return {
     Accept: "application/json",
     "Content-Type": "application/json",
-    "X-Demo-User-Id": String(userId),
+    ...identityHeaders(identity),
     ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}),
     ...(workspaceId ? { "X-Agent-Workspace-Id": workspaceId } : {}),
   };
@@ -59,22 +61,22 @@ function accepted(value: Record<string, unknown>): RunAccepted {
 }
 
 export const recommendationRunClient = {
-  async create(request: RecommendationRequest, userId: number, signal?: AbortSignal, workspaceId?: string): Promise<RunAccepted> {
+  async create(request: RecommendationRequest, identity: RequestIdentity, signal?: AbortSignal, workspaceId?: string): Promise<RunAccepted> {
     const response = await fetch(`${baseUrl}/api/v1/recommendation-runs`, {
-      method: "POST", headers: headers(userId, request.request_id, workspaceId), body: JSON.stringify(request), signal,
+      method: "POST", headers: headers(identity, request.request_id, workspaceId), body: JSON.stringify(request), signal,
     });
     return accepted(await jsonResponse(response));
   },
 
-  async clarify(taskId: string, contextVersion: number, answers: Record<string, string>, idempotencyKey: string, userId: number, workspaceId?: string): Promise<RunAccepted> {
+  async clarify(taskId: string, contextVersion: number, answers: Record<string, string>, idempotencyKey: string, identity: RequestIdentity, workspaceId?: string): Promise<RunAccepted> {
     const response = await fetch(`${baseUrl}/api/v1/recommendation-runs/${encodeURIComponent(taskId)}/clarifications`, {
-      method: "POST", headers: headers(userId, idempotencyKey, workspaceId), body: JSON.stringify({ context_version: contextVersion, answers }),
+      method: "POST", headers: headers(identity, idempotencyKey, workspaceId), body: JSON.stringify({ context_version: contextVersion, answers }),
     });
     return accepted(await jsonResponse(response));
   },
 
-  async state(taskId: string, userId: number): Promise<{ terminal: boolean; status: string; result?: RecommendationExecution; error_code?: string }> {
-    const response = await fetch(`${baseUrl}/api/v1/recommendation-runs/${encodeURIComponent(taskId)}`, { headers: headers(userId), cache: "no-store" });
+  async state(taskId: string, identity: RequestIdentity): Promise<{ terminal: boolean; status: string; result?: RecommendationExecution; error_code?: string }> {
+    const response = await fetch(`${baseUrl}/api/v1/recommendation-runs/${encodeURIComponent(taskId)}`, { headers: headers(identity), cache: "no-store" });
     const payload = await jsonResponse(response);
     const result = payload.result;
     if (result !== null && result !== undefined) payload.result = decodeRecommendationExecution(result);
@@ -82,12 +84,12 @@ export const recommendationRunClient = {
     return payload as unknown as { terminal: boolean; status: string; result?: RecommendationExecution; error_code?: string };
   },
 
-  async stream(run: RunAccepted, userId: number, onEvent: (event: AgentProgressEvent) => void, signal?: AbortSignal): Promise<void> {
+  async stream(run: RunAccepted, getIdentity: () => RequestIdentity, onEvent: (event: AgentProgressEvent) => void, signal?: AbortSignal): Promise<void> {
     let lastSequence = 0;
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
         const response = await fetch(`${baseUrl}${run.events_url}`, {
-          headers: { Accept: "text/event-stream", "X-Demo-User-Id": String(userId), ...(lastSequence ? { "Last-Event-ID": String(lastSequence) } : {}) }, cache: "no-store", signal,
+          headers: { Accept: "text/event-stream", ...identityHeaders(getIdentity()), ...(lastSequence ? { "Last-Event-ID": String(lastSequence) } : {}) }, cache: "no-store", signal,
         });
         if (!response.ok || !response.body) throw new Error(`RUN_STREAM_HTTP_${response.status}`);
         const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";

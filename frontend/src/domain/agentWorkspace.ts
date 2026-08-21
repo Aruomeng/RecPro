@@ -70,7 +70,7 @@ export interface AgentWorkspaceSnapshot {
   schema_version: "agent-workspace-v1";
   workspace_id: string;
   session_id: string;
-  mode: "guest" | "demo";
+  mode: "guest" | "demo" | "authenticated";
   context_version: number;
   orchestrator: { name: string; role: string; state: AgentWorkspaceState; current_route: string };
   agents: WorkspaceAgent[];
@@ -112,7 +112,7 @@ export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
 }
 
 export function isAgentWorkspaceSnapshot(value: unknown): value is AgentWorkspaceSnapshot {
-  if (!isRecord(value) || value.schema_version !== "agent-workspace-v1" || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo"].includes(String(value.mode))) return false;
+  if (!isRecord(value) || value.schema_version !== "agent-workspace-v1" || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo", "authenticated"].includes(String(value.mode))) return false;
   if (!isRecord(value.orchestrator) || !Array.isArray(value.agents) || value.agents.length !== 8 || !value.agents.every(isWorkspaceAgent)) return false;
   if (!Array.isArray(value.directives) || !value.directives.every(isDirective) || !Array.isArray(value.recent_events) || !value.recent_events.every(isWorkspaceEvent)) return false;
   if (!Array.isArray(value.sources) || !value.sources.every((source) => isRecord(source) && typeof source.source_id === "string" && ["INTERNAL", "EXTERNAL_DEMO"].includes(String(source.kind)) && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string")) return false;

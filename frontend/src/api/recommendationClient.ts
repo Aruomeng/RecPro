@@ -1,5 +1,7 @@
 import { isRecommendationExecution } from "../domain/recommendation";
 import type { RecommendationClient, RecommendationExecution, RecommendationRequest } from "../domain/recommendation";
+import { identityHeaders } from "./authHeaders";
+import type { RequestIdentity } from "./authHeaders";
 
 export const RECOMMENDATION_PATHS = {
   tasks: "/api/v1/recommendation-tasks",
@@ -100,7 +102,7 @@ async function post<T>(params: {
   url: string;
   body: unknown;
   idempotencyKey: string;
-  demoUserId: number;
+  identity: RequestIdentity;
   signal?: AbortSignal;
   timeoutMs: number;
   validate: (value: unknown) => value is T;
@@ -122,7 +124,7 @@ async function post<T>(params: {
         Accept: "application/json",
         "Content-Type": "application/json",
         "Idempotency-Key": params.idempotencyKey,
-        "X-Demo-User-Id": String(params.demoUserId),
+        ...identityHeaders(params.identity),
       },
       body: JSON.stringify(params.body),
       signal: controller.signal,
@@ -158,11 +160,13 @@ export function createRecommendationClient(params: {
   fetcher?: Fetcher;
   timeoutMs?: number;
   demoUserId?: number;
+  identity?: RequestIdentity;
 } = {}): RecommendationClient {
   const baseUrl = normalizeBaseUrl(params.baseUrl ?? "");
   const fetcher = params.fetcher ?? globalThis.fetch.bind(globalThis);
   const timeoutMs = params.timeoutMs ?? DEFAULT_RECOMMENDATION_TIMEOUT_MS;
   const demoUserId = params.demoUserId ?? 1001;
+  const identity = params.identity ?? { mode: "demo", demoUserId };
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive finite number");
   if (!Number.isInteger(demoUserId) || demoUserId < 1) throw new RangeError("demoUserId must be a positive integer");
 
@@ -173,7 +177,7 @@ export function createRecommendationClient(params: {
         url: `${baseUrl}${RECOMMENDATION_PATHS.tasks}`,
         body: request,
         idempotencyKey: request.request_id,
-        demoUserId,
+        identity,
         signal: options.signal,
         timeoutMs,
         validate: isRecommendationExecution,
@@ -187,7 +191,7 @@ export function createRecommendationClient(params: {
         url: `${baseUrl}${RECOMMENDATION_PATHS.tasks}/${encodeURIComponent(taskId)}/clarifications`,
         body: { context_version: contextVersion, answers },
         idempotencyKey,
-        demoUserId,
+        identity,
         signal: options.signal,
         timeoutMs,
         validate: isRecommendationExecution,

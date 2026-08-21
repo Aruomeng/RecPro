@@ -1,10 +1,12 @@
 import { isAgentWorkspaceSnapshot, isDirective, isRecord, isWorkspaceEvent } from "../domain/agentWorkspace";
 import type { AgentWorkspaceSnapshot, InteractionDirective, WorkspaceEvent, WorkspaceObservationType } from "../domain/agentWorkspace";
+import { identityHeaders } from "./authHeaders";
+import type { RequestIdentity } from "./authHeaders";
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
-function headers(userId: number, idempotencyKey?: string): HeadersInit {
-  return { Accept: "application/json", "Content-Type": "application/json", "X-Demo-User-Id": String(userId), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) };
+function headers(identity: RequestIdentity, idempotencyKey?: string): HeadersInit {
+  return { Accept: "application/json", "Content-Type": "application/json", ...identityHeaders(identity), ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) };
 }
 
 async function payload(response: Response): Promise<Record<string, unknown>> {
@@ -15,37 +17,37 @@ async function payload(response: Response): Promise<Record<string, unknown>> {
 }
 
 export const agentWorkspaceClient = {
-  async create(sessionId: string, mode: "guest" | "demo", userId: number): Promise<{ workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean }> {
-    const response = await fetch(`${baseUrl}/api/v1/agent-workspaces`, { method: "POST", headers: headers(userId), body: JSON.stringify({ session_id: sessionId, mode }) });
+  async create(sessionId: string, mode: "guest" | "demo" | "authenticated", identity: RequestIdentity): Promise<{ workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean }> {
+    const response = await fetch(`${baseUrl}/api/v1/agent-workspaces`, { method: "POST", headers: headers(identity), body: JSON.stringify({ session_id: sessionId, mode }) });
     const value = await payload(response);
     if (!isAgentWorkspaceSnapshot(value.workspace) || typeof value.events_url !== "string" || typeof value.replayed !== "boolean") throw new Error("INVALID_WORKSPACE_CREATED");
     return value as unknown as { workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean };
   },
 
-  async observe(workspaceId: string, type: WorkspaceObservationType, value: Record<string, unknown>, userId: number): Promise<AgentWorkspaceSnapshot> {
+  async observe(workspaceId: string, type: WorkspaceObservationType, value: Record<string, unknown>, identity: RequestIdentity): Promise<AgentWorkspaceSnapshot> {
     const observationId = globalThis.crypto.randomUUID();
     const response = await fetch(`${baseUrl}/api/v1/agent-workspaces/${encodeURIComponent(workspaceId)}/observations`, {
-      method: "POST", headers: headers(userId, observationId), body: JSON.stringify({ observation_id: observationId, event_type: type, payload: value }),
+      method: "POST", headers: headers(identity, observationId), body: JSON.stringify({ observation_id: observationId, event_type: type, payload: value }),
     });
     const result = await payload(response);
     if (!isAgentWorkspaceSnapshot(result.workspace)) throw new Error("INVALID_WORKSPACE_OBSERVATION");
     return result.workspace;
   },
 
-  async action(workspaceId: string, directiveId: string, action: "ACCEPT" | "DISMISS" | "UNDO", userId: number): Promise<InteractionDirective> {
+  async action(workspaceId: string, directiveId: string, action: "ACCEPT" | "DISMISS" | "UNDO", identity: RequestIdentity): Promise<InteractionDirective> {
     const response = await fetch(`${baseUrl}/api/v1/agent-workspaces/${encodeURIComponent(workspaceId)}/directives/${encodeURIComponent(directiveId)}/actions`, {
-      method: "POST", headers: headers(userId), body: JSON.stringify({ action }),
+      method: "POST", headers: headers(identity), body: JSON.stringify({ action }),
     });
     const result = await payload(response);
     if (!isDirective(result.directive)) throw new Error("INVALID_DIRECTIVE_ACTION");
     return result.directive;
   },
 
-  async stream(eventsUrl: string, workspaceId: string, userId: number, onEvent: (event: WorkspaceEvent) => void, signal: AbortSignal): Promise<void> {
+  async stream(eventsUrl: string, workspaceId: string, getIdentity: () => RequestIdentity, onEvent: (event: WorkspaceEvent) => void, signal: AbortSignal): Promise<void> {
     let last = 0; let retryDelayMs = 600;
     while (!signal.aborted) {
       try {
-        const response = await fetch(`${baseUrl}${eventsUrl}`, { headers: { Accept: "text/event-stream", "X-Demo-User-Id": String(userId), ...(last ? { "Last-Event-ID": String(last) } : {}) }, cache: "no-store", signal });
+        const response = await fetch(`${baseUrl}${eventsUrl}`, { headers: { Accept: "text/event-stream", ...identityHeaders(getIdentity()), ...(last ? { "Last-Event-ID": String(last) } : {}) }, cache: "no-store", signal });
         if (!response.ok || !response.body) throw new Error(`WORKSPACE_STREAM_HTTP_${response.status}`);
         const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
         while (!signal.aborted) {

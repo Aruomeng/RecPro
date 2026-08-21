@@ -4,16 +4,19 @@ import { useRoute } from "vue-router";
 import ResourceDrawer from "./components/ResourceDrawer.vue";
 import SystemStatus from "./components/SystemStatus.vue";
 import AgentRail from "./components/AgentRail.vue";
+import LoginDialog from "./components/LoginDialog.vue";
 import { useAgentWorkspaceStore } from "./stores/agentWorkspace";
 import { useLibraryStore } from "./stores/library";
 import { useSessionStore } from "./stores/session";
 import { useSystemStore } from "./stores/system";
+import { useAuthStore } from "./stores/auth";
 
 const route = useRoute();
 const session = useSessionStore();
 const system = useSystemStore();
 const library = useLibraryStore();
 const agentWorkspace = useAgentWorkspaceStore();
+const auth = useAuthStore();
 const nav = [
   ["/", "⌂", "探索首页"], ["/recommend", "✦", "智能推荐"], ["/graph", "⌘", "知识图谱"], ["/path", "↝", "阅读路径"], ["/insights", "◫", "馆藏洞察"],
 ] as const;
@@ -21,6 +24,7 @@ const pageTitle = computed(() => nav.find(([path]) => path === route.path)?.[2] 
 
 onMounted(async () => {
   session.start();
+  await auth.restore();
   await Promise.all([system.refresh(), library.loadOverview(), agentWorkspace.initialize()]);
   await agentWorkspace.observe("ROUTE_CHANGED", { route: route.path, page_title: pageTitle.value });
 });
@@ -30,6 +34,7 @@ watch(() => system.readiness, (readiness) => {
   const degraded = Object.entries(readiness.value.components).filter(([, component]) => component.status !== "UP").map(([name]) => name);
   void agentWorkspace.observe("READINESS_CHANGED", { degraded, can_recommend: readiness.value.can_recommend });
 });
+watch(() => session.inactivityEpoch, () => { if (auth.authenticated) void auth.logout(); });
 onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
 </script>
 
@@ -48,10 +53,12 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
         <div class="breadcrumb"><span>智慧图书馆</span><i>/</i><b>{{ pageTitle }}</b></div>
         <div class="top-actions">
           <span class="session-label">会话 {{ session.sessionId.slice(0, 8).toUpperCase() }}</span>
-          <div class="mode-switch" role="group" aria-label="身份模式">
-            <button type="button" :class="{ active: session.mode === 'guest' }" @click="session.setMode('guest')">访客模式</button>
-            <button type="button" :class="{ active: session.mode === 'demo' }" @click="session.setMode('demo')">演示画像</button>
+          <div v-if="auth.authenticated && auth.account" class="account-chip">
+            <span><b>{{ auth.account.display_name }}</b><small>{{ auth.account.roles.join(' · ') }}</small></span>
+            <button type="button" @click="auth.onboardingOpen = true">画像授权</button>
+            <button type="button" @click="auth.logout">安全退出</button>
           </div>
+          <button v-else class="login-entry" type="button" @click="auth.dialogOpen = true"><span>访客探索</span><b>登录</b></button>
           <button class="system-dot" type="button" :title="system.healthy ? '系统已连接' : '系统状态需检查'" @click="system.drawerOpen = true"><i :class="{ up: system.healthy }" />{{ system.healthy ? '馆藏在线' : '状态检查' }}</button>
         </div>
       </header>
@@ -67,10 +74,12 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
           <span class="eyebrow">SYSTEM READINESS</span><h2>系统状态</h2>
           <p>技术信息仅在此处展示，不占用读者主界面。</p>
           <SystemStatus :liveness="system.liveness" :readiness="system.readiness" />
+          <button v-if="auth.researchDemoEnabled" class="secondary-action" type="button" @click="auth.useResearchDemo(); system.drawerOpen = false">进入研究演示画像（1001）</button>
           <RouterLink class="secondary-action" to="/system" @click="system.drawerOpen = false">打开完整兼容页</RouterLink>
         </aside>
       </div>
     </Transition>
-    <Transition name="countdown"><div v-if="session.showCountdown" class="session-countdown" role="status"><b>{{ session.secondsRemaining }}</b><span>秒后重置访客会话</span><button type="button" @click="session.touch">继续探索</button></div></Transition>
+    <LoginDialog />
+    <Transition name="countdown"><div v-if="session.showCountdown" class="session-countdown" role="status"><b>{{ session.secondsRemaining }}</b><span>秒后{{ auth.authenticated ? '安全退出' : '重置访客会话' }}</span><button type="button" @click="session.touch">继续探索</button></div></Transition>
   </div>
 </template>

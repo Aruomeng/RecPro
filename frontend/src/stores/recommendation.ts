@@ -7,6 +7,7 @@ import type { RecommendationExecution, RecommendationOutputType } from "../domai
 import { createRequestId } from "../domain/recommendation";
 import { useSessionStore } from "./session";
 import { useAgentWorkspaceStore } from "./agentWorkspace";
+import { useAuthStore } from "./auth";
 
 export const AGENT_ROLES = [
   ["IntentUnderstandingAgent", "意图理解"], ["UserProfileAgent", "用户画像"],
@@ -18,6 +19,7 @@ export const AGENT_ROLES = [
 export const useRecommendationStore = defineStore("recommendation", () => {
   const session = useSessionStore();
   const workspace = useAgentWorkspaceStore();
+  const auth = useAuthStore();
   const query = ref("多智能体系统与智慧图书馆");
   const outputType = ref<RecommendationOutputType>("TOPIC_RESOURCES");
   const phase = ref<"idle" | "starting" | "streaming" | "clarification" | "success" | "error">("idle");
@@ -41,11 +43,11 @@ export const useRecommendationStore = defineStore("recommendation", () => {
   async function consume(accepted: RunAccepted): Promise<void> {
     run.value = accepted;
     phase.value = "streaming";
-    await recommendationRunClient.stream(accepted, session.userId, (event) => {
+    await recommendationRunClient.stream(accepted, () => auth.requestIdentity, (event) => {
       events.value.push(event);
       if (event.event_type === "TASK_FAILED") error.value = `协作任务失败：${event.error_code ?? "UNKNOWN"}`;
     }, controller?.signal);
-    const state = await recommendationRunClient.state(accepted.task_id, session.userId);
+    const state = await recommendationRunClient.state(accepted.task_id, auth.requestIdentity);
     if (state.result) {
       result.value = state.result;
       phase.value = state.result.status === "WAITING_CLARIFICATION" ? "clarification" : "success";
@@ -56,6 +58,7 @@ export const useRecommendationStore = defineStore("recommendation", () => {
   }
 
   async function start(selectedOutput = outputType.value): Promise<void> {
+    if (!auth.requireLogin(selectedOutput === "READING_PATH" ? "阅读路径" : "智能推荐")) return;
     const input = query.value.trim();
     if (!input) { error.value = "请输入想探索的主题。"; return; }
     controller?.abort();
@@ -73,8 +76,8 @@ export const useRecommendationStore = defineStore("recommendation", () => {
       const accepted = await recommendationRunClient.create({
         request_id: createRequestId(), session_id: session.sessionId, scene: "SEARCH_AFTER", input_text: input,
         requested_resource_types: ["BOOK"], requested_output_type: selectedOutput, limit: selectedOutput === "READING_PATH" ? 8 : 8,
-        constraints: { personalization_mode: session.mode === "demo" ? "PROFILE" : "ANONYMOUS" },
-      }, session.userId, controller.signal, workspace.workspaceId);
+        constraints: { personalization_mode: session.mode === "demo" || auth.canUsePersonalization ? "PROFILE" : "ANONYMOUS" },
+      }, auth.requestIdentity, controller.signal, workspace.workspaceId);
       await consume(accepted);
     } catch (caught) {
       if (!controller.signal.aborted) { phase.value = "error"; error.value = caught instanceof Error ? caught.message : "推荐任务暂时失败。"; }
@@ -83,10 +86,11 @@ export const useRecommendationStore = defineStore("recommendation", () => {
 
   async function clarify(): Promise<void> {
     if (!result.value) return;
+    if (!auth.requireLogin("推荐澄清")) return;
     session.setBusy(true);
     controller = new AbortController();
     try {
-      const accepted = await recommendationRunClient.clarify(result.value.task_id, result.value.context_version, answers.value, createRequestId(), session.userId, workspace.workspaceId);
+      const accepted = await recommendationRunClient.clarify(result.value.task_id, result.value.context_version, answers.value, createRequestId(), auth.requestIdentity, workspace.workspaceId);
       events.value = [];
       await consume(accepted);
     } catch (caught) { phase.value = "error"; error.value = caught instanceof Error ? caught.message : "澄清提交失败。"; }

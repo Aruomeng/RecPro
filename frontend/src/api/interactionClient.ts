@@ -7,6 +7,8 @@ import type {
   ImpressionBatchResponse,
   InteractionClient,
 } from "../domain/interaction";
+import { identityHeaders } from "./authHeaders";
+import type { RequestIdentity } from "./authHeaders";
 
 export const INTERACTION_PATHS = {
   impressions: "/api/v1/recommendation-impressions/batch",
@@ -197,7 +199,7 @@ async function post<T>(params: {
   url: string;
   body: unknown;
   idempotencyKey: string;
-  demoUserId: number;
+  identity: RequestIdentity;
   signal?: AbortSignal;
   timeoutMs: number;
   workspaceId?: string;
@@ -221,7 +223,7 @@ async function post<T>(params: {
         Accept: "application/json",
         "Content-Type": "application/json",
         "Idempotency-Key": params.idempotencyKey,
-        "X-Demo-User-Id": String(params.demoUserId),
+        ...identityHeaders(params.identity),
         ...(params.workspaceId ? { "X-Agent-Workspace-Id": params.workspaceId } : {}),
       },
       body: JSON.stringify(params.body),
@@ -258,12 +260,14 @@ export function createInteractionClient(params: {
   fetcher?: Fetcher;
   timeoutMs?: number;
   demoUserId?: number;
+  identity?: RequestIdentity;
   workspaceId?: string;
 } = {}): InteractionClient {
   const baseUrl = normalizeBaseUrl(params.baseUrl ?? "");
   const fetcher = params.fetcher ?? globalThis.fetch.bind(globalThis);
   const timeoutMs = params.timeoutMs ?? DEFAULT_INTERACTION_TIMEOUT_MS;
   const demoUserId = params.demoUserId ?? 1001;
+  const identity = params.identity ?? { mode: "demo", demoUserId };
   const workspaceId = params.workspaceId;
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) throw new RangeError("timeoutMs must be a positive finite number");
   if (!Number.isInteger(demoUserId) || demoUserId < 1) throw new RangeError("demoUserId must be a positive integer");
@@ -278,7 +282,7 @@ export function createInteractionClient(params: {
         url: `${baseUrl}${INTERACTION_PATHS.impressions}`,
         body: request,
         idempotencyKey: options.idempotencyKey ?? request.impressions[0].impression_uuid,
-        demoUserId,
+        identity,
         signal: options.signal,
         timeoutMs,
         workspaceId,
@@ -293,7 +297,7 @@ export function createInteractionClient(params: {
         url: `${baseUrl}${INTERACTION_PATHS.feedback(itemId)}`,
         body: request,
         idempotencyKey: request.feedback_uuid,
-        demoUserId,
+        identity,
         signal: options.signal,
         timeoutMs,
         workspaceId,
@@ -307,7 +311,7 @@ export function createInteractionClient(params: {
         url: `${baseUrl}${INTERACTION_PATHS.behavior}`,
         body: request,
         idempotencyKey: request.event_uuid,
-        demoUserId,
+        identity,
         signal: options.signal,
         timeoutMs,
         workspaceId,

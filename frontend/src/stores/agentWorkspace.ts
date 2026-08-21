@@ -4,9 +4,11 @@ import { defineStore } from "pinia";
 import { agentWorkspaceClient } from "../api/agentWorkspaceClient";
 import type { AgentWorkspaceSnapshot, InteractionDirective, WorkspaceAgent, WorkspaceEvent, WorkspaceObservationType } from "../domain/agentWorkspace";
 import { useSessionStore } from "./session";
+import { useAuthStore } from "./auth";
 
 export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
   const session = useSessionStore();
+  const auth = useAuthStore();
   const workspaceId = ref("");
   const state = ref<"idle" | "connecting" | "online" | "degraded">("idle");
   const expanded = ref(false);
@@ -87,11 +89,11 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
     state.value = "connecting";
     error.value = "";
     try {
-      const created = await agentWorkspaceClient.create(session.sessionId, session.mode, session.userId);
+      const created = await agentWorkspaceClient.create(session.sessionId, session.mode, auth.requestIdentity);
       if (token !== generation) return;
       applySnapshot(created.workspace);
       state.value = "online";
-      void agentWorkspaceClient.stream(created.events_url, created.workspace.workspace_id, session.userId, applyEvent, streamController.signal).catch((caught) => {
+      void agentWorkspaceClient.stream(created.events_url, created.workspace.workspace_id, () => auth.requestIdentity, applyEvent, streamController.signal).catch((caught) => {
         if (!streamController?.signal.aborted) { state.value = "degraded"; error.value = caught instanceof Error ? caught.message : "Agent 事件流已断开"; }
       });
     } catch (caught) {
@@ -104,7 +106,7 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
   async function observe(type: WorkspaceObservationType, payload: Record<string, unknown> = {}): Promise<void> {
     if (!workspaceId.value) return;
     try {
-      applySnapshot(await agentWorkspaceClient.observe(workspaceId.value, type, payload, session.userId));
+      applySnapshot(await agentWorkspaceClient.observe(workspaceId.value, type, payload, auth.requestIdentity));
       state.value = "online";
     } catch (caught) {
       error.value = caught instanceof Error ? caught.message : "情境观察未送达";
@@ -114,14 +116,18 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
 
   async function action(directive: InteractionDirective, value: "ACCEPT" | "DISMISS" | "UNDO"): Promise<void> {
     if (!workspaceId.value) return;
-    const updated = await agentWorkspaceClient.action(workspaceId.value, directive.directive_id, value, session.userId);
+    const updated = await agentWorkspaceClient.action(workspaceId.value, directive.directive_id, value, auth.requestIdentity);
     directives.value = directives.value.map((item) => item.directive_id === updated.directive_id ? updated : item);
   }
 
   function selectAgent(name: string): void { selectedAgentName.value = name; expanded.value = true; }
   function stop(): void { generation += 1; streamController?.abort(); streamController = undefined; state.value = "idle"; }
 
-  watch(() => [session.sessionId, session.mode, session.userId] as const, () => { void initialize(); });
+  watch(() => [session.sessionId, session.mode, session.userId, auth.accessToken] as const, () => {
+    // The application shell owns initial startup. Once started, identity and
+    // session changes reconnect the same global workspace automatically.
+    if (state.value !== "idle") void initialize();
+  });
 
   return {
     workspaceId, state, expanded, snapshot, agents, events, directives, sources, selectedAgentName, selectedAgent, error,
