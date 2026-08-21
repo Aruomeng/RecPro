@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import binascii
 from dataclasses import dataclass
+from datetime import UTC, datetime
 import hashlib
 import hmac
 import json
@@ -21,6 +22,7 @@ import math
 import re
 import time
 from typing import Any, Callable
+from uuid import UUID
 
 from backend.app.config import AppSettings
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
@@ -28,7 +30,7 @@ from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 
 _BASE64URL = re.compile(r"^[A-Za-z0-9_-]+$")
 _SUBJECT = re.compile(r"^[1-9][0-9]{0,18}$")
-_ALLOWED_ROLES = frozenset({"user", "research_admin", "service_worker"})
+_ALLOWED_ROLES = frozenset({"user", "librarian", "research_admin", "service_worker"})
 _MAX_TOKEN_LENGTH = 16 * 1024
 _MAX_SEGMENT_LENGTH = 8 * 1024
 
@@ -170,10 +172,29 @@ class HMACBearerTokenResolver:
             not isinstance(token_id, str) or not 1 <= len(token_id) <= 128
         ):
             return None
+        session_id = payload.get("sid")
+        try:
+            parsed_session_id = UUID(session_id) if session_id is not None else None
+        except (TypeError, ValueError):
+            return None
+        auth_version = payload.get("av")
+        role_version = payload.get("rv")
+        if auth_version is not None and (
+            isinstance(auth_version, bool) or not isinstance(auth_version, int) or auth_version < 1
+        ):
+            return None
+        if role_version is not None and (
+            isinstance(role_version, bool) or not isinstance(role_version, int) or role_version < 1
+        ):
+            return None
         return AuthenticatedPrincipal(
             user_id=user_id,
             roles=frozenset(roles),
             token_id=token_id,
+            session_id=parsed_session_id,
+            auth_version=auth_version,
+            role_version=role_version,
+            expires_at=datetime.fromtimestamp(expiration, tz=UTC),
         )
 
 
