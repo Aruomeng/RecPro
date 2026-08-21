@@ -1,0 +1,96 @@
+.kiosk-shell { min-height: 100vh; }
+.nav-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 30;
+  width: var(--rail);
+  padding: 18px 10px;
+  border-right: 1px solid var(--v2-border);
+  background: var(--v2-surface);
+  backdrop-filter: none;
+}
+.brand-mark {
+  width: 58px; height: 58px; border: 0; border-radius: 16px;
+  background: var(--v2-primary); color: #fff; font-family: inherit; letter-spacing: -.04em;
+  box-shadow: 0 8px 20px rgba(37, 99, 235, .22);
+}
+.brand-mark i { background: #38bdf8; box-shadow: none; border: 2px solid #fff; }
+.nav-rail nav { gap: 8px; }
+.nav-rail nav a, .rail-status { min-height: 68px; color: var(--v2-muted); border-radius: 14px; }
+.nav-rail nav a b { font-size: 23px; }
+.nav-rail nav a span, .rail-status span { font-size: 12px; font-weight: 650; }
+.nav-rail nav a:hover, .nav-rail nav a.router-link-active { color: var(--v2-primary); background: var(--v2-primary-soft); transform: none; }
+.kiosk-frame { margin-left: var(--rail); min-height: 100vh; height: auto; display: grid; grid-template-rows: 72px minmax(calc(100vh - 72px), auto); }
+.top-bar {
+  position: sticky; top: 0; z-index: 20; height: 72px;
+  padding: 0 clamp(20px, 2.2vw, 44px);
+  border-bottom: 1px solid var(--v2-border);
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: saturate(160%) blur(12px);
+}
+.breadcrumb { color: var(--v2-muted); font-size: 14px; }
+.breadcrumb b { color: var(--v2-text); }
+.session-label { color: var(--v2-muted); font-size: 12px; }
+.mode-switch { height: 44px; border-color: var(--v2-border); background: var(--v2-surface-soft); }
+.mode-switch button { min-width: 88px; min-height: 36px; color: var(--v2-muted); }
+.mode-switch button.active { background: #fff; color: var(--v2-primary); box-shadow: 0 1px 5px rgba(15, 23, 42, .09); }
+.system-dot { min-height: 52px; color: var(--v2-muted); }
+.rail-status i, .system-dot i { box-shadow: none; }
+.rail-status i.up, .system-dot i.up { background: var(--v2-success); box-shadow: none; }
+.kiosk-content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--content-max);
+  min-width: 0;
+  margin: 0 auto;
+  overflow: visible;
+  padding: clamp(20px, 2vw, 36px) clamp(20px, 2.2vw, 44px) 48px;
+}
+.view-header {
+  height: auto;
+  min-height: 104px;
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+.view-header h1 { margin: 0; }
+.view-header p { margin: 8px 0 0; }
+.graph-search, .path-create { min-width: min(520px, 48vw); }
+.view-header input, .path-create input, .graph-search input {
+  min-width: 0; flex: 1; height: 56px; border-color: var(--v2-border); background: #fff;
+  color: var(--v2-text); font-size: 16px;
+}
+.view-header button, .path-create button, .graph-search button, .secondary-action {
+  min-height: 56px; height: auto; border-radius: 12px; background: var(--v2-primary); color: #fff;
+}
+.page-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--v2-gap-4); }
+.span-12 { grid-column: span 12; }.span-8 { grid-column: span 8; }.span-7 { grid-column: span 7; }.span-6 { grid-column: span 6; }.span-5 { grid-column: span 5; }.span-4 { grid-column: span 4; }
+@media (min-width: 1600px) {
+  .kiosk-shell.agent-panel-open .kiosk-frame { margin-right: var(--agent-panel-width); }
+}
+@media (max-width: 1599px) {
+  .kiosk-shell.agent-panel-open .kiosk-frame { margin-right: 0; }
+}
+@media (max-width: 1099px) {
+  .kiosk-content { padding-bottom: 92px; }
+  .top-actions .session-label { display: none; }
+  .view-header { flex-direction: column; }
+  .graph-search, .path-create { width: 100%; min-width: 0; }
+  .span-8, .span-7, .span-6, .span-5, .span-4 { grid-column: span 12; }
+}
+@media (max-width: 720px) {
+  :root { --rail: 0px; }
+  .nav-rail { inset: auto 0 62px 0; width: auto; height: 64px; padding: 6px; border: 0; border-top: 1px solid var(--v2-border); flex-direction: row; }
+  .brand-mark { display: none; }
+  .nav-rail nav { flex: 1; flex-direction: row; gap: 2px; }
+  .nav-rail nav a { min-height: 52px; flex: 1; }
+  .nav-rail nav a b { font-size: 17px; }.nav-rail nav a span { font-size: 10px; }
+  .rail-status { width: 48px; min-height: 52px; }
+  .kiosk-frame { margin-left: 0; padding-bottom: 126px; grid-template-rows: 64px auto; }
+  .top-bar { height: 64px; padding: 0 14px; }
+  .breadcrumb span, .breadcrumb i, .top-actions .system-dot { display: none; }
+  .mode-switch button { min-width: 70px; font-size: 13px; }
+  .kiosk-content { padding: 16px 14px 30px; }
+  .view-header { min-height: 0; margin-bottom: 16px; }
+  .view-header h1 { font-size: 28px; }.view-header p { font-size: 15px; }
+}

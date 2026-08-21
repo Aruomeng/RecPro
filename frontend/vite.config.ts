@@ -6,6 +6,10 @@ export default defineConfig({
   build: {
     // Preserve prior immutable assets so repeated builds never remove files.
     emptyOutDir: false,
+    // ECharts is registered per lazy route; the remaining shared rendering
+    // primitives form one measured 512 kB chunk rather than a monolithic
+    // all-chart bundle.  Keep the warning threshold just above that baseline.
+    chunkSizeWarningLimit: 540,
   },
   server: {
     port: 5173,

@@ -3,6 +3,7 @@ import { computed } from "vue";
 import type { EChartsCoreOption as EChartsOption } from "echarts/core";
 import type { GraphNode, GraphView } from "../domain/exploration";
 import EChart from "./EChart.vue";
+import "../charts/registerGraph";
 
 const props = defineProps<{ graph: GraphView | null; compact?: boolean }>();
 const emit = defineEmits<{ nodeClick: [node: GraphNode] }>();

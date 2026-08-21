@@ -2,6 +2,7 @@
 import { computed, onMounted } from "vue";
 import type { EChartsCoreOption as EChartsOption } from "echarts/core";
 import EChart from "../components/EChart.vue";
+import "../charts/registerInsights";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
 const library = useLibraryStore(); const recommendation = useRecommendationStore();

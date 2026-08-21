@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import type { EChartsCoreOption as EChartsOption } from "echarts/core";
 
 import EChart from "../components/EChart.vue";
+import "../charts/registerPie";
 import GraphCanvas from "../components/GraphCanvas.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";

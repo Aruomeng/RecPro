@@ -1,0 +1,7 @@
+/* LibraMAS balanced-screen design system.  kiosk.css remains untouched as the
+   compatibility stylesheet; all new defaults are composed from these modules. */
+@import "./styles-v2/tokens.css";
+@import "./styles-v2/foundation.css";
+@import "./styles-v2/layout.css";
+@import "./styles-v2/components.css";
+@import "./styles-v2/pages.css";
