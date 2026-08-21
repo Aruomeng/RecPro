@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "0cb5fb89-ba1a-5f8d-ab32-841b2d4df6e5",
+  "created_at": "2026-08-21T04:20:00Z",
+  "git_commit": "f670b88adb1d315fb22969daa5c2f6e795a8054a",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "intent": "Create only the two new append-only Agent Workspace audit tables, append the fixed demo acceptance trace (11 public workspace events and 5 directive state facts), and append one migration marker. No existing row is updated or removed; DeepSeek, Neo4j, Chroma, Outbox, container, volume, and file mutations are prohibited.",
+  "environment": {
+    "environment_id": "recpro_local_research_g10",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:7a8dbc6a0fbb41a0a47b96f4dc5f4d5076160b4cbb8ae178d107cc5df43c0c5f",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.agent_workspace_event:schema",
+      "operation": "CREATE",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.interaction_directive_fact:schema",
+      "operation": "CREATE",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.recpro_schema_migration:migration_id=g10-agent-workspace-audit-v1",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.agent_workspace_event:workspace_id=de6b0647-85f5-4e62-9be0-876dd9dd39e7",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 11
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.interaction_directive_fact:workspace_id=de6b0647-85f5-4e62-9be0-876dd9dd39e7",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 5
+    }
+  ],
+  "input_hashes": {
+    "backend/app/agent_workspace/adapters/mysql_audit.py": "fb036bcc45462c0b415405e477f0c75ae6cb1016ccc18733ecddc6d31803b67f",
+    "backend/app/agent_workspace/application/audit_worker.py": "4f822653d2eb69b1d4cddfab1f8c2efd8088ecd0cb8eeebfb3c90335717d247b",
+    "backend/app/agent_workspace/audit.py": "7bcfae75e6009152b6affdf26f23db29bf1fd8042d425b1423db963157f0af44",
+    "backend/app/agent_workspace/ports/audit.py": "34554ede4a6cf40a87a410505dd4a833c27c4f26d5cb53800e402dd6c91fd393",
+    "infra/mysql/migrations/008_g10_agent_workspace_audit.sql": "f9f73b3aab14c6cca5bcf51dd6919e9f4c214599b5036d4560c124e25d69cd9a",
+    "scripts/execute_g10_agent_workspace_audit.py": "f0c898560c5223a99cfa72e9dc4bee4c6231aad24c81a167462727e4e127ca6e",
+    "scripts/reconcile_g10_agent_workspace_audit.py": "0e238a0723e83b71808dc647a5eff8e9e0496c0012949f91c70b4431ab26264d"
+  },
+  "idempotency_key": "g10-agent-workspace-audit-successor-f670b88adb1d",
+  "max_changes": 17,
+  "preconditions": [
+    "reviewed implementation commit is exactly f670b88adb1d315fb22969daa5c2f6e795a8054a and remains an ancestor of the execution revision",
+    "the user separately approves this unchanged successor plan_id and canonical plan_hash before any database connection",
+    "database identity and host fingerprint match; both audit tables and the migration marker are absent",
+    "all seven migration, executor, reconciler, audit port, adapter, worker, and fact-model input hashes match",
+    "executor accepts CREATE TABLE IF NOT EXISTS and INSERT IGNORE only; UPDATE, DELETE, DROP, TRUNCATE, REPLACE, ALTER, and RENAME are rejected",
+    "demo user_id is exactly 1001; workspace_id is de6b0647-85f5-4e62-9be0-876dd9dd39e7; session_id is 57f4cc50-2593-4c0d-952f-060b251f8521",
+    "DeepSeek request budget, external network requests, Neo4j writes, Chroma writes, Outbox claims, container changes, volume changes, and file deletions are exactly 0",
+    "preflight verifies zero table/marker existence before the first statement and postflight reconciles exactly 11 event facts, 5 directive facts, and 1 marker",
+    "rollback is fail-forward only: retain any created schema or appended immutable facts, disable the opt-in adapter, and report failure; no compensating removal is allowed"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "534f66b511d0fd9cc17d4aa625f8a5310d0d592711cf001a6bdcf1bb83e16333"
+}
