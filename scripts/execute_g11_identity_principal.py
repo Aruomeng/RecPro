@@ -89,6 +89,11 @@ def dry_run_report() -> dict[str, object]:
     }
 
 
+def principal_create_sql() -> str:
+    """Return driver-safe SQL while retaining the literal MySQL wildcard host."""
+    return f"CREATE USER '{IDENTITY_USER}'@'%%' IDENTIFIED BY %s"
+
+
 def validate_plan(path: Path, *, plan_id: str, approved_hash: str) -> dict[str, object]:
     plan = json.loads(path.read_text(encoding="utf-8"))
     Draft202012Validator(
@@ -159,7 +164,7 @@ async def apply_plan(args: argparse.Namespace) -> dict[str, object]:
                 return {"status": "PASS", "mode": "IDEMPOTENT_REPLAY", "changes": 0, "business_row_writes": 0}
             raise ValueError("identity principal exists with a partial or different grant set")
         async with connection.cursor() as cursor:
-            await cursor.execute(f"CREATE USER '{IDENTITY_USER}'@'{IDENTITY_HOST}' IDENTIFIED BY %s", (identity_password,))
+            await cursor.execute(principal_create_sql(), (identity_password,))
             for table, privileges in TABLE_PRIVILEGES.items():
                 privilege_sql = ", ".join(privileges)
                 await cursor.execute(f"GRANT {privilege_sql} ON `{database}`.`{table}` TO '{IDENTITY_USER}'@'{IDENTITY_HOST}'")

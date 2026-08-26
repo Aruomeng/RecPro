@@ -4,7 +4,7 @@ import hashlib
 import unittest
 
 from scripts.build_g11_identity_principal_plan import build_plan
-from scripts.execute_g11_identity_principal import MAXIMUM_CHANGES, TABLE_PRIVILEGES, canonical, dry_run_report
+from scripts.execute_g11_identity_principal import MAXIMUM_CHANGES, TABLE_PRIVILEGES, canonical, dry_run_report, principal_create_sql
 
 
 class IdentityPrincipalPlanTests(unittest.TestCase):
@@ -24,6 +24,11 @@ class IdentityPrincipalPlanTests(unittest.TestCase):
         serialized = "\n".join(target["identifier"] for target in plan["targets"])
         self.assertNotIn(":DELETE", serialized)
         self.assertNotIn(":DROP", serialized)
+
+    def test_create_user_sql_escapes_driver_percent_without_changing_target(self) -> None:
+        statement = principal_create_sql()
+        self.assertIn("'recpro_identity'@'%%'", statement)
+        self.assertEqual(1, statement.count("%s"))
 
 
 if __name__ == "__main__": unittest.main()
