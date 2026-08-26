@@ -1,0 +1,63 @@
+{
+  "schema_version": "g11-identity-acceptance-v1",
+  "accepted_at": "2026-08-26T08:35:00+08:00",
+  "database_identity": "mysql://127.0.0.1:62306/recpro",
+  "schema_successor": {
+    "plan_id": "061bf0c9-a232-53bf-a338-e92635a9b677",
+    "plan_hash": "1fa4c998ecfe379f2008fe4afdb677630a5df6e58bc90c76f97bbcfe495eb78a",
+    "status": "PASS",
+    "base_tables": 12,
+    "views_created": 3,
+    "fixed_rows_appended": 37,
+    "seed_counts": {
+      "iam_role": 4,
+      "iam_permission": 15,
+      "iam_role_permission_fact": 17,
+      "recpro_schema_migration": 1
+    }
+  },
+  "principal_successor": {
+    "plan_id": "d67a05b2-4a4e-58d8-8a06-b34c1d4cae75",
+    "plan_hash": "7a6ad99a35abf778595cd4f6c6868b7f7e8a1fa175b67d308845b74e32aa31c7",
+    "status": "PASS",
+    "principal": "recpro_identity@%",
+    "principal_count": 1,
+    "table_privilege_count": 29,
+    "privileges": {"SELECT": 15, "INSERT": 9, "UPDATE": 5},
+    "schema_privilege_count": 0,
+    "idempotent_replay_changes": 0
+  },
+  "runtime": {
+    "workbench_url": "http://127.0.0.1:5173/",
+    "backend_url": "http://127.0.0.1:8000/",
+    "readiness": "READY",
+    "can_recommend": true,
+    "components": {
+      "mysql": "UP",
+      "neo4j": "UP",
+      "chroma": "UP",
+      "llm": "UP",
+      "recommendation_pipeline": "UP",
+      "interaction_pipeline": "UP",
+      "config_bundle": "UP"
+    },
+    "identity_routes_mounted": 6,
+    "frontend_http_status": 200
+  },
+  "verification": {
+    "g11_tests_passed": 25,
+    "real_user_accounts": 0,
+    "real_admin_accounts": 0,
+    "deepseek_requests": 0,
+    "business_row_writes": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0
+  },
+  "secret_handling": {
+    "plaintext_in_evidence": false,
+    "local_files_git_ignored": [".env.host", ".env.identity.local"],
+    "local_file_mode": "0600"
+  }
+}
