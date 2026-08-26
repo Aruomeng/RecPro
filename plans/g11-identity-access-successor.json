@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "061bf0c9-a232-53bf-a338-e92635a9b677",
+  "created_at": "2026-08-26T03:15:00Z",
+  "git_commit": "b845a44e4cc572ce673ad5b66e720331b0f4358e",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "intent": "Forward-complete the confirmed partial G11 state by retaining all 12 existing empty IAM tables, creating only the 3 missing effective-state views, and appending exactly 37 fixed role, permission, grant, and migration facts. No existing object or row is deleted, replaced, renamed, altered, or updated.",
+  "environment": {
+    "environment_id": "recpro_local_research_g11_successor",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:9b20cfadd2774ea30f38035581a4b7437c602126dbfb3c23aa4dc6c3d725ed1b",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {"kind":"MYSQL","identifier":"recpro.iam_effective_role_permission_v:schema","operation":"CREATE","expected_before_count":0,"expected_after_min_count":1},
+    {"kind":"MYSQL","identifier":"recpro.iam_effective_user_role_v:schema","operation":"CREATE","expected_before_count":0,"expected_after_min_count":1},
+    {"kind":"MYSQL","identifier":"recpro.user_effective_personalization_consent_v:schema","operation":"CREATE","expected_before_count":0,"expected_after_min_count":1},
+    {"kind":"MYSQL","identifier":"recpro.iam_role:fixed-role-seed","operation":"APPEND","expected_before_count":0,"expected_after_min_count":4},
+    {"kind":"MYSQL","identifier":"recpro.iam_permission:fixed-permission-seed","operation":"APPEND","expected_before_count":0,"expected_after_min_count":15},
+    {"kind":"MYSQL","identifier":"recpro.iam_role_permission_fact:fixed-grant-seed","operation":"APPEND","expected_before_count":0,"expected_after_min_count":17},
+    {"kind":"MYSQL","identifier":"recpro.recpro_schema_migration:migration_id=g11-identity-access-v1","operation":"APPEND","expected_before_count":0,"expected_after_min_count":1}
+  ],
+  "input_hashes": {
+    "infra/mysql/migrations/009_g11_identity_access.sql": "7a924ebdce35cc4d8832c5725f31e9e26402ed6ff2ae1a612ce97103f6aeda19",
+    "scripts/build_g11_identity_successor_plan.py": "80435971e49693308e505b4ce0e71561dc877af0aa338f00bb5ffd305031c191",
+    "scripts/execute_g11_identity_successor.py": "d53a2711ea362cd077ced63f773f27ca2f139c8faa1d6bb6ef27a700be32b30d"
+  },
+  "idempotency_key": "g11-identity-successor-b845a44e4cc5",
+  "max_changes": 37,
+  "preconditions": [
+    "reviewed successor commit is exactly b845a44e4cc572ce673ad5b66e720331b0f4358e and remains an ancestor of execution",
+    "the user separately approves this unchanged successor plan_id and canonical plan_hash before any database connection",
+    "all 12 IAM base tables exist and each contains exactly 0 rows; all 3 IAM views and the G11 marker are absent",
+    "the original attempt stopped at CREATE VIEW permission denial and appended exactly 0 fixed seed rows",
+    "execution uses the protected root credential only because recpro_migrator lacks CREATE VIEW; no root credential is logged or persisted by the executor",
+    "only 3 CREATE VIEW and 4 fixed INSERT IGNORE statements are allowed; destructive and mutable operations are rejected",
+    "maximum appended rows are exactly 37; accounts, credentials, sessions, consents, recommendations, DeepSeek, Neo4j, and Chroma changes are 0",
+    "failure recovery remains forward-only with no compensating delete, drop, revoke, or truncate"
+  ],
+  "safety_assertions": {"file_deletions":0,"database_physical_deletions":0,"overwrite_existing":false,"destructive_capabilities_required":false,"counts_must_not_decrease":true},
+  "plan_hash": "1fa4c998ecfe379f2008fe4afdb677630a5df6e58bc90c76f97bbcfe495eb78a"
+}
