@@ -1,0 +1,76 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "19634127-dc38-5c17-921e-c36c5a96523e",
+  "created_at": "2026-08-27T12:04:08Z",
+  "git_commit": "4a8f8ddc8531b85b4d2d78277bf4ea6ef6a8aba7",
+  "classification": "S2_CONTROLLED_UPDATE",
+  "mode": "APPLY",
+  "intent": "Activate the approved initial administrator in one transaction by inserting one frozen Argon2id password credential, consuming the existing one-time activation token, changing only the account status/authentication version fields, and appending one deterministic security event. The raw login identifier and password remain only in a Git-ignored chmod 0600 local credential file and are never printed.",
+  "environment": {
+    "environment_id": "recpro_local_research_g11_admin_activation",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:498b1499a55681e2f2871fd0f024dcbb4d2a1c39666e17c6c9f92cf68c461dfd",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_action_token:token=e3ad826b-b687-59f9-8b03-f8e0ef1387f0:state=CONSUMED",
+      "operation": "UPDATE_STATUS",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_password_credential:user_id=10000:phc-sha256=b5929ab36946e8228ef1000f8d0f91a743ad1735d3a1148ea9498081c883eb85",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_security_event:event=43cc8cf6-2493-5c60-bf5e-6bf67357a405:type=ACCOUNT_ACTIVATED",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_user_account:user_id=10000:state=ACTIVE:auth_version=2",
+      "operation": "UPDATE_STATUS",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    }
+  ],
+  "input_hashes": {
+    "backend/app/identity/adapters/mysql.py": "633de80fdf4e04940faea85b5ac97340b0c56915394f81d0fccb45a1e907ecb7",
+    "backend/app/identity/security.py": "4d867bfb147f7e455b4297b82d12e480d2cc57dc2e544511bb2d7c070e886743",
+    "infra/mysql/migrations/009_g11_identity_access.sql": "7a924ebdce35cc4d8832c5725f31e9e26402ed6ff2ae1a612ce97103f6aeda19",
+    "scripts/build_g11_admin_activation_plan.py": "9d20a5a8c2bc37ff465d2283739f1cc80b1fcf16b719749ed81a86f28a259486",
+    "scripts/execute_g11_admin_activation.py": "46d41272dba9c8f3aef293fa851541e16b31cada2f8578639b1bab0ff486a18f"
+  },
+  "idempotency_key": "g11-admin-activation-43cc8cf6-2493-5c60-bf5e-6bf67357a405",
+  "max_changes": 4,
+  "preconditions": [
+    "reviewed administrator activation implementation commit is exactly 4a8f8ddc8531b85b4d2d78277bf4ea6ef6a8aba7 and remains an ancestor of execution",
+    "the user separately approves this unchanged activation plan_id and canonical plan_hash before any database connection",
+    "user 10000 exactly matches the approved bootstrap account, is PENDING_ACTIVATION, has auth_version 1 and role_version 3, and has no password credential",
+    "the deterministic activation token matches its protected HMAC digest, is unconsumed, unrevoked, and unexpired",
+    "the random login password and its frozen Argon2id-v1 PHC string match and exist only in a Git-ignored chmod 0600 local file",
+    "execution uses only recpro_identity and one InnoDB transaction with row locks; any partial or changed state fails closed",
+    "allowed mutations are exactly one credential INSERT, one activation-token status UPDATE, one account security-state UPDATE, and one security-event INSERT",
+    "the account UPDATE changes status to ACTIVE, must_change_password to false, auth_version from 1 to 2, and updated_at only",
+    "no login is performed by this plan, so new sessions, refresh tokens, login events, and last_login_at changes are 0",
+    "DeepSeek requests, recommendation/behavior/profile facts, consent facts, Neo4j/Chroma writes, file deletions, physical database deletions, and container/volume changes are 0",
+    "an exact complete activated state is accepted only as a zero-change idempotent replay; all other states require a forward-only successor plan"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "74b5bb57526e191f5080e1c9466f279495993aa61f03e936c91042fe8574bf64"
+}
