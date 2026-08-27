@@ -1,0 +1,80 @@
+{
+  "schema_version": "1.0.0",
+  "evidence_type": "G11_ADMIN_ACTIVATION_ACCEPTANCE",
+  "recorded_at": "2026-08-27T12:07:00Z",
+  "plan": {
+    "plan_id": "19634127-dc38-5c17-921e-c36c5a96523e",
+    "plan_hash": "74b5bb57526e191f5080e1c9466f279495993aa61f03e936c91042fe8574bf64",
+    "reviewed_commit": "4a8f8ddc8531b85b4d2d78277bf4ea6ef6a8aba7",
+    "approved": true,
+    "maximum_changes": 4
+  },
+  "apply_result": {
+    "status": "PASS",
+    "mode": "APPLY",
+    "changes": 4,
+    "user_id": 10000,
+    "account_status": "ACTIVE",
+    "auth_version": 2,
+    "login_sessions": 0,
+    "deepseek_requests": 0,
+    "plaintext_values_printed": 0,
+    "deletions": 0
+  },
+  "idempotent_replay": {
+    "status": "PASS",
+    "mode": "IDEMPOTENT_REPLAY",
+    "changes": 0,
+    "deletions": 0
+  },
+  "read_only_reconciliation": {
+    "status": "PASS",
+    "account": {
+      "status": "ACTIVE",
+      "auth_version": 2,
+      "role_version": 3,
+      "must_change_password": false
+    },
+    "credential": {
+      "present": true,
+      "algorithm": "ARGON2ID",
+      "parameters_version": "argon2id-v1",
+      "password_version": 1,
+      "protected_password_matches": true
+    },
+    "effective_roles": [
+      "user",
+      "librarian",
+      "research_admin"
+    ],
+    "consumed_activation_tokens": 1,
+    "activation_events": 1,
+    "sessions": 0,
+    "database_writes": 0,
+    "deletions": 0,
+    "plaintext_values_printed": 0
+  },
+  "runtime": {
+    "backend_http": 200,
+    "frontend_http": 200,
+    "frontend_url": "http://127.0.0.1:5173"
+  },
+  "credential_delivery": {
+    "identifier": "LIBRAMAS-ADMIN-2026-001",
+    "password_storage": ".env.admin-login.local",
+    "password_file_permissions": "0600",
+    "password_committed_to_git": false,
+    "password_recorded_in_evidence": false
+  },
+  "safety": {
+    "new_sessions": 0,
+    "new_consents": 0,
+    "deepseek_requests": 0,
+    "neo4j_writes": 0,
+    "chroma_writes": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0
+  }
+}
