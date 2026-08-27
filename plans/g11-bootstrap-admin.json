@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0.0",
+  "plan_id": "5fb010fb-d088-53fc-a616-8d6797b7eb65",
+  "created_at": "2026-08-27T11:45:43Z",
+  "git_commit": "20d3e46e43d4d3c3d5f1e4f4526d717ff9990961",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "intent": "Append exactly one pending-activation local human account named LibraMAS 研究管理员, one hashed reader identifier, the user, librarian, research_admin role grants, one hashed 24-hour activation token, and one public security event. The bootstrap resolves only the first-actor dependency and creates no password, session, consent, behavior, recommendation, model request, or destructive operation.",
+  "environment": {
+    "environment_id": "recpro_local_research_g11_bootstrap_admin",
+    "workspace": "/Users/tianyuhang/Documents/RecPro",
+    "host_fingerprint": "sha256:88cd02803664bb70d40ff5b36f95cc66e68560b427d15caef524598557e6760c",
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "index_namespace": null
+  },
+  "targets": [
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_action_token:token=e3ad826b-b687-59f9-8b03-f8e0ef1387f0",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_login_identifier:hmac-sha256=78a1bf9c0b0bc363310da215fd7722bbf31877c6ca10cb2907424eed92c10989",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_security_event:event=81068207-7d09-58ac-be21-b8129cd9a553",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_user_account:user_id=10000:account=39a79e50-092d-59da-83c3-9050f49c5f0f",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_user_role_fact:role=librarian:fact=24e0bcf8-20a3-5a25-8d5e-0041ceb4ca7c",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_user_role_fact:role=research_admin:fact=5031417d-346d-5423-9226-ce5170663897",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    },
+    {
+      "kind": "MYSQL",
+      "identifier": "recpro.iam_user_role_fact:role=user:fact=0183589c-cc9e-5b74-90d9-bd737e1e59dd",
+      "operation": "APPEND",
+      "expected_before_count": 0,
+      "expected_after_min_count": 1
+    }
+  ],
+  "input_hashes": {
+    "backend/app/identity/security.py": "4d867bfb147f7e455b4297b82d12e480d2cc57dc2e544511bb2d7c070e886743",
+    "infra/mysql/migrations/009_g11_identity_access.sql": "7a924ebdce35cc4d8832c5725f31e9e26402ed6ff2ae1a612ce97103f6aeda19",
+    "scripts/build_g11_bootstrap_admin_plan.py": "b444981784088d9cac1bcf874c0c5c11bcb4ea3b98dd9d0165c80f4150c03d4c",
+    "scripts/execute_g11_bootstrap_admin.py": "a7e7362c417f08e69976598104e89399becd50dfd1d169f30e81eadea075b15f"
+  },
+  "idempotency_key": "g11-bootstrap-admin-39a79e50-092d-59da-83c3-9050f49c5f0f",
+  "max_changes": 7,
+  "preconditions": [
+    "reviewed bootstrap implementation commit is exactly 20d3e46e43d4d3c3d5f1e4f4526d717ff9990961 and remains an ancestor of execution",
+    "the user separately approves this unchanged bootstrap plan_id and canonical plan_hash before any database connection",
+    "all 12 G11 IAM tables, 3 effective-state views, 4 fixed roles, 15 permissions, and 17 fixed role-permission grants already reconcile",
+    "iam_user_account contains exactly 0 rows and user_id 10000 plus every deterministic target UUID/hash are absent",
+    "execution uses only the table-bounded recpro_identity principal and one InnoDB transaction; a partial pre-existing target fails closed",
+    "the synthetic identifier and random activation code are stored only in a Git-ignored chmod 0600 local file; the database stores HMAC-SHA256 digests only",
+    "the account starts PENDING_ACTIVATION with no password; the user must choose a 10-128 character password through the activation API",
+    "the three interactive roles are explicitly granted; service_worker is excluded and no implicit role inheritance is used",
+    "the activation token expires 24 hours after successful apply; raw credential material is never printed by the executor",
+    "maximum appended rows are exactly 7; updates, deletes, drops, replaces, schema changes, DeepSeek calls, Neo4j/Chroma writes, file deletions, and container or volume changes are 0",
+    "an exact complete prior state is accepted only as a zero-write idempotent replay; all other non-empty account states require a new successor plan"
+  ],
+  "safety_assertions": {
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "overwrite_existing": false,
+    "destructive_capabilities_required": false,
+    "counts_must_not_decrease": true
+  },
+  "plan_hash": "2c8815172721155348c697402ead8f9e2dbe8cb80212e6fa746d8bbc95a6e974"
+}
