@@ -1,0 +1,85 @@
+{
+  "schema_version": "1.0.0",
+  "evidence_type": "G11_BOOTSTRAP_ADMIN_ACCEPTANCE",
+  "recorded_at": "2026-08-27T11:54:30Z",
+  "plan": {
+    "plan_id": "5fb010fb-d088-53fc-a616-8d6797b7eb65",
+    "plan_hash": "2c8815172721155348c697402ead8f9e2dbe8cb80212e6fa746d8bbc95a6e974",
+    "reviewed_commit": "20d3e46e43d4d3c3d5f1e4f4526d717ff9990961",
+    "approved": true,
+    "maximum_rows": 7
+  },
+  "apply_result": {
+    "status": "PASS",
+    "mode": "APPLY",
+    "rows_written": 7,
+    "user_id": 10000,
+    "account_status": "PENDING_ACTIVATION",
+    "roles": [
+      "user",
+      "librarian",
+      "research_admin"
+    ],
+    "activation_expires_at": "2026-08-28T11:51:55.458722Z",
+    "plaintext_values_printed": 0,
+    "deepseek_requests": 0,
+    "deletions": 0
+  },
+  "idempotent_replay": {
+    "status": "PASS",
+    "mode": "IDEMPOTENT_REPLAY",
+    "rows_written": 0,
+    "deletions": 0
+  },
+  "read_only_reconciliation": {
+    "status": "PASS",
+    "accounts": 1,
+    "identifiers": 1,
+    "role_facts": 3,
+    "effective_roles": [
+      "user",
+      "librarian",
+      "research_admin"
+    ],
+    "valid_activation_tokens": 1,
+    "security_events": 1,
+    "password_credentials": 0,
+    "sessions": 0,
+    "consent_facts": 0,
+    "database_writes": 0,
+    "deletions": 0
+  },
+  "runtime_reconciliation": {
+    "backend": "READY",
+    "frontend_http": 200,
+    "can_recommend": true,
+    "authentication_routes": {
+      "activate": true,
+      "login": true,
+      "me": true
+    },
+    "components": {
+      "mysql": "UP",
+      "neo4j": "UP",
+      "chroma": "UP",
+      "llm": "UP",
+      "llm_model": "deepseek-v4-flash",
+      "recommendation_pipeline": "UP",
+      "interaction_pipeline": "UP",
+      "config_bundle": "UP"
+    },
+    "node_runtime": "codex-bundled",
+    "system_node_modified": false
+  },
+  "safety": {
+    "password_created": false,
+    "session_created": false,
+    "personalization_consent_created": false,
+    "neo4j_writes": 0,
+    "chroma_writes": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0
+  }
+}
