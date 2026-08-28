@@ -17,10 +17,13 @@ const system = useSystemStore();
 const library = useLibraryStore();
 const agentWorkspace = useAgentWorkspaceStore();
 const auth = useAuthStore();
-const nav = [
+const baseNav = [
   ["/", "⌂", "探索首页"], ["/recommend", "✦", "智能推荐"], ["/graph", "⌘", "知识图谱"], ["/path", "↝", "阅读路径"], ["/insights", "◫", "馆藏洞察"],
 ] as const;
-const pageTitle = computed(() => nav.find(([path]) => path === route.path)?.[2] ?? "系统状态");
+const nav = computed(() => auth.permissions.includes("catalog.knowledge.review")
+  ? [...baseNav, ["/knowledge-reviews", "✓", "知识审核"] as const]
+  : [...baseNav]);
+const pageTitle = computed(() => nav.value.find(([path]) => path === route.path)?.[2] ?? "系统状态");
 
 onMounted(async () => {
   session.start();

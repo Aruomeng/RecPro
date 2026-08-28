@@ -15,6 +15,7 @@ from backend.app.api.debug import create_debug_router
 from backend.app.api.feedback import create_feedback_router
 from backend.app.api.health import create_health_router
 from backend.app.api.identity import create_identity_router
+from backend.app.api.knowledge_reviews import create_knowledge_review_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
 from backend.app.api.recommendation_runs import create_recommendation_run_router
@@ -59,6 +60,8 @@ def create_app(
     agent_workspace_broker: object | None = None,
     identity_service: object | None = None,
     identity_api_enabled: bool = False,
+    knowledge_review_service: object | None = None,
+    knowledge_review_api_enabled: bool = False,
 ) -> FastAPI:
     if recommendation_readiness_enabled and (
         recommendation_service is None or not recommendation_api_enabled
@@ -68,6 +71,8 @@ def create_app(
         )
     if identity_api_enabled and identity_service is None:
         raise ValueError("identity API requires an explicit identity service")
+    if knowledge_review_api_enabled and knowledge_review_service is None:
+        raise ValueError("knowledge review API requires an explicit service")
     state = configuration_state or (
         ConfigurationState(settings=settings, is_valid=True)
         if settings is not None
@@ -136,6 +141,11 @@ def create_app(
         if "POST" not in cors_methods:
             cors_methods.append("POST")
         cors_headers.extend(["Idempotency-Key", "X-CSRF-Token"])
+    if knowledge_review_service is not None and knowledge_review_api_enabled:
+        if "POST" not in cors_methods:
+            cors_methods.append("POST")
+        if "Idempotency-Key" not in cors_headers:
+            cors_headers.append("Idempotency-Key")
     if effective_principal_resolver is not None or effective_debug_api_enabled:
         cors_headers.append("Authorization")
     if recommendation_progress_broker is not None or agent_workspace_broker is not None:
@@ -218,6 +228,13 @@ def create_app(
                 secure_cookies=runtime.auth_cookie_secure,
             )
         )
+    if knowledge_review_service is not None and knowledge_review_api_enabled:
+        if effective_principal_resolver is None:
+            raise ValueError("knowledge review API requires formal authentication")
+        application.include_router(create_knowledge_review_router(
+            service=knowledge_review_service,  # type: ignore[arg-type]
+            principal_resolver=effective_principal_resolver,
+        ))
     return application
 
 

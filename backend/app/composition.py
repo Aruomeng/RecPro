@@ -52,6 +52,8 @@ from backend.app.agent_workspace import AgentWorkspaceAuditBuffer
 from backend.app.agent_workspace.adapters.mysql_audit import MySQLAgentWorkspaceAuditAdapter
 from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
 from backend.app.agent_workspace.adapters.profile_reader import MySQLWorkspaceProfileReader
+from backend.app.knowledge_review import InMemoryKnowledgeReviewRepository, KnowledgeReviewService
+from backend.app.knowledge_review.loader import load_v2_review_proposals
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.adapters.g4_mysql import (
     MySQLG4RecommendationTaskService,
@@ -481,6 +483,7 @@ def build_research_g4_http_app(
     recommendation_progress_broker: object | None = None,
     agent_workspace_broker: object | None = None,
     identity_service: IdentityService | None = None,
+    knowledge_review_service: KnowledgeReviewService | None = None,
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -531,6 +534,8 @@ def build_research_g4_http_app(
         identity_service=identity_service,
         identity_api_enabled=identity_service is not None,
         principal_resolver=principal_resolver,
+        knowledge_review_service=knowledge_review_service,
+        knowledge_review_api_enabled=knowledge_review_service is not None,
     )
 
 
@@ -583,6 +588,7 @@ def build_research_g4_http_app_from_runtime(
     recommendation_progress_broker: object | None = None,
     agent_workspace_broker: object | None = None,
     identity_service: IdentityService | None = None,
+    knowledge_review_service: KnowledgeReviewService | None = None,
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -659,7 +665,23 @@ def build_research_g4_http_app_from_runtime(
         recommendation_progress_broker=recommendation_progress_broker,
         agent_workspace_broker=agent_workspace_broker,
         identity_service=identity_service,
+        knowledge_review_service=knowledge_review_service,
     )
+
+
+def build_local_knowledge_review_service(
+    proposal_path: str | None = None,
+) -> KnowledgeReviewService:
+    """Build the pre-migration, bounded in-memory librarian review service."""
+
+    from pathlib import Path
+
+    project_root = Path(__file__).resolve().parents[2]
+    path = Path(proposal_path) if proposal_path else project_root / (
+        "artifacts/verification/book-graph-v2/lib-books-v2-20260828/review-proposals.jsonl"
+    )
+    proposals = load_v2_review_proposals(path)
+    return KnowledgeReviewService(InMemoryKnowledgeReviewRepository(proposals))
 
 
 def build_research_exploration_service(
@@ -786,6 +808,7 @@ def build_profile_outbox_worker(
 __all__ = [
     "build_agent_workspace_audit_worker",
     "build_agent_workspace_profile_reader",
+    "build_local_knowledge_review_service",
     "build_formal_auth_resolver",
     "build_production_http_app",
     "build_demo_http_app",

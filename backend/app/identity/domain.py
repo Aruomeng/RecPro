@@ -221,10 +221,12 @@ ROLE_PERMISSIONS: dict[RoleCode, frozenset[str]] = {
     RoleCode.LIBRARIAN: frozenset({
         "catalog.read", "account.reader.create", "account.reader.read",
         "account.reader.disable", "account.reader.reset_password",
+        "catalog.knowledge.review",
     }),
     RoleCode.RESEARCH_ADMIN: frozenset({
         "catalog.read", "role.assign", "research.trace.read",
         "research.profile.replay", "research.audit.read",
+        "catalog.knowledge.review",
     }),
     RoleCode.SERVICE_WORKER: frozenset({"worker.profile.consume"}),
 }

@@ -27,6 +27,7 @@ from backend.app.composition import (
     build_research_feedback_service,
     build_research_g4_http_app_from_runtime,
     build_local_identity_service,
+    build_local_knowledge_review_service,
 )
 from backend.app.config import load_configuration
 
@@ -187,6 +188,10 @@ def create_g4_feedback_app():
         recommendation_progress_broker=progress_broker,
         agent_workspace_broker=workspace_broker,
         identity_service=identity_service,
+        knowledge_review_service=(
+            build_local_knowledge_review_service()
+            if identity_service is not None else None
+        ),
     )
     # Construction does not drain the buffer and therefore performs no write.
     # An approved operator path may explicitly invoke this worker later.
