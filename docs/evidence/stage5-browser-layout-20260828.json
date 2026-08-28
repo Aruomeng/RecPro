@@ -1,0 +1,49 @@
+{
+  "schema_version": "libra-stage5-browser-layout-v1",
+  "observed_at": "2026-08-28T19:30:00+08:00",
+  "frontend_origin": "http://127.0.0.1:5173",
+  "backend_origin": "http://127.0.0.1:8000",
+  "routes": [
+    "/",
+    "/recommend",
+    "/graph?q=人工智能",
+    "/path",
+    "/insights",
+    "/knowledge-reviews"
+  ],
+  "viewports": [
+    {"width": 1920, "height": 1080},
+    {"width": 3840, "height": 2160},
+    {"width": 1366, "height": 768},
+    {"width": 1280, "height": 720},
+    {"width": 390, "height": 844}
+  ],
+  "assertions": {
+    "route_viewport_pairs": 30,
+    "horizontal_overflow_failures": 0,
+    "hidden_non_scroll_card_clipping_failures": 0,
+    "guest_recommendation_opens_login": true,
+    "guest_knowledge_review_action_buttons": 0,
+    "workspace_agent_count": 8,
+    "home_live_totals": {
+      "resources": 14989,
+      "books": 14986,
+      "graph_nodes": 47773,
+      "graph_relationships": 130192
+    }
+  },
+  "graph_runtime_observation": {
+    "status": "DEGRADED_OBSERVED",
+    "detail": "The bounded public graph request returned 503 on a cold browser observation and later returned 200 through the same Vite proxy after Neo4j cache warm-up. The UI exposed the real degradation code and did not synthesize graph data.",
+    "database_writes": 0
+  },
+  "safety_counts": {
+    "file_deletions": 0,
+    "database_deletes": 0,
+    "neo4j_writes": 0,
+    "mysql_writes": 0,
+    "deepseek_requests": 0,
+    "container_changes": 0,
+    "volume_changes": 0
+  }
+}

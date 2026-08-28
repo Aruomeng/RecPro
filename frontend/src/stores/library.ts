@@ -31,7 +31,10 @@ export const useLibraryStore = defineStore("library", () => {
     loadingGraph.value = true;
     graphQuery.value = input;
     try { graph.value = await explorationClient.graphSearch(input); graphPaths.value = null; highlightedPathId.value = null; error.value = ""; }
-    catch { error.value = "知识图谱暂时无法读取。"; }
+    catch (cause) {
+      const code = cause instanceof Error && /^[A-Z0-9_]+$/.test(cause.message) ? cause.message : "GRAPH_SEARCH_UNAVAILABLE";
+      error.value = `知识图谱暂时无法读取（${code}）。`;
+    }
     finally { loadingGraph.value = false; }
   }
   async function loadGraphPaths(sourceId: string, targetId: string): Promise<void> {
@@ -52,7 +55,10 @@ export const useLibraryStore = defineStore("library", () => {
         truncated: Boolean(graph.value?.truncated || paths.truncated),
       };
       error.value = paths.paths.length ? "" : "两个实体之间没有找到 3 跳以内的公开证据路径。";
-    } catch { error.value = "多跳证据路径暂时无法读取。"; }
+    } catch (cause) {
+      const code = cause instanceof Error && /^[A-Z0-9_]+$/.test(cause.message) ? cause.message : "GRAPH_PATH_UNAVAILABLE";
+      error.value = `多跳证据路径暂时无法读取（${code}）。`;
+    }
     finally { loadingGraph.value = false; }
   }
   async function expandNode(entityId: string): Promise<void> {

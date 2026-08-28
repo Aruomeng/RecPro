@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import GraphCanvas from "../components/GraphCanvas.vue";
 import type { GraphNode } from "../domain/exploration";
 import { useLibraryStore } from "../stores/library";
@@ -10,6 +10,7 @@ import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 const library = useLibraryStore();
 const recommendation = useRecommendationStore();
 const router = useRouter();
+const route = useRoute();
 const workspace = useAgentWorkspaceStore();
 const selected = ref<GraphNode | null>(null);
 const pathStart = ref<GraphNode | null>(null);
@@ -23,7 +24,11 @@ const neighbors = computed(() => {
 });
 const relationCounts = computed(() => Object.entries((library.graph?.edges ?? []).filter((edge) => !selected.value || edge.source === selected.value.id || edge.target === selected.value.id).reduce<Record<string, number>>((acc, edge) => { acc[edge.label || edge.type] = (acc[edge.label || edge.type] ?? 0) + 1; return acc; }, {})).sort((a,b) => b[1]-a[1]).slice(0,6));
 const activePath = computed(() => library.graphPaths?.paths.find((path) => path.path_id === library.highlightedPathId) ?? library.graphPaths?.paths[0]);
-onMounted(() => { if (!library.graph) void library.searchGraph(); });
+onMounted(() => {
+  const routedQuery = typeof route.query.q === "string" ? route.query.q.trim() : "";
+  if (routedQuery) void library.searchGraph(routedQuery);
+  else if (!library.graph) void library.searchGraph();
+});
 function select(node: GraphNode): void {
   selected.value = node;
   if (pathStart.value && pathStart.value.id !== node.id) void library.loadGraphPaths(pathStart.value.id, node.id);
@@ -52,6 +57,7 @@ function toggleType(type: string): void { enabledTypes.value = enabledTypes.valu
       </aside>
       <div class="graph-main-panel">
         <div class="graph-toolbar"><span>查询：{{ library.graph?.query || library.graphQuery }}</span><em v-if="library.graph?.truncated">已展示局部子图</em></div>
+        <div v-if="typeof route.query.evidence_ref === 'string'" class="graph-evidence-context"><b>来自推荐结果的路径证据核验</b><span>{{ route.query.evidence_ref }}</span><small>当前展示与该书相关的真实局部子图；精确多跳高亮仅在对应 v2 图版本可用时呈现。</small></div>
         <div v-if="pathStart" class="graph-path-notice"><span>路径起点：<b>{{ pathStart.label }}</b></span><span v-if="activePath">当前高亮 {{ activePath.hop_count }} 跳 · 证据分 {{ Math.round(activePath.score * 100) }}%</span><span v-else>再选择一个节点，查询 3 跳以内证据</span><button type="button" @click="pathStart = null; library.graphPaths = null; library.highlightedPathId = null">结束路径模式</button></div>
         <GraphCanvas v-if="library.graph?.nodes.length" :graph="library.graph" :allowed-types="enabledTypes" :selected-id="selected?.id" :highlighted-edge-ids="activePath?.edge_ids" @node-click="select" />
         <div v-else-if="library.loadingGraph" class="loading-state"><h3>正在读取有界子图…</h3><p>查询只允许白名单实体与一跳关系。</p></div>

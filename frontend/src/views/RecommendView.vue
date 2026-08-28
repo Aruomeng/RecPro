@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { useRouter } from "vue-router";
 import BookCover from "../components/BookCover.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
@@ -8,6 +9,7 @@ import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 const recommendation = useRecommendationStore();
 const library = useLibraryStore();
 const workspace = useAgentWorkspaceStore();
+const router = useRouter();
 const outputs = [
   ["TOPIC_RESOURCES", "主题书单"], ["PERSONALIZED_FEED", "个性推荐"], ["READING_PATH", "阅读路径"],
 ] as const;
@@ -33,6 +35,11 @@ function channelScore(item: (typeof recommendation.items)[number], channel: stri
   return item.evidence?.channel_scores[channel] ?? 0;
 }
 function channelName(channel: string): string { return ({ MYSQL: "MySQL", GRAPH: "Neo4j", VECTOR: "Chroma" } as Record<string, string>)[channel] ?? channel; }
+function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void {
+  const refs = item.evidence?.graph_path_refs ?? [];
+  if (!refs.length) return;
+  void router.push({ path: "/graph", query: { q: item.resource.title, evidence_ref: refs[0] } });
+}
 </script>
 
 <template>
@@ -97,6 +104,9 @@ function channelName(channel: string): string { return ({ MYSQL: "MySQL", GRAPH:
               <span v-for="channel in channels" :key="channel"><b>{{ channelName(channel) }}</b><i><em :style="{ width: `${Math.min(100, Math.round(channelScore(item, channel) * 100))}%` }" /></i><strong>{{ Math.round(channelScore(item, channel) * 100) }}%</strong></span>
             </div>
             <span v-if="(item.evidence?.negative_penalty ?? 0) > 0" class="penalty-label">负反馈惩罚 −{{ item.evidence?.negative_penalty.toFixed(2) }}</span>
+            <button v-if="item.evidence?.graph_path_refs?.length" class="graph-evidence-link" type="button" @click.stop="inspectGraphEvidence(item)">
+              <span>Neo4j 路径证据 {{ item.evidence.graph_path_refs.length }} 条</span><b>进入图谱核验 →</b>
+            </button>
           </div>
         </article>
       </div>
