@@ -15,6 +15,7 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 from typing import Any, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.request import ProxyHandler, Request, build_opener
@@ -241,6 +242,36 @@ def verify_v2_change_plan(
         or expected.get("relationships") != graph_plan.get("triples", {}).get("total")
     ):
         raise ValueError("graph artifacts differ from the approved Neo4j v2 ChangePlan")
+    input_hashes = change_plan.get("input_hashes")
+    if not isinstance(input_hashes, Mapping) or not input_hashes:
+        raise ValueError("Neo4j v2 ChangePlan input hashes are missing")
+    for relative, expected_hash in input_hashes.items():
+        if not isinstance(relative, str) or not isinstance(expected_hash, str):
+            raise ValueError("Neo4j v2 ChangePlan input hash entry is invalid")
+        resolved_input = resolve_repository_path(relative, label="Neo4j v2 approved input")
+        if not resolved_input.is_file() or sha256_bytes(resolved_input.read_bytes()) != expected_hash:
+            raise ValueError("Neo4j v2 approved input hash mismatch")
+    reviewed_commit = change_plan.get("git_commit")
+    if not isinstance(reviewed_commit, str) or not re.fullmatch(r"[0-9a-f]{40}", reviewed_commit):
+        raise ValueError("Neo4j v2 ChangePlan Git commit is invalid")
+    ancestor = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", reviewed_commit, "HEAD"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if ancestor.returncode != 0:
+        raise ValueError("reviewed Neo4j v2 commit is not an ancestor of HEAD")
+    tracked_status = subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=no"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if tracked_status:
+        raise ValueError("tracked working tree must be clean for Neo4j v2 apply")
     safety = change_plan.get("safety")
     if not isinstance(safety, Mapping) or any(
         safety.get(key) != 0
@@ -428,13 +459,14 @@ def execute(
     if not resolved_plan_dir.is_dir() or not resolved_env_file.is_file():
         raise ValueError("graph plan directory or Neo4j secret file is missing")
     plan, nodes, triples = verify_plan(resolved_plan_dir)
+    approved_v2_plan: dict[str, Any] | None = None
     if apply and plan.get("schema_version") == "book-graph-plan-v2":
         if not change_plan_path or not approved_plan_id or not approved_plan_hash:
             raise ValueError("v2 --apply requires an exact approved Neo4j ChangePlan")
         resolved_change_plan = resolve_repository_path(
             change_plan_path, label="Neo4j v2 ChangePlan",
         )
-        verify_v2_change_plan(
+        approved_v2_plan = verify_v2_change_plan(
             resolved_change_plan,
             approved_plan_id=approved_plan_id,
             approved_plan_hash=approved_plan_hash,
@@ -465,6 +497,16 @@ def execute(
 
     before_nodes = cypher_count_nodes(client)
     before_relationships = cypher_count_relationships(client)
+    before_v1 = cypher_count_graph_version(client, "lib-books-v1-20260810")
+    before_target = cypher_count_graph_version(client, str(plan["graph_version"]))
+    if apply and approved_v2_plan is not None:
+        source_guard = approved_v2_plan.get("source_v1_guard")
+        if not isinstance(source_guard, Mapping) or before_v1 != (
+            source_guard.get("nodes"), source_guard.get("relationships")
+        ):
+            raise ValueError("live v1 graph counts differ from the approved immutable baseline")
+        if before_target != (0, 0):
+            raise ValueError("target v2 graph version is not empty; refusing an additive import")
     if (before_nodes or before_relationships) and not allow_nonempty_target:
         raise ValueError("target Neo4j is non-empty; refusing import without explicit override")
 
@@ -485,6 +527,7 @@ def execute(
 
     after_nodes = cypher_count_nodes(client)
     after_relationships = cypher_count_relationships(client)
+    after_v1 = cypher_count_graph_version(client, "lib-books-v1-20260810")
     graph_version_nodes, graph_version_relationships = cypher_count_graph_version(
         client, str(plan["graph_version"])
     )
@@ -494,6 +537,8 @@ def execute(
         graph_version_nodes != expected_nodes or graph_version_relationships != expected_relationships
     ):
         raise RuntimeError("Neo4j graph-version counts do not match the reviewed plan")
+    if apply and approved_v2_plan is not None and after_v1 != before_v1:
+        raise RuntimeError("immutable v1 graph counts changed during v2 import")
     report = {
         "schema_version": "book-graph-import-report-v1",
         "status": "PASS" if (not apply or (graph_version_nodes == expected_nodes and graph_version_relationships == expected_relationships)) else "PASS_WITH_BLOCKERS",
@@ -511,6 +556,8 @@ def execute(
         "counts": {
             "before": {"nodes": before_nodes, "relationships": before_relationships},
             "after": {"nodes": after_nodes, "relationships": after_relationships},
+            "v1_before": {"nodes": before_v1[0], "relationships": before_v1[1]},
+            "v1_after": {"nodes": after_v1[0], "relationships": after_v1[1]},
             "graph_version": {"nodes": graph_version_nodes, "relationships": graph_version_relationships},
             "expected": {"nodes": expected_nodes, "relationships": expected_relationships},
         },
