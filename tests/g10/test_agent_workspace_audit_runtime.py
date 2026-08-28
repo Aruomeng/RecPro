@@ -9,6 +9,8 @@ from uuid import UUID
 
 from backend.app.agent_workspace import AgentWorkspaceAuditBuffer, AgentWorkspaceBroker, AuditCapacityError
 from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
+from backend.app.composition import build_agent_workspace_audit_worker
+from backend.app.config import AppSettings
 from scripts.execute_g10_agent_workspace_audit import (
     REQUIRED_INPUT_PATHS,
     SESSION_ID,
@@ -51,6 +53,50 @@ class _Adapter:
 
 
 class AgentWorkspaceAuditRuntimeTests(unittest.IsolatedAsyncioTestCase):
+    def test_audit_runtime_is_fail_closed_without_successor_approval(self) -> None:
+        with self.assertRaisesRegex(ValueError, "successor plan id"):
+            AppSettings(
+                app_env="demo",
+                mysql_password="isolated-test-password",
+                agent_workspace_audit_enabled=True,
+            )
+
+    def test_retired_plan_cannot_enable_runtime(self) -> None:
+        with self.assertRaisesRegex(ValueError, "retired"):
+            AppSettings(
+                app_env="demo",
+                mysql_password="isolated-test-password",
+                agent_workspace_audit_enabled=True,
+                agent_workspace_audit_plan_id="0cb5fb89-ba1a-5f8d-ab32-841b2d4df6e5",
+                agent_workspace_audit_plan_hash="1" * 64,
+                agent_workspace_audit_run_identity="audit-runtime-test-001",
+            )
+
+    def test_worker_construction_opens_no_database_connection(self) -> None:
+        settings = AppSettings(
+            app_env="demo",
+            mysql_password="isolated-test-password",
+            agent_workspace_audit_enabled=True,
+            agent_workspace_audit_plan_id="9d27f940-a22c-5ca8-97e0-d6ba651665c1",
+            agent_workspace_audit_plan_hash="2" * 64,
+            agent_workspace_audit_run_identity="audit-runtime-test-002",
+        )
+        calls = 0
+
+        async def factory() -> _Connection:
+            nonlocal calls
+            calls += 1
+            return _Connection()
+
+        worker = build_agent_workspace_audit_worker(
+            settings,
+            buffer=AgentWorkspaceAuditBuffer(enabled=True),
+            connection_factory=factory,
+        )
+
+        self.assertIsInstance(worker, AgentWorkspaceAuditWorker)
+        self.assertEqual(0, calls)
+
     def test_guest_workspace_never_enqueues_audit_facts(self) -> None:
         buffer = AgentWorkspaceAuditBuffer(enabled=True)
         broker = AgentWorkspaceBroker(audit_buffer=buffer, workspace_id_factory=lambda: WORKSPACE_ID)

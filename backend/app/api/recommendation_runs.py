@@ -24,10 +24,10 @@ from backend.app.api.recommendation import (
     _project_public_warnings,
     _resolve_principal,
     _validate_request_shape,
+    build_recommendation_command,
 )
 from backend.app.recommendation.application.public import (
     RecommendationProgressBrokerPort,
-    RecommendationTaskCommand,
     RunCapacityError,
     RunContextConflictError,
     RunIdempotencyConflictError,
@@ -54,23 +54,6 @@ class RecommendationRunState(StrictModel):
     terminal: bool
     error_code: str | None = None
     result: RecommendationExecutionResponse | None = None
-
-
-def _command(request: RecommendationTaskCreateRequest, *, user_id: int) -> RecommendationTaskCommand:
-    return RecommendationTaskCommand(
-        request_id=request.request_id,
-        session_id=request.session_id,
-        user_id=user_id,
-        scene=request.scene.value,
-        input_text=request.input_text,
-        resource_types=tuple(item.value for item in request.requested_resource_types),
-        output_type=request.requested_output_type.value if request.requested_output_type else None,
-        source_resource_id=request.source_resource_id,
-        source_item_id=request.source_item_id,
-        evaluation_at=None,
-        constraints=dict(request.constraints),
-        limit=request.limit,
-    )
 
 
 def _public_result(payload: dict[str, Any]) -> dict[str, Any]:
@@ -164,7 +147,11 @@ def create_recommendation_run_router(
             raise PublicAPIError(409, ErrorCode.REQUEST_ID_MISMATCH, "Idempotency-Key must equal request_id.", False, {})
         _validate_request_shape(request)
         actor = await principal(demo_user_id, authorization)
-        command = _command(request, user_id=actor.user_id)
+        command = build_recommendation_command(
+            request,
+            principal=actor,
+            app_env=app_env,
+        )
         task_id, trace_id = derive_task_identity_values(command)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:

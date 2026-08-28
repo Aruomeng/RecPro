@@ -44,8 +44,8 @@ def validate_configuration(values: Mapping[str, str]) -> tuple[str, ...]:
         "RECPRO_MYSQL_HOST",
         "RECPRO_MYSQL_PORT",
         "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT",
-        "RECPRO_NEO4J_ADMIN_USER",
-        "RECPRO_NEO4J_ADMIN_PASSWORD",
+        "RECPRO_NEO4J_READ_USER",
+        "RECPRO_NEO4J_READ_PASSWORD",
     ):
         if not values.get(name, "").strip():
             issues.append(f"{name} must be configured")

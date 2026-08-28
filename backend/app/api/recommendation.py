@@ -69,6 +69,19 @@ _PUBLIC_WARNING_ALIASES = {
 }
 _PUBLIC_WARNING_VALUES = frozenset(code.value for code in WarningCode)
 
+# These values are security decisions or server-owned identity facts.  They may
+# travel inside the existing constraints envelope for compatibility with the
+# recommendation application port, but a client must never be able to supply
+# or override them.
+RESERVED_RECOMMENDATION_CONSTRAINT_KEYS = frozenset(
+    {
+        "_personalization_enabled",
+        "profile_empty",
+        "profile_version",
+        "user_id",
+    }
+)
+
 
 def _project_public_warnings(payload: Mapping[str, Any]) -> dict[str, Any]:
     """Map internal Agent diagnostics onto the closed public warning contract."""
@@ -239,6 +252,17 @@ def _invalid_scene(message: str, *, scene: TriggerScene) -> PublicAPIError:
 
 
 def _validate_request_shape(request: RecommendationTaskCreateRequest) -> None:
+    reserved_keys = sorted(
+        RESERVED_RECOMMENDATION_CONSTRAINT_KEYS.intersection(request.constraints)
+    )
+    if reserved_keys:
+        raise PublicAPIError(
+            status_code=422,
+            code=ErrorCode.UNKNOWN_FIELD,
+            message="Recommendation constraints contain server-reserved fields.",
+            retryable=False,
+            details={"fields": reserved_keys},
+        )
     if request.as_of_time is not None:
         raise PublicAPIError(
             status_code=403,
@@ -288,6 +312,45 @@ def _validate_request_shape(request: RecommendationTaskCreateRequest) -> None:
             retryable=False,
             details={"minimum": 6, "requested": request.limit},
         )
+
+
+def build_recommendation_command(
+    request: RecommendationTaskCreateRequest,
+    *,
+    principal: AuthenticatedPrincipal,
+    app_env: str,
+) -> RecommendationTaskCommand:
+    """Build one trusted command for both synchronous and asynchronous APIs.
+
+    Formal identities only acquire profile access through the consent-derived
+    permission.  The session-less demo principal preserves the existing,
+    explicitly isolated synthetic-profile workflow.
+    """
+
+    personalization_enabled = principal.has_permission(
+        "personalization.profile.use"
+    ) or (app_env == "demo" and principal.session_id is None)
+    effective_constraints = dict(request.constraints)
+    effective_constraints["_personalization_enabled"] = personalization_enabled
+    effective_constraints["profile_empty"] = not personalization_enabled
+    return RecommendationTaskCommand(
+        request_id=request.request_id,
+        session_id=request.session_id,
+        user_id=principal.user_id,
+        scene=request.scene.value,
+        input_text=request.input_text,
+        resource_types=tuple(item.value for item in request.requested_resource_types),
+        output_type=(
+            request.requested_output_type.value
+            if request.requested_output_type is not None
+            else None
+        ),
+        source_resource_id=request.source_resource_id,
+        source_item_id=request.source_item_id,
+        evaluation_at=None,
+        constraints=effective_constraints,
+        limit=request.limit,
+    )
 
 
 def _resolve_demo_user(
@@ -432,33 +495,12 @@ def create_recommendation_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
-        effective_constraints = dict(request.constraints)
-        effective_constraints["_personalization_enabled"] = (
-            principal.has_permission("personalization.profile.use")
-            or (app_env == "demo" and principal.session_id is None)
-        )
-        effective_constraints["profile_empty"] = not bool(
-            effective_constraints["_personalization_enabled"]
-        )
         try:
             result = await service.create_task(
-                RecommendationTaskCommand(
-                    request_id=request.request_id,
-                    session_id=request.session_id,
-                    user_id=principal.user_id,
-                    scene=request.scene.value,
-                    input_text=request.input_text,
-                    resource_types=tuple(item.value for item in request.requested_resource_types),
-                    output_type=(
-                        request.requested_output_type.value
-                        if request.requested_output_type is not None
-                        else None
-                    ),
-                    source_resource_id=request.source_resource_id,
-                    source_item_id=request.source_item_id,
-                    evaluation_at=None,
-                    constraints=effective_constraints,
-                    limit=request.limit,
+                build_recommendation_command(
+                    request,
+                    principal=principal,
+                    app_env=app_env,
                 ),
                 idempotency_key=idempotency_key,
             )

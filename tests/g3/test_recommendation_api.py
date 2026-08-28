@@ -294,6 +294,30 @@ class RecommendationAPITest(unittest.TestCase):
         self.assertEqual("INVALID_SCENE_SOURCE", response.json()["error"]["code"])
         self.assertEqual([], service.calls)
 
+    def test_server_owned_personalization_constraint_is_rejected_before_service(self) -> None:
+        service = FakeRecommendationService()
+        request_id = uuid4()
+        with TestClient(app_for(service)) as client:
+            response = client.post(
+                "/api/v1/recommendation-tasks",
+                json={
+                    "request_id": str(request_id),
+                    "session_id": str(uuid4()),
+                    "scene": "SEARCH_AFTER",
+                    "input_text": "topic",
+                    "constraints": {"_personalization_enabled": True},
+                },
+                headers={
+                    "Idempotency-Key": str(request_id),
+                    "X-Demo-User-Id": "7",
+                },
+            )
+
+        self.assertEqual(422, response.status_code)
+        self.assertEqual("UNKNOWN_FIELD", response.json()["error"]["code"])
+        self.assertEqual(["_personalization_enabled"], response.json()["error"]["details"]["fields"])
+        self.assertEqual([], service.calls)
+
 
 if __name__ == "__main__":
     unittest.main()

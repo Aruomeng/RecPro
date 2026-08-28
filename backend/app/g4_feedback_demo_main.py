@@ -20,6 +20,7 @@ from pathlib import Path
 
 from backend.app.catalog.runtime.g4_ports import build_g4_readonly_runtime
 from backend.app.composition import (
+    build_agent_workspace_audit_worker,
     build_research_behavior_service,
     build_research_exploration_service,
     build_research_feedback_service,
@@ -30,7 +31,7 @@ from backend.app.config import load_configuration
 
 from scripts.g4_operator_runtime import load_existing_chroma_collection
 from backend.app.recommendation.progress import RecommendationProgressBroker
-from backend.app.agent_workspace import AgentWorkspaceBroker
+from backend.app.agent_workspace import AgentWorkspaceAuditBuffer, AgentWorkspaceBroker
 
 
 GRAPH_VERSION = "lib-books-v1-20260810"
@@ -123,8 +124,8 @@ def create_g4_feedback_app():
     )
 
     graph_port = _required("RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT")
-    graph_username = _required("RECPRO_NEO4J_ADMIN_USER")
-    graph_password = _required("RECPRO_NEO4J_ADMIN_PASSWORD")
+    graph_username = _required("RECPRO_NEO4J_READ_USER")
+    graph_password = _required("RECPRO_NEO4J_READ_PASSWORD")
     graph_endpoint = f"http://127.0.0.1:{graph_port}/db/neo4j/tx/commit"
     runtime = build_g4_readonly_runtime(
         graph_endpoint=graph_endpoint,
@@ -152,12 +153,20 @@ def create_g4_feedback_app():
         graph_version=GRAPH_VERSION,
     )
     progress_broker = RecommendationProgressBroker(max_concurrent=8, retention_seconds=600.0)
-    workspace_broker = AgentWorkspaceBroker(max_workspaces=32, retention_seconds=600.0)
+    workspace_audit_buffer = AgentWorkspaceAuditBuffer(
+        enabled=settings.agent_workspace_audit_enabled,
+        max_facts=settings.agent_workspace_audit_max_facts,
+    )
+    workspace_broker = AgentWorkspaceBroker(
+        max_workspaces=32,
+        retention_seconds=600.0,
+        audit_buffer=workspace_audit_buffer,
+    )
     identity_service = (
         build_local_identity_service(settings)
         if settings.local_identity_api_enabled else None
     )
-    return build_research_g4_http_app_from_runtime(
+    application = build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
         enable_llm_provider=False,
@@ -172,6 +181,15 @@ def create_g4_feedback_app():
         agent_workspace_broker=workspace_broker,
         identity_service=identity_service,
     )
+    # Construction does not drain the buffer and therefore performs no write.
+    # An approved operator path may explicitly invoke this worker later.
+    application.state.agent_workspace_audit_buffer = workspace_audit_buffer
+    application.state.agent_workspace_audit_worker = (
+        build_agent_workspace_audit_worker(settings, buffer=workspace_audit_buffer)
+        if settings.agent_workspace_audit_enabled
+        else None
+    )
+    return application
 
 
 app = create_g4_feedback_app()

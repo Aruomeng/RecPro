@@ -19,8 +19,8 @@ class ResearchWorkbenchTests(unittest.TestCase):
             "RECPRO_MYSQL_HOST": "127.0.0.1",
             "RECPRO_MYSQL_PORT": "62306",
             "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT": "62475",
-            "RECPRO_NEO4J_ADMIN_USER": "neo4j",
-            "RECPRO_NEO4J_ADMIN_PASSWORD": "secret-present",
+            "RECPRO_NEO4J_READ_USER": "recpro_graph_reader",
+            "RECPRO_NEO4J_READ_PASSWORD": "secret-present",
         }
 
     def test_complete_research_configuration_is_accepted(self) -> None:
@@ -44,6 +44,18 @@ class ResearchWorkbenchTests(unittest.TestCase):
         values["RECPRO_LLM_MODEL"] = "deepseek-chat"
         issues = validate_configuration(values)
         self.assertEqual(2, len(issues))
+
+    def test_admin_credentials_do_not_satisfy_runtime_read_identity(self) -> None:
+        values = self.valid_values()
+        values.pop("RECPRO_NEO4J_READ_USER")
+        values.pop("RECPRO_NEO4J_READ_PASSWORD")
+        values["RECPRO_NEO4J_ADMIN_USER"] = "neo4j"
+        values["RECPRO_NEO4J_ADMIN_PASSWORD"] = "operator-secret"
+
+        issues = validate_configuration(values)
+
+        self.assertIn("RECPRO_NEO4J_READ_USER must be configured", issues)
+        self.assertIn("RECPRO_NEO4J_READ_PASSWORD must be configured", issues)
 
 
 if __name__ == "__main__":

@@ -88,8 +88,8 @@ def create_g4_app():
     graph_port = _required("RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT")
     runtime = build_g4_readonly_runtime(
         graph_endpoint=f"http://127.0.0.1:{graph_port}/db/neo4j/tx/commit",
-        graph_username=_required("RECPRO_NEO4J_ADMIN_USER"),
-        graph_password=_required("RECPRO_NEO4J_ADMIN_PASSWORD"),
+        graph_username=_required("RECPRO_NEO4J_READ_USER"),
+        graph_password=_required("RECPRO_NEO4J_READ_PASSWORD"),
         chroma_collection=loaded.collection,
         graph_version=GRAPH_VERSION,
         embedding_version=EMBEDDING_VERSION,

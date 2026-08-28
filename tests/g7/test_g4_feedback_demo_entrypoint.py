@@ -48,8 +48,8 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             "RECPRO_LLM_PROVIDER": "deepseek",
             "RECPRO_LLM_API_KEY": "local-test-deepseek-key-001",
             "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT": "62688",
-            "RECPRO_NEO4J_ADMIN_USER": "neo4j",
-            "RECPRO_NEO4J_ADMIN_PASSWORD": "demo-g4-g5-neo4j-password",
+            "RECPRO_NEO4J_READ_USER": "recpro_graph_reader",
+            "RECPRO_NEO4J_READ_PASSWORD": "demo-g4-g5-neo4j-password",
             "RECPRO_G4_CHROMA_PATH": "data/chroma",
             "RECPRO_G4_CHROMA_SITE_PACKAGES": ".venv-chroma-g6-20260811/lib/python3.11/site-packages",
         }
@@ -58,6 +58,7 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
         feedback = object()
         behavior = object()
         application = SimpleNamespace(
+            state=SimpleNamespace(),
             openapi=lambda: {
                 "paths": {
                     "/api/v1/recommendation-tasks": {},
@@ -107,7 +108,10 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             exploration_service=ANY,
             recommendation_progress_broker=ANY,
             agent_workspace_broker=ANY,
+            identity_service=None,
         )
+        self.assertEqual(0, application.state.agent_workspace_audit_buffer.pending_count)
+        self.assertIsNone(application.state.agent_workspace_audit_worker)
         paths = set(module.app.openapi()["paths"])
         self.assertIn("/api/v1/recommendation-tasks", paths)
         self.assertIn("/api/v1/recommendation-impressions/batch", paths)

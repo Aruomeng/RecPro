@@ -24,6 +24,9 @@ DEFAULT_PROMPT_BUNDLE_SHA256 = (
     "1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a"
 )
 LOCAL_SECRET_PATTERN = re.compile(r"^[A-Za-z0-9._~-]{16,128}$")
+RETIRED_WORKSPACE_AUDIT_PLAN_IDS = frozenset(
+    {"0cb5fb89-ba1a-5f8d-ab32-841b2d4df6e5"}
+)
 
 
 class AppSettings(BaseSettings):
@@ -178,6 +181,25 @@ class AppSettings(BaseSettings):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
     )
     auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
+    # Workspace audit is a separately approved append-only capability.  Merely
+    # enabling the research application is insufficient: a successor plan,
+    # its canonical hash, and a bounded run identity must all be supplied.
+    agent_workspace_audit_enabled: bool = False
+    agent_workspace_audit_plan_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    )
+    agent_workspace_audit_plan_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    agent_workspace_audit_run_identity: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$",
+    )
+    agent_workspace_audit_max_facts: int = Field(default=512, ge=1, le=512)
+    agent_workspace_audit_batch_limit: int = Field(default=32, ge=1, le=64)
     cors_origins: tuple[str, ...] = ("http://localhost:5173",)
 
     @field_validator("config_bundle_path", mode="before")
@@ -315,6 +337,29 @@ class AppSettings(BaseSettings):
             raise ValueError("worker mode must be disabled unless the worker is enabled")
         if self.worker_enabled and self.app_env == "production":
             raise ValueError("profile outbox worker is not enabled for production yet")
+        return self
+
+    @model_validator(mode="after")
+    def validate_workspace_audit_configuration(self) -> "AppSettings":
+        approval_fields = (
+            self.agent_workspace_audit_plan_id,
+            self.agent_workspace_audit_plan_hash,
+            self.agent_workspace_audit_run_identity,
+        )
+        if not self.agent_workspace_audit_enabled:
+            if any(value is not None for value in approval_fields):
+                raise ValueError(
+                    "workspace audit approval fields require the explicit audit switch"
+                )
+            return self
+        if self.app_env != "demo":
+            raise ValueError("workspace audit is restricted to the demo research runtime")
+        if any(value is None for value in approval_fields):
+            raise ValueError(
+                "workspace audit requires successor plan id, plan hash, and run identity"
+            )
+        if self.agent_workspace_audit_plan_id in RETIRED_WORKSPACE_AUDIT_PLAN_IDS:
+            raise ValueError("the previous workspace audit plan is retired")
         return self
 
 

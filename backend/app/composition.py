@@ -48,6 +48,9 @@ from backend.app.identity.security import (
     LocalJWTIssuer,
     VersionedPrincipalResolver,
 )
+from backend.app.agent_workspace import AgentWorkspaceAuditBuffer
+from backend.app.agent_workspace.adapters.mysql_audit import MySQLAgentWorkspaceAuditAdapter
+from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.adapters.g4_mysql import (
     MySQLG4RecommendationTaskService,
@@ -717,6 +720,31 @@ def build_research_behavior_service(
     )
 
 
+def build_agent_workspace_audit_worker(
+    settings: AppSettings,
+    *,
+    buffer: AgentWorkspaceAuditBuffer,
+    connection_factory: ConnectionFactory | None = None,
+) -> AgentWorkspaceAuditWorker:
+    """Construct, but never start, the separately approved append-only worker.
+
+    The returned worker opens no connection until an explicit operator calls
+    ``drain_once``.  Runtime configuration validation supplies the independent
+    plan/hash/run-identity gate before this builder can be reached.
+    """
+
+    if not settings.agent_workspace_audit_enabled:
+        raise ValueError("workspace audit worker requires the explicit audit switch")
+    if settings.app_env != "demo":
+        raise ValueError("workspace audit worker requires the demo research runtime")
+    return AgentWorkspaceAuditWorker(
+        buffer=buffer,
+        adapter=MySQLAgentWorkspaceAuditAdapter(),
+        connection_factory=connection_factory or _mysql_connection_factory(settings),
+        max_batch=settings.agent_workspace_audit_batch_limit,
+    )
+
+
 def build_profile_outbox_worker(
     settings: AppSettings,
     *,
@@ -745,6 +773,7 @@ def build_profile_outbox_worker(
 
 
 __all__ = [
+    "build_agent_workspace_audit_worker",
     "build_formal_auth_resolver",
     "build_production_http_app",
     "build_demo_http_app",
