@@ -237,7 +237,7 @@ backend/app/
 │   ├── retrieval/                 # 统一候选DTO、通道和融合
 │   ├── ranking/                   # 特征、惩罚、MMR、组合输出
 │   ├── explanation/               # EvidenceBundle、模板、LLM校验
-│   ├── agents/                    # 9个Agent、Registry、Orchestrator
+│   ├── agents/                    # 8个业务Agent、Registry、独立Orchestrator
 │   ├── ports/
 │   └── adapters/
 ├── feedback/
@@ -550,7 +550,7 @@ user_behavior_event追加与REPLAY_AS_OF画像重放
 
 实施内容：
 
-1. 完成9个Agent、AgentRegistry和结构化消息。
+1. 完成8个业务Agent、AgentRegistry、独立Orchestrator和结构化消息。
 2. 实现CREATED到终态的状态机与乐观锁。
 3. 实现两阶段Probe、四维策略和必要槽位判断。
 4. 实现GUIDED早停、原task恢复、BOOKLIST和READING_PATH。
@@ -834,7 +834,7 @@ G2、G5、G8和最终发布门禁前
 以下情况均不允许标记阶段完成：
 
 1. 只有Swagger和健康接口就称系统已经可运行。
-2. 9个Agent类都存在，但执行路径始终是固定顺序。
+2. 8个业务Agent类和Orchestrator都存在，但执行路径始终是固定顺序。
 3. API返回推荐列表，但数据库没有record、evidence和Trace。
 4. 推荐结果根据demo用户ID或固定资源ID硬编码。
 5. 单元测试覆盖率高，但没有真实MySQL集成测试。

@@ -327,7 +327,7 @@ Trace：可追溯执行记录
 | ExplanationAgent | 生成忠实于证据的推荐解释 | 排名结果、证据引用、策略理由 | 模板、LLMProvider、EvidenceValidator | 摘要理由、详细解释 |
 | FeedbackLearningAgent | 将用户反应转化为状态变化 | 曝光、点击、收藏、借阅、负反馈 | FeedbackService、OutboxRepository、消息总线 | 画像增量提案、资源状态和策略日志 |
 
-本版将原先由Orchestrator内部承担的意图理解独立为 `IntentUnderstandingAgent`，因此共有9个逻辑Agent。增加该Agent的原因是让意图解析具有独立契约、工具回退和评价指标，而不是为了增加Agent数量。
+本版将原先由 Orchestrator 内部承担的意图理解独立为 `IntentUnderstandingAgent`，因此共有 8 个业务 Agent；`RecommendationOrchestrator` 是独立控制平面，不计为第九个 Agent。拆分意图理解的原因是让其具备独立契约、工具回退和评价指标，而不是为了增加 Agent 数量。
 
 ### 4.2.1 各Agent的合法动作
 
@@ -5067,16 +5067,17 @@ LibraMAS推荐模块采用监督式多智能体协同架构。系统将推荐任
 - 所有Agent调用写入执行日志；
 - LLM不得生成资源ID、分数、行为证据或知识图谱路径。
 
-必须实现以下核心Agent：
-1. RecommendationOrchestratorAgent
-2. IntentUnderstandingAgent
-3. UserProfileAgent
-4. ResourceSemanticAgent
-5. RecommendationPolicyAgent
-6. CandidateRecallAgent
-7. RankingAgent
-8. ExplanationAgent
-9. FeedbackLearningAgent
+必须实现以下 8 个核心业务 Agent：
+1. IntentUnderstandingAgent
+2. UserProfileAgent
+3. ResourceSemanticAgent
+4. RecommendationPolicyAgent
+5. CandidateRecallAgent
+6. RankingAgent
+7. ExplanationAgent
+8. FeedbackLearningAgent
+
+另设唯一的 `RecommendationOrchestrator` 负责全局状态推进、调度和重规划，但它不作为业务 Agent 计数。
 
 交互决策必须包含四个独立字段：
 1. output_type

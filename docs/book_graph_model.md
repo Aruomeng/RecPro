@@ -57,6 +57,14 @@ ISBN 冲突不强行合并：相同 ISBN 出现多个核心书目指纹时，Boo
 
 当前图版本：76 个 CSV、15,538 条来源记录、63,388 个节点、191,865 条关系；计划状态 `PASS_WITH_WARNINGS`，警告为 371 条 ISBN 规范化问题。用户确认本地研究授权后，`lib-books-v1-20260810` 已追加到独立目标并完成幂等复验，最终计数保持 63,388/191,865。
 
+## v2 作品层与多跳证据（待批准导入）
+
+`lib-books-v2-20260828` 采用全新版本边界，保留 v1 全部节点、关系与约束不变。v2 在 `Book` 之上新增 `Work`，通过 `Book-[:INSTANCE_OF]->Work` 表达版本/实例到作品的层级；只有规范化题名一致且至少一个作者一致时自动归并。缺作者、ISBN 或出版社冲突会生成馆员审核提案，不自动修改权威图。
+
+确定性 dry-run 得到 78,129 个节点、206,848 条关系，其中新增 14,741 个 Work 和 14,983 条 INSTANCE_OF；未生成缺少真实副本号的 Item。公共路径查询固定最多 3 跳、10 条路径、60 节点、120 条边和 3 秒，只允许白名单 Label/Relationship 与常量参数化 Cypher。Graph 通道在 v2 中没有合法路径时不得贡献分数。
+
+上述 v2 尚未导入。精确 Neo4j ChangePlan 位于 `docs/evidence/neo4j-v2-change-plan-20260828.json`，必须取得其 `plan_id + plan_hash` 批准后才允许向隔离图追加；任何执行都必须证明 v1 计数零变化。
+
 ## MySQL 事实层映射与只读召回
 
 `scripts/build_mysql_book_plan.py` 将同一 `graph_version` 的 `Book` 节点和标签关系映射为现有 G2 五张表的 JSONL ChangePlan：`resource_catalog`、`resource_book_detail`、`tag_dictionary`、`resource_tag`、`resource_index_state`。计划只使用稳定 `external_id`，不提前猜测 MySQL 自增 ID；详情见 [MySQL 书目计划 Schema](../contracts/data/intake/mysql-book-plan.schema.json)。

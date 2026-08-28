@@ -15,6 +15,8 @@ make PYTHON=.venv-g1-final-py311/bin/python research-workbench
 
 ## 当前状态
 
+2026-08-29 的“证据约束、情境感知多智能体推荐”代码阶段已经完成：同步/异步个性化授权统一，客户端保留约束被拒绝；全局 Workspace 具备真实有界 Agent 调度和 SessionTopicGraph；知识图谱 v2 构建、多跳路径证据、馆员审核闭环、全页面证据联动及开发性实验运行器均已实现。开发实验覆盖 B0—B3、Proposed、9 个消融和 8 类故障，严格标记为 `DEVELOPMENT_PROXY`，未调用 DeepSeek、未读写数据库。真实 v2 导入、馆员审核迁移和 Workspace 审计迁移仍受各自精确 ChangePlan 约束，获批前不会执行。详见 [证据约束多智能体优化实施状态](docs/LibraMAS_证据约束多智能体优化实施状态_20260829.md)。
+
 G0—G5 的核心代码切片、MySQL 隔离运行态和安全门禁已经建立；G6 已完成真实图书数据、可选检索能力和一次隔离目标只读融合验证。`Lib` 已完成 76 个 CSV 的只读规范化，并将版本化图 `lib-books-v1-20260810` 追加导入独立 Neo4j（15,538 条来源记录、63,388 个节点、191,865 条关系）；在用户明确授权后，同一书目已按 append-only ChangePlan 写入隔离 Compose MySQL（14,983 本书、8,516 个标签、70,750 条标签关系），并完成幂等复跑与只读计数核验。当前已基于同一 MySQL ChangePlan 离线构建 14,983 条确定性向量记录（`hash-char-ngram-v1`、384 维），两次独立构建哈希一致；用户授权后已在独立本地 Chroma 路径创建新 collection `library_resources__hash_char_ngram_v1`，追加 14,983 条向量，并完成全量回读、版本/元数据核验、召回冒烟和幂等复核（`chromadb==1.5.9`）。MySQL 的 `embedding_status=PENDING` 未修改。Neo4j/Chroma 只读召回端口已通过真实隔离运行态融合验证：固定三组版本，MySQL 计数和 Chroma 14,983 条向量前后不变，8 条候选同时带 MYSQL/GRAPH/VECTOR 通道且无 fallback；详细证据见 `artifacts/verification/g6/g6-retrieval-fusion-readonly-20260811-001/readonly.json`。G7 已有推荐工作台、契约化 RecommendationClient、澄清交互占位和明确标注的本地演示；默认页面会根据健康响应决定是否允许真实请求，默认 `can_recommend=false` 时仍只显示闸门提示，不会绕过健康闸门或自动写入数据库。新增的显式 Demo/Production HTTP 组合根只有在调用方提供服务、启用 API 与健康闸门后才会声明 `can_recommend=true`；默认 HTTP/API/Worker 仍保持关闭，`can_recommend` 不因容器启动而自动变为 `true`。
 
 G5 Worker 运行态接线已完成：Compose worker 继续启动为健康但无副作用的 `false/disabled` 模式；只有显式设置 `RECPRO_WORKER_ENABLED=true` 与 `RECPRO_WORKER_MODE=profile_outbox`，并满足非 production 配置，才会连接 MySQL 消费画像 Outbox。默认安全门禁的只读证据见 `artifacts/verification/g5/g5-worker-wiring-20260812-001/worker-wiring.json`，本阶段数据库连接、写入和 Outbox claim 均为 0。
@@ -75,6 +77,7 @@ G4 ChangePlan 工具现可分别冻结 `deepseek_intent_policy` 与 `deepseek_ex
 - [核心数据字典](docs/data_dictionary.md)
 - [HTTP API 契约](docs/api.md)
 - [论文实验协议](docs/experiment_protocol.md)
+- [证据约束多智能体优化实施状态](docs/LibraMAS_证据约束多智能体优化实施状态_20260829.md)
 - [A01—A25 验收矩阵](docs/acceptance_matrix.md)
 - [图书数据接入契约](contracts/data/intake/book-intake-manifest.schema.json)
 - [书目图谱模型与导入契约](docs/book_graph_model.md)

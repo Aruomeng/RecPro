@@ -97,7 +97,13 @@ export const useAuthStore = defineStore("auth", () => {
     requestedFeature.value = "密码已更新，请使用新密码重新登录";
     dialogOpen.value = true;
   }
+  async function activateAccount(identifierType: "READER_NUMBER" | "STUDENT_NUMBER", identifier: string, oneTimeCode: string, newPassword: string): Promise<void> {
+    await identityClient.activate(identifierType, identifier, oneTimeCode, newPassword);
+  }
+  async function completePasswordReset(identifierType: "READER_NUMBER" | "STUDENT_NUMBER", identifier: string, oneTimeCode: string, newPassword: string): Promise<void> {
+    await identityClient.completeReset(identifierType, identifier, oneTimeCode, newPassword);
+  }
   function useResearchDemo(): void { if (researchDemoEnabled) { clearLocal(); session.setMode("demo"); } }
 
-  return { accessToken, account, permissions, consents, phase, ready, dialogOpen, onboardingOpen, requestedFeature, error, researchDemoEnabled, authenticated, requestIdentity, canUsePersonalization, canPersistBehavior, restore, login, refresh, logout, clearLocal, requireLogin, loadMe, setConsent, changePassword, useResearchDemo };
+  return { accessToken, account, permissions, consents, phase, ready, dialogOpen, onboardingOpen, requestedFeature, error, researchDemoEnabled, authenticated, requestIdentity, canUsePersonalization, canPersistBehavior, restore, login, refresh, logout, clearLocal, requireLogin, loadMe, setConsent, changePassword, activateAccount, completePasswordReset, useResearchDemo };
 });

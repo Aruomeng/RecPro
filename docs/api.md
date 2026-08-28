@@ -938,6 +938,8 @@ ACCESS_PAPER_FULLTEXT
 | `REQUEST_ID_MISMATCH` | 422 | Header 与请求体 Request ID 不一致 |
 | `REQUEST_ID_CONFLICT` | 409 | Request ID 被不同请求使用 |
 | `IDEMPOTENCY_KEY_REUSED` | 409 | 同 Key 载荷不一致 |
+| `IDEMPOTENCY_CONFLICT` | 409 | 追加式动作与既有事实冲突 |
+| `CAPACITY_EXCEEDED` | 429 | 有界队列或运行时容量暂时耗尽 |
 | `STALE_CONTEXT_VERSION` | 409 | 澄清上下文过期 |
 | `TASK_STATE_CONFLICT` | 409 | 当前任务状态不接受该命令 |
 
@@ -1070,3 +1072,29 @@ G1 生成结果必须恰好包含 `GET /health/live` 与 `GET /health/ready`，�
 破坏性变更：移除/重命名字段、改变字段含义、缩小允许值、改变状态机；必须发布新的 API 主版本或提供完整兼容期。
 
 历史响应、推荐记录和解释版本始终按产生时的 Schema 与版本读取，不用新代码静默改写。
+
+## 18. 证据约束与知识治理扩展
+
+### 18.1 Agent Workspace v2
+
+Workspace 响应版本为 `agent-workspace-v2`，保留 v1 请求兼容。每个会话固定 8 个业务 Agent，Orchestrator 独立显示但不计数。Observation 按 `context_version` 串行处理，真实 dispatch 才发布 `AGENT_STARTED/COMPLETED/DEGRADED/FAILED`；常驻观察不得调用 DeepSeek。
+
+会话内 `SessionTopicGraph` 只保存在有界内存中，节点类型限定为 `QUERY/TOPIC/RESOURCE/ROUTE/RECOMMENDATION_TASK`，最多 64 节点、128 条边。Guest 不持久化，认证审计只保存摘要哈希和公开决策引用。
+
+### 18.2 多跳图谱证据
+
+```text
+GET /api/v1/explore/graph/paths?source_id=...&target_id=...&max_hops=3&limit=10
+```
+
+返回 `GraphPathView`，每条路径包含稳定 `path_id`、节点/边 ID、跳数、衰减分数和 Evidence Ref。接口不接受任意 Cypher，不公开 SourceFile/SourceRecord，且严格执行 3 跳、10 路径、60 节点、120 边和 3 秒边界。
+
+### 18.3 馆员知识审核
+
+```text
+GET  /api/v1/librarian/knowledge-reviews
+GET  /api/v1/librarian/knowledge-reviews/{proposal_id}
+POST /api/v1/librarian/knowledge-reviews/{proposal_id}/actions
+```
+
+仅持有 `catalog.knowledge.review` 的 `librarian` 或 `research_admin` 可访问。动作仅接受 `APPROVE/REJECT/REQUEST_EVIDENCE`，并追加 Action Fact；批准动作不会直接写 Neo4j，只能成为下一图版本构建的候选输入。Reader、Guest 和 Agent 均无审核权限。

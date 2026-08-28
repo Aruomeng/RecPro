@@ -13,7 +13,7 @@ LibraMAS 采用以下架构基线：
 
 1. 后端采用按业务能力拆分的模块化单体，不在原型阶段拆分微服务。
 2. 领域逻辑采用端口—适配器结构，框架和数据库位于依赖方向的最外层。
-3. 九个逻辑 Agent 在同一进程内运行，通过 Orchestrator 和结构化消息协作。
+3. 8 个业务 Agent 在同一进程内运行，由独立 Orchestrator 通过结构化消息协调；Orchestrator 不计为第九个 Agent。
 4. MySQL 是唯一事实源；Chroma 和 Neo4j 是带版本的可替换派生索引。
 5. 每个业务模块只维护自己拥有的数据，并通过公开端口交换最小 DTO。
 6. 所有事实变更以追加、版本化或补偿方式表达，不提供物理删除能力。
@@ -187,17 +187,18 @@ Composition Root → 所有需要装配的公开模块
 
 ### 9.1 逻辑 Agent
 
-系统包含九个逻辑 Agent：
+系统包含 8 个业务 Agent：
 
-1. `RecommendationOrchestratorAgent`
-2. `IntentUnderstandingAgent`
-3. `UserProfileAgent`
-4. `ResourceSemanticAgent`
-5. `RecommendationPolicyAgent`
-6. `CandidateRecallAgent`
-7. `RankingAgent`
-8. `ExplanationAgent`
-9. `FeedbackLearningAgent`
+1. `IntentUnderstandingAgent`
+2. `UserProfileAgent`
+3. `ResourceSemanticAgent`
+4. `RecommendationPolicyAgent`
+5. `CandidateRecallAgent`
+6. `RankingAgent`
+7. `ExplanationAgent`
+8. `FeedbackLearningAgent`
+
+`RecommendationOrchestrator` 是独立控制平面，不作为业务 Agent 注册，也不计入 Agent 数量。
 
 Agent 必须同时具备 Role、Goal、Observation、Tools、Policy、Action、Confidence 和 Trace。仅封装数据库函数且没有局部决策的组件是 Service，不命名为 Agent。
 

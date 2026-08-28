@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 
-import { identityClient } from "../api/identityClient";
 import type { ConsentScope } from "../domain/identity";
 import { useAuthStore } from "../stores/auth";
 
@@ -51,10 +50,10 @@ async function submit(): Promise<void> {
     }
     if (password.value !== confirmation.value) { notice.value = "两次输入的密码不一致。"; return; }
     if (tab.value === "activate") {
-      await identityClient.activate(identifierType.value, identifier.value, oneTimeCode.value, password.value);
+      await auth.activateAccount(identifierType.value, identifier.value, oneTimeCode.value, password.value);
       notice.value = "账号已激活，请切换到登录并使用新密码。";
     } else {
-      await identityClient.completeReset(identifierType.value, identifier.value, oneTimeCode.value, password.value);
+      await auth.completePasswordReset(identifierType.value, identifier.value, oneTimeCode.value, password.value);
       notice.value = "密码已更新，请使用新密码登录。";
     }
     tab.value = "login"; password.value = ""; confirmation.value = ""; oneTimeCode.value = "";

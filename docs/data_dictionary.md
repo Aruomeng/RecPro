@@ -826,3 +826,13 @@ G4 第一实现使用 `g4-orchestrator-v1` 与八个规则 Agent 版本。当前
 3. 枚举退役使用逻辑停用和读取兼容，不从历史数据中移除旧值。
 4. 公式和 JSON Schema 变化必须提升版本并保留旧解析器用于历史重放。
 5. 每次变更记录影响表、DTO、API、实验和回放兼容性。
+
+## 16. 证据治理追加事实（待批准迁移）
+
+| 对象 | 类型 | 核心字段 | 不变量 |
+|---|---|---|---|
+| `knowledge_review_proposal` | 追加事实 | proposal UUID、类型、图版本、主体/关系/客体、来源引用、原因码、置信度、Agent、任务/Workspace、幂等摘要、时间 | Agent 只能提案，不能直接修改 Neo4j |
+| `knowledge_review_action_fact` | 追加事实 | fact UUID、proposal UUID、版本、动作、馆员、原因码、幂等键、时间 | 只接受 APPROVE/REJECT/REQUEST_EVIDENCE；不更新历史事实 |
+| `knowledge_review_current_v` | 只读视图 | 每个 proposal 的最新 Action Fact | 由版本最大值推导，不保存可变当前状态 |
+
+外键使用 `ON DELETE RESTRICT ON UPDATE RESTRICT`。迁移只允许 CREATE、固定权限种子和 INSERT；`DELETE/DROP/TRUNCATE/REPLACE` 以及级联删除均被执行器拒绝。当前精确计划见 `docs/evidence/g12-knowledge-review-change-plan-20260828.json`，获批前这些对象不会写入 MySQL。

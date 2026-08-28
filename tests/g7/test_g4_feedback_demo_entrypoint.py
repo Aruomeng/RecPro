@@ -109,6 +109,7 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             recommendation_progress_broker=ANY,
             agent_workspace_broker=ANY,
             identity_service=None,
+            knowledge_review_service=None,
         )
         self.assertEqual(0, application.state.agent_workspace_audit_buffer.pending_count)
         self.assertIsNone(application.state.agent_workspace_audit_worker)
