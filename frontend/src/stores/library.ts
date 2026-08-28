@@ -2,13 +2,15 @@ import { ref } from "vue";
 import { defineStore } from "pinia";
 
 import { explorationClient } from "../api/explorationClient";
-import type { GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
+import type { GraphPathView, GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
 import { useAgentWorkspaceStore } from "./agentWorkspace";
 
 export const useLibraryStore = defineStore("library", () => {
   const workspace = useAgentWorkspaceStore();
   const overview = ref<LibraryOverview | null>(null);
   const graph = ref<GraphView | null>(null);
+  const graphPaths = ref<GraphPathView | null>(null);
+  const highlightedPathId = ref<string | null>(null);
   const graphQuery = ref("人工智能");
   const selectedResource = ref<ResourceDetail | null>(null);
   const detailOpen = ref(false);
@@ -28,8 +30,29 @@ export const useLibraryStore = defineStore("library", () => {
     if (!input) return;
     loadingGraph.value = true;
     graphQuery.value = input;
-    try { graph.value = await explorationClient.graphSearch(input); error.value = ""; }
+    try { graph.value = await explorationClient.graphSearch(input); graphPaths.value = null; highlightedPathId.value = null; error.value = ""; }
     catch { error.value = "知识图谱暂时无法读取。"; }
+    finally { loadingGraph.value = false; }
+  }
+  async function loadGraphPaths(sourceId: string, targetId: string): Promise<void> {
+    loadingGraph.value = true;
+    try {
+      const paths = await explorationClient.graphPaths(sourceId, targetId, 3, 10);
+      graphPaths.value = paths;
+      highlightedPathId.value = paths.paths[0]?.path_id ?? null;
+      const nodes = new Map((graph.value?.nodes ?? []).map((node) => [node.id, node]));
+      const edges = new Map((graph.value?.edges ?? []).map((edge) => [edge.id, edge]));
+      paths.graph.nodes.forEach((node) => nodes.set(node.id, node));
+      paths.graph.edges.forEach((edge) => edges.set(edge.id, edge));
+      graph.value = {
+        graph_version: paths.graph_version,
+        query: `${sourceId} → ${targetId}`,
+        nodes: [...nodes.values()].slice(0, 60),
+        edges: [...edges.values()].slice(0, 120),
+        truncated: Boolean(graph.value?.truncated || paths.truncated),
+      };
+      error.value = paths.paths.length ? "" : "两个实体之间没有找到 3 跳以内的公开证据路径。";
+    } catch { error.value = "多跳证据路径暂时无法读取。"; }
     finally { loadingGraph.value = false; }
   }
   async function expandNode(entityId: string): Promise<void> {
@@ -57,5 +80,5 @@ export const useLibraryStore = defineStore("library", () => {
     catch { error.value = "图书详情暂时无法读取。"; }
   }
 
-  return { overview, graph, graphQuery, selectedResource, detailOpen, loadingOverview, loadingGraph, error, loadOverview, searchGraph, expandNode, openResource };
+  return { overview, graph, graphPaths, highlightedPathId, graphQuery, selectedResource, detailOpen, loadingOverview, loadingGraph, error, loadOverview, searchGraph, expandNode, loadGraphPaths, openResource };
 });

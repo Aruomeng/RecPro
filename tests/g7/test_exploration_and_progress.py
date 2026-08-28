@@ -59,6 +59,78 @@ class PublicGraphBoundaryTests(unittest.TestCase):
         self.assertLessEqual(len(view["edges"]), 120)
         self.assertTrue(view["truncated"])
 
+    def test_path_view_returns_only_bounded_public_multihop_evidence(self) -> None:
+        rows = [
+            {"row": [
+                [
+                    ["book:1", "Book", {"title": "多智能体系统", "source_file": "private.csv"}],
+                    ["work:1", "Work", {"title": "多智能体系统"}],
+                    ["topic:1", "Topic", {"name": "多智能体"}],
+                ],
+                [
+                    ["edge:instance", "INSTANCE_OF", "book:1", "work:1"],
+                    ["edge:topic", "HAS_TOPIC", "work:1", "topic:1"],
+                ],
+                2,
+            ]},
+            # This path is structurally valid but exceeds the caller's bound.
+            {"row": [
+                [
+                    ["book:1", "Book", {"title": "多智能体系统"}],
+                    ["work:1", "Work", {"title": "多智能体系统"}],
+                    ["author:1", "Author", {"name": "作者"}],
+                    ["topic:1", "Topic", {"name": "多智能体"}],
+                ],
+                [
+                    ["edge:1", "INSTANCE_OF", "book:1", "work:1"],
+                    ["edge:2", "AUTHORED_BY", "work:1", "author:1"],
+                    ["edge:3", "HAS_TOPIC", "author:1", "topic:1"],
+                ],
+                3,
+            ]},
+        ]
+
+        result = self.reader()._path_view(
+            rows,
+            source_id="book:1",
+            target_id="topic:1",
+            max_hops=2,
+            limit=10,
+        )
+
+        self.assertEqual(1, len(result["paths"]))
+        self.assertEqual(2, result["paths"][0]["hop_count"])
+        self.assertEqual(0.85, result["paths"][0]["score"])
+        self.assertTrue(result["paths"][0]["path_id"].startswith("graphpath:"))
+        self.assertEqual({"Book", "Work", "Topic"}, {node["type"] for node in result["graph"]["nodes"]})
+        self.assertTrue(all("source_file" not in node["properties"] for node in result["graph"]["nodes"]))
+
+    def test_path_query_keeps_user_values_out_of_constant_cypher(self) -> None:
+        class CapturingReader(PublicGraphReader):
+            def _query(self, statement, parameters):
+                self.statement = statement
+                self.parameters = parameters
+                return []
+
+        reader = CapturingReader(
+            endpoint="http://127.0.0.1:7474/db/neo4j/tx/commit",
+            username="readonly",
+            password="test-only",
+            graph_version="lib-books-v2-20260828",
+        )
+        injection = "book:1') MATCH (secret) RETURN secret //"
+        result = asyncio.run(reader.paths(injection, "topic:1", max_hops=3, limit=10))
+        self.assertEqual([], result["paths"])
+        self.assertNotIn(injection, reader.statement)
+        self.assertEqual(injection, reader.parameters["source_id"])
+        self.assertIn("*1..3", reader.statement)
+
+    def test_path_bounds_are_fail_closed(self) -> None:
+        reader = self.reader()
+        for max_hops, limit in ((0, 1), (4, 1), (1, 0), (1, 11)):
+            with self.assertRaises(ValueError):
+                asyncio.run(reader.paths("book:1", "topic:1", max_hops=max_hops, limit=limit))
+
 
 class ExplorationLayeringTests(unittest.IsolatedAsyncioTestCase):
     async def test_overview_cache_uses_ports_once(self) -> None:

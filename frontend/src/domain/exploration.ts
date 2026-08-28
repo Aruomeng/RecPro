@@ -43,3 +43,19 @@ export interface GraphNode {
 }
 export interface GraphEdge { id: string; source: string; target: string; type: string; label: string }
 export interface GraphView { graph_version: string; query: string; nodes: GraphNode[]; edges: GraphEdge[]; truncated: boolean }
+export interface GraphPath {
+  path_id: string;
+  node_ids: string[];
+  edge_ids: string[];
+  hop_count: number;
+  score: number;
+  evidence_refs: string[];
+}
+export interface GraphPathView {
+  graph_version: string;
+  source_id: string;
+  target_id: string;
+  paths: GraphPath[];
+  graph: GraphView;
+  truncated: boolean;
+}

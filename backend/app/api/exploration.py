@@ -95,6 +95,24 @@ class GraphViewResponse(StrictModel):
     truncated: bool
 
 
+class GraphPathResponse(StrictModel):
+    path_id: str
+    node_ids: list[str] = Field(min_length=2, max_length=4)
+    edge_ids: list[str] = Field(min_length=1, max_length=3)
+    hop_count: int = Field(ge=1, le=3)
+    score: float = Field(ge=0, le=1)
+    evidence_refs: list[str] = Field(min_length=1)
+
+
+class GraphPathViewResponse(StrictModel):
+    graph_version: str
+    source_id: str
+    target_id: str
+    paths: list[GraphPathResponse] = Field(max_length=10)
+    graph: GraphViewResponse
+    truncated: bool
+
+
 def _unavailable(exc: Exception) -> PublicAPIError:
     return PublicAPIError(
         status_code=503,
@@ -170,6 +188,34 @@ def create_exploration_router(*, service: Any) -> APIRouter:
     ) -> GraphViewResponse:
         try:
             return GraphViewResponse.model_validate(await service.graph_neighbors(entity_id, limit=limit))
+        except (ConnectionError, RuntimeError, OSError) as exc:
+            raise _unavailable(exc) from exc
+
+    @router.get(
+        "/graph/paths",
+        response_model=GraphPathViewResponse,
+        responses=errors,
+        openapi_extra={"parameters": [REQUEST_ID_PARAMETER], "security": []},
+        operation_id="exploration_graph_paths_v2",
+    )
+    async def graph_paths(
+        source_id: str = Query(min_length=1, max_length=256),
+        target_id: str = Query(min_length=1, max_length=256),
+        max_hops: int = Query(default=3, ge=1, le=3),
+        limit: int = Query(default=10, ge=1, le=10),
+    ) -> GraphPathViewResponse:
+        try:
+            return GraphPathViewResponse.model_validate(
+                await service.graph_paths(
+                    source_id, target_id, max_hops=max_hops, limit=limit,
+                )
+            )
+        except ValueError as exc:
+            raise PublicAPIError(
+                422, ErrorCode.INVALID_JSON,
+                "The bounded graph path request is invalid.", False,
+                {"error_type": type(exc).__name__},
+            ) from exc
         except (ConnectionError, RuntimeError, OSError) as exc:
             raise _unavailable(exc) from exc
 

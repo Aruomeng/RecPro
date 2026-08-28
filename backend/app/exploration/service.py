@@ -47,5 +47,14 @@ class ExplorationService:
     async def graph_neighbors(self, entity_id: str, *, limit: int) -> dict[str, object]:
         return await self._catalog.map_resource_ids(await self._graph.neighbors(entity_id, limit=limit))
 
+    async def graph_paths(
+        self, source_id: str, target_id: str, *, max_hops: int, limit: int,
+    ) -> dict[str, object]:
+        view = await self._graph.paths(
+            source_id, target_id, max_hops=max_hops, limit=limit,
+        )
+        view["graph"] = await self._catalog.map_resource_ids(dict(view["graph"]))
+        return view
+
 
 __all__ = ["ExplorationService"]

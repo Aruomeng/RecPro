@@ -167,6 +167,7 @@ class RecommendationEvidenceResponse(StrictModel):
     channel_ranks: dict[str, int]
     primary_channel: str | None = None
     evidence_refs: list[str] = Field(min_length=1)
+    graph_path_refs: list[str] = Field(default_factory=list, max_length=10)
     negative_penalty: float = Field(ge=0, le=1)
 
 

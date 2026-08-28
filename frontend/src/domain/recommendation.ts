@@ -69,6 +69,7 @@ export interface RecommendationEvidence {
   channel_ranks: Record<string, number>;
   primary_channel?: string;
   evidence_refs: string[];
+  graph_path_refs?: string[];
   negative_penalty: number;
 }
 
@@ -303,6 +304,7 @@ function decodeEvidence(value: unknown, path: string): void {
   Object.entries(ranks).forEach(([key, rank]) => number(rank, `${path}.channel_ranks.${key}`, 1));
   if (evidence.primary_channel !== undefined) text(evidence.primary_channel, `${path}.primary_channel`, { nullable: true });
   stringArray(evidence.evidence_refs, `${path}.evidence_refs`, { nonEmpty: true });
+  if (evidence.graph_path_refs !== undefined) stringArray(evidence.graph_path_refs, `${path}.graph_path_refs`);
   number(evidence.negative_penalty, `${path}.negative_penalty`, 0, 1);
 }
 

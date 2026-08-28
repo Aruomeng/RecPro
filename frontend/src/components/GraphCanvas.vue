@@ -5,10 +5,10 @@ import type { GraphNode, GraphView } from "../domain/exploration";
 import EChart from "./EChart.vue";
 import "../charts/registerGraph";
 
-const props = defineProps<{ graph: GraphView | null; compact?: boolean; allowedTypes?: string[]; selectedId?: string }>();
+const props = defineProps<{ graph: GraphView | null; compact?: boolean; allowedTypes?: string[]; selectedId?: string; highlightedEdgeIds?: string[] }>();
 const emit = defineEmits<{ nodeClick: [node: GraphNode] }>();
-const types = ["Book", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"];
-const colors = ["#2563eb", "#0891b2", "#4f46e5", "#0284c7", "#7c3aed", "#0d9488", "#64748b"];
+const types = ["Book", "Work", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"];
+const colors = ["#2563eb", "#1d4ed8", "#0891b2", "#4f46e5", "#0284c7", "#7c3aed", "#0d9488", "#64748b"];
 const visibleNodes = computed(() => (props.graph?.nodes ?? []).filter((node) => !props.allowedTypes?.length || props.allowedTypes.includes(node.type)));
 const visibleIds = computed(() => new Set(visibleNodes.value.map((node) => node.id)));
 const option = computed<EChartsOption>(() => ({
@@ -31,7 +31,10 @@ const option = computed<EChartsOption>(() => ({
       symbolSize: node.type === "Book" ? (props.compact ? 20 : 34) : (props.compact ? 13 : 23),
       selected: node.id === props.selectedId,
     })),
-    links: (props.graph?.edges ?? []).filter((edge) => visibleIds.value.has(edge.source) && visibleIds.value.has(edge.target)).map((edge) => ({ source: edge.source, target: edge.target, value: 1, name: edge.label })),
+    links: (props.graph?.edges ?? []).filter((edge) => visibleIds.value.has(edge.source) && visibleIds.value.has(edge.target)).map((edge) => ({
+      id: edge.id, source: edge.source, target: edge.target, value: 1, name: edge.label,
+      lineStyle: props.highlightedEdgeIds?.includes(edge.id) ? { color: "#2563eb", opacity: 1, width: 4 } : undefined,
+    })),
   }],
 }));
 function clicked(params: unknown): void {

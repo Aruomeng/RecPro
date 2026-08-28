@@ -77,6 +77,19 @@ class FakeGraph:
         )
 
 
+class FakeV2GraphWithoutPath:
+    async def recall(self, *, terms, graph_version, limit):
+        return (
+            GraphRecallEvidence(
+                external_id="book:one",
+                score=0.95,
+                matched_terms=("多智能体",),
+                graph_version=graph_version,
+                graph_path_refs=(),
+            ),
+        )
+
+
 class FakeGraphTimeout:
     def __init__(self) -> None:
         self.calls = 0
@@ -192,6 +205,19 @@ class RetrievalFusionTests(unittest.TestCase):
         self.assertEqual(2, len(vector.calls))
         self.assertTrue(all("VECTOR" not in item["channel"] for item in result.payload["candidates"]))
         self.assertTrue(all(item["semantic_score"] is None for item in result.payload["candidates"]))
+
+    def test_v2_graph_without_path_evidence_cannot_contribute(self) -> None:
+        agent = CatalogCandidateRecallAgent(
+            FakeCatalog(),
+            graph=FakeV2GraphWithoutPath(),
+            graph_version="lib-books-v2-20260828",
+        )
+        result = asyncio.run(agent.handle(recall_message()))
+        candidates = list(result.payload["candidates"])
+        self.assertTrue(candidates)
+        self.assertTrue(all("GRAPH" not in item["channel"] for item in candidates))
+        self.assertTrue(all(item["graph_path_refs"] == [] for item in candidates))
+        self.assertTrue(all(":graph:" not in item["evidence_ref"] for item in candidates))
 
     def test_graph_and_vector_outage_keeps_sufficient_mysql_candidates(self) -> None:
         graph = FakeGraphTimeout()

@@ -13,7 +13,7 @@ from urllib.request import ProxyHandler, Request, build_opener
 
 
 PUBLIC_LABELS = frozenset(
-    {"Book", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"}
+    {"Book", "Work", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"}
 )
 PUBLIC_RELATIONSHIPS = frozenset(
     {
@@ -24,6 +24,7 @@ PUBLIC_RELATIONSHIPS = frozenset(
         "HAS_TOPIC",
         "HAS_SUBJECT_CODE",
         "HAS_KEYWORD",
+        "INSTANCE_OF",
     }
 )
 PUBLIC_PROPERTIES = frozenset(
@@ -57,6 +58,16 @@ _NEIGHBORS = (
     "RETURN n.entity_id, labels(n)[0], properties(n), "
     "r.edge_key, type(r), startNode(r).entity_id, endNode(r).entity_id, "
     "m.entity_id, labels(m)[0], properties(m) LIMIT $edge_limit"
+)
+_PATHS = (
+    "MATCH p=(source {graph_version: $graph_version, entity_id: $source_id})-[relationships*1..3]-(target {graph_version: $graph_version, entity_id: $target_id}) "
+    "WHERE any(label IN labels(source) WHERE label IN $labels) "
+    "AND any(label IN labels(target) WHERE label IN $labels) "
+    "AND all(rel IN relationships WHERE type(rel) IN $relationships) "
+    "WITH p ORDER BY length(p), [node IN nodes(p) | node.entity_id] LIMIT $path_limit "
+    "RETURN [node IN nodes(p) | [node.entity_id, labels(node)[0], properties(node)]], "
+    "[rel IN relationships(p) | [rel.edge_key, type(rel), startNode(rel).entity_id, endNode(rel).entity_id]], "
+    "length(p)"
 )
 
 
@@ -110,6 +121,39 @@ class PublicGraphReader:
         params = self._base_params() | {"entity_id": normalized, "edge_limit": min(120, limit)}
         rows = await asyncio.to_thread(self._query, _NEIGHBORS, params)
         return self._view(rows, query=normalized, limit=min(60, limit + 1))
+
+    async def paths(
+        self,
+        source_id: str,
+        target_id: str,
+        *,
+        max_hops: int = 3,
+        limit: int = 10,
+    ) -> dict[str, object]:
+        source = source_id.strip()
+        target = target_id.strip()
+        if not source or not target or len(source) > 256 or len(target) > 256:
+            raise ValueError("graph path endpoints must contain 1 to 256 characters")
+        if source == target:
+            raise ValueError("graph path endpoints must be different")
+        if not 1 <= max_hops <= 3 or not 1 <= limit <= 10:
+            raise ValueError("graph path bounds exceed the public contract")
+        # The statement remains a constant 1..3-hop query.  A smaller caller
+        # bound is applied again while parsing; no user value is interpolated
+        # into Cypher.
+        params = self._base_params() | {
+            "source_id": source,
+            "target_id": target,
+            "path_limit": limit,
+        }
+        rows = await asyncio.to_thread(self._query, _PATHS, params)
+        return self._path_view(
+            rows,
+            source_id=source,
+            target_id=target,
+            max_hops=max_hops,
+            limit=limit,
+        )
 
     def _base_params(self) -> dict[str, object]:
         return {
@@ -193,13 +237,90 @@ class PublicGraphReader:
             "truncated": truncated or len(nodes) >= limit,
         }
 
+    def _path_view(
+        self,
+        rows: list[Mapping[str, Any]],
+        *,
+        source_id: str,
+        target_id: str,
+        max_hops: int,
+        limit: int,
+    ) -> dict[str, object]:
+        graph_rows: list[Mapping[str, Any]] = []
+        paths: list[dict[str, object]] = []
+        for raw in rows:
+            values = raw.get("row")
+            if not isinstance(values, list) or len(values) != 3:
+                continue
+            nodes, edges, hop_count = values
+            if (
+                not isinstance(nodes, list)
+                or not isinstance(edges, list)
+                or not isinstance(hop_count, int)
+                or not 1 <= hop_count <= max_hops
+                or len(nodes) != hop_count + 1
+                or len(edges) != hop_count
+            ):
+                continue
+            node_ids = [str(node[0]) for node in nodes if isinstance(node, list) and len(node) == 3]
+            if len(node_ids) != len(nodes) or node_ids[0] != source_id or node_ids[-1] != target_id:
+                # Undirected Cypher may return the endpoints in reverse order.
+                if len(node_ids) != len(nodes) or node_ids[0] != target_id or node_ids[-1] != source_id:
+                    continue
+                nodes = list(reversed(nodes))
+                edges = list(reversed(edges))
+                node_ids = list(reversed(node_ids))
+            edge_ids: list[str] = []
+            for edge in edges:
+                if not isinstance(edge, list) or len(edge) != 4:
+                    edge_ids = []
+                    break
+                raw_id, edge_type, edge_source, edge_target = edge
+                if str(edge_type) not in PUBLIC_RELATIONSHIPS:
+                    edge_ids = []
+                    break
+                edge_id = str(raw_id) if raw_id else sha256(
+                    f"{edge_source}:{edge_type}:{edge_target}".encode()
+                ).hexdigest()[:32]
+                edge_ids.append(edge_id)
+            if len(edge_ids) != hop_count:
+                continue
+            path_id = "graphpath:" + sha256(
+                f"{self._graph_version}:{':'.join(node_ids)}:{':'.join(edge_ids)}".encode()
+            ).hexdigest()[:32]
+            paths.append({
+                "path_id": path_id,
+                "node_ids": node_ids,
+                "edge_ids": edge_ids,
+                "hop_count": hop_count,
+                "score": round(0.85 ** (hop_count - 1), 6),
+                "evidence_refs": [path_id, f"graph:{self._graph_version}"],
+            })
+            for index, node in enumerate(nodes):
+                edge = edges[index] if index < len(edges) else [None, None, None, None]
+                neighbor = nodes[index + 1] if index + 1 < len(nodes) else [None, None, None]
+                graph_rows.append({"row": [
+                    node[0], node[1], node[2],
+                    edge[0], edge[1], edge[2], edge[3],
+                    neighbor[0], neighbor[1], neighbor[2],
+                ]})
+        graph = self._view(graph_rows[:120], query=f"{source_id}->{target_id}", limit=60)
+        return {
+            "graph_version": self._graph_version,
+            "source_id": source_id,
+            "target_id": target_id,
+            "paths": paths[:limit],
+            "graph": graph,
+            "truncated": len(rows) > limit or graph["truncated"],
+        }
+
     @staticmethod
     def _subtitle(node_type: str, properties: Mapping[str, object]) -> str | None:
         if node_type == "Book":
             parts = [properties.get("publisher"), properties.get("publication_year")]
             text = " · ".join(str(item) for item in parts if item)
             return text or None
-        return {"Topic": "主题", "Author": "作者", "Publisher": "出版社", "Category": "分类", "Keyword": "关键词", "SubjectCode": "中图分类"}.get(node_type)
+        return {"Work": "作品", "Topic": "主题", "Author": "作者", "Publisher": "出版社", "Category": "分类", "Keyword": "关键词", "SubjectCode": "中图分类"}.get(node_type)
 
 
 __all__ = ["PUBLIC_LABELS", "PUBLIC_RELATIONSHIPS", "PublicGraphReader"]

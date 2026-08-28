@@ -506,6 +506,12 @@ class CatalogCandidateRecallAgent:
                 ),
             )
             graph_hit = graph_hits.get(resource.external_id)
+            if (
+                graph_hit is not None
+                and graph_hit.graph_version.startswith("lib-books-v2-")
+                and not graph_hit.graph_path_refs
+            ):
+                graph_hit = None
             graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
             vector_hit = vector_hits.get(resource.external_id)
             vector_score = float(vector_hit.score) if vector_hit is not None else 0.0
@@ -545,6 +551,9 @@ class CatalogCandidateRecallAgent:
                     "negative_penalty": round(negative_penalty, 6),
                     "evidence_ref": evidence_ref,
                     "channel_scores": channel_scores,
+                    "graph_path_refs": (
+                        list(graph_hit.graph_path_refs) if graph_hit is not None else []
+                    ),
                     # ``None`` means the optional channel was unavailable or
                     # did not participate.  A successful graph query with no
                     # hit is represented by ``0.0`` instead, so downstream

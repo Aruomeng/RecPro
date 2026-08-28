@@ -1,4 +1,4 @@
-import type { GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
+import type { GraphPathView, GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -23,6 +23,16 @@ function validGraph(value: unknown): value is GraphView {
   return value.nodes.length <= 60 && value.edges.length <= 120 && value.nodes.every((node) => record(node) && text(node.id) && text(node.type) && text(node.label) && record(node.properties)) &&
     value.edges.every((edge) => record(edge) && text(edge.id) && text(edge.source) && text(edge.target) && text(edge.type) && text(edge.label));
 }
+function validGraphPathView(value: unknown): value is GraphPathView {
+  if (!record(value) || !text(value.graph_version) || !text(value.source_id) || !text(value.target_id) ||
+    typeof value.truncated !== "boolean" || !Array.isArray(value.paths) || value.paths.length > 10 || !validGraph(value.graph)) return false;
+  return value.paths.every((path) => {
+    if (!record(path) || !text(path.path_id) || !path.path_id.startsWith("graphpath:") || !count(path.hop_count) || path.hop_count < 1 || path.hop_count > 3 ||
+      typeof path.score !== "number" || path.score < 0 || path.score > 1 || !Array.isArray(path.node_ids) || !Array.isArray(path.edge_ids) || !Array.isArray(path.evidence_refs)) return false;
+    return path.node_ids.length === path.hop_count + 1 && path.edge_ids.length === path.hop_count &&
+      path.node_ids.every(text) && path.edge_ids.every(text) && path.evidence_refs.every(text);
+  });
+}
 
 async function getJson<T>(path: string, validate: (value: unknown) => value is T, signal?: AbortSignal): Promise<T> {
   const response = await fetch(`${baseUrl}${path}`, { headers: { Accept: "application/json" }, cache: "no-store", signal });
@@ -37,4 +47,8 @@ export const explorationClient = {
   resource: (id: number, signal?: AbortSignal) => getJson(`/api/v1/explore/resources/${encodeURIComponent(String(id))}`, validResource, signal),
   graphSearch: (query: string, limit = 30, signal?: AbortSignal) => getJson(`/api/v1/explore/graph/search?q=${encodeURIComponent(query)}&limit=${limit}`, validGraph, signal),
   graphNeighbors: (entityId: string, limit = 40, signal?: AbortSignal) => getJson(`/api/v1/explore/graph/nodes/${encodeURIComponent(entityId)}/neighbors?limit=${limit}`, validGraph, signal),
+  graphPaths: (sourceId: string, targetId: string, maxHops = 3, limit = 10, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ source_id: sourceId, target_id: targetId, max_hops: String(maxHops), limit: String(limit) });
+    return getJson(`/api/v1/explore/graph/paths?${params.toString()}`, validGraphPathView, signal);
+  },
 };

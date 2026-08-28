@@ -45,6 +45,7 @@ class GraphRecallEvidence:
     score: float
     matched_terms: tuple[str, ...]
     graph_version: str
+    graph_path_refs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

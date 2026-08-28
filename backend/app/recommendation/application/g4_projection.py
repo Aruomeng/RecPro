@@ -332,6 +332,22 @@ def _candidate_items(
         negative_penalty = _bounded_number(
             item.get("negative_penalty", 0.0), "ranked item.negative_penalty"
         )
+        raw_graph_path_refs = item.get("graph_path_refs", [])
+        if not isinstance(raw_graph_path_refs, Sequence) or isinstance(
+            raw_graph_path_refs, (str, bytes, bytearray)
+        ):
+            raise G4ProjectionError("ranked item.graph_path_refs must be a list")
+        graph_path_refs = [str(ref).strip() for ref in raw_graph_path_refs]
+        if len(graph_path_refs) > 10 or any(
+            not ref.startswith("graphpath:") for ref in graph_path_refs
+        ):
+            raise G4ProjectionError("graph path references are invalid")
+        if "GRAPH" in channels and not graph_path_refs:
+            graph_version = str(item.get("evidence_ref", ""))
+            if ":graph:lib-books-v2-" in graph_version:
+                raise G4ProjectionError(
+                    "v2 Graph channel requires at least one path reference"
+                )
         projected.append(
             {
                 "rank_no": rank_no,
@@ -354,6 +370,7 @@ def _candidate_items(
                 "channel_ranks": channel_ranks,
                 "primary_channel": primary_channel,
                 "negative_penalty": negative_penalty,
+                "graph_path_refs": graph_path_refs,
             }
         )
     if set(explanations) != seen_resources:
@@ -412,6 +429,7 @@ def extract_candidate_rows_for_persistence(
                         "resource_id": candidate["resource_id"],
                         "channel": channel,
                         "evidence_refs": list(candidate["evidence_refs"]),
+                        "graph_path_refs": list(candidate["graph_path_refs"]),
                     },
                 }
             )
@@ -520,6 +538,7 @@ def build_http_execution_payload(
                         "primary_channel": candidate["primary_channel"],
                         "evidence_refs": candidate["evidence_refs"],
                         "negative_penalty": candidate["negative_penalty"],
+                        "graph_path_refs": candidate["graph_path_refs"],
                     },
                 }
             )

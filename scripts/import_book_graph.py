@@ -29,6 +29,9 @@ GRAPH_VERSION_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 PROJECT_PATTERN = re.compile(r"^recpro-library-neo4j-[a-z0-9][a-z0-9._-]{2,63}$")
 SAFE_IDENTIFIER = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 SHA256_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+PLAN_ID_PATTERN = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 ALLOWED_LICENSE_STATUSES = {"CONFIRMED_LOCAL_RESEARCH", "LICENSED_OPEN_DATA"}
 ALL_LICENSE_STATUSES = {"PENDING_USER_CONFIRMATION", *ALLOWED_LICENSE_STATUSES}
 NODE_LABELS = {
@@ -36,6 +39,7 @@ NODE_LABELS = {
     "SourceFile",
     "SourceRecord",
     "Book",
+    "Work",
     "Category",
     "Topic",
     "Author",
@@ -55,6 +59,7 @@ RELATIONSHIP_TYPES = {
     "PUBLISHED_BY",
     "HAS_SUBJECT_CODE",
     "HAS_KEYWORD",
+    "INSTANCE_OF",
 }
 _DESTRUCTIVE_CYPHER_WORDS = (
     "DE" + "LETE",
@@ -144,7 +149,7 @@ def verify_plan(plan_dir: Path) -> tuple[dict[str, Any], list[dict[str, Any]], l
         raise ValueError("graph plan JSONL artifact hash mismatch")
     graph_version = plan.get("graph_version")
     validate_identifier(str(graph_version), label="graph version", pattern=GRAPH_VERSION_PATTERN)
-    if plan.get("schema_version") != "book-graph-plan-v1":
+    if plan.get("schema_version") not in {"book-graph-plan-v1", "book-graph-plan-v2"}:
         raise ValueError("unsupported graph plan schema version")
     if plan.get("can_import") is not True:
         raise ValueError("graph plan is not marked can_import")
@@ -192,6 +197,63 @@ def verify_plan(plan_dir: Path) -> tuple[dict[str, Any], list[dict[str, Any]], l
             raise ValueError("graph triple properties must be an object without null values")
         edge_keys.add(edge_key)
     return plan, nodes, triples
+
+
+def verify_v2_change_plan(
+    path: Path,
+    *,
+    approved_plan_id: str,
+    approved_plan_hash: str,
+    graph_plan: Mapping[str, Any],
+    graph_plan_path: Path,
+) -> dict[str, Any]:
+    """Verify the exact, separately approved Neo4j v2 append plan.
+
+    This check runs before credentials are read or a network client exists.
+    It intentionally binds approval to both the immutable graph artifacts and
+    their exact bounded append counts.
+    """
+
+    if PLAN_ID_PATTERN.fullmatch(approved_plan_id) is None:
+        raise ValueError("approved v2 ChangePlan id is malformed")
+    if SHA256_PATTERN.fullmatch(approved_plan_hash) is None:
+        raise ValueError("approved v2 ChangePlan hash is malformed")
+    change_plan = load_json(path, label="Neo4j v2 ChangePlan")
+    if change_plan.get("schema_version") != "recpro-neo4j-v2-change-plan-v1":
+        raise ValueError("unsupported Neo4j v2 ChangePlan schema")
+    if (
+        change_plan.get("plan_id") != approved_plan_id
+        or change_plan.get("plan_hash") != approved_plan_hash
+    ):
+        raise ValueError("approved Neo4j v2 ChangePlan identity does not match")
+    unsigned = dict(change_plan)
+    unsigned.pop("plan_hash", None)
+    if sha256_bytes(canonical_json(unsigned).encode()) != approved_plan_hash:
+        raise ValueError("Neo4j v2 ChangePlan canonical hash does not match")
+    expected = change_plan.get("graph_append")
+    if not isinstance(expected, Mapping):
+        raise ValueError("Neo4j v2 ChangePlan graph append budget is missing")
+    actual_graph_plan_hash = sha256_bytes(graph_plan_path.read_bytes())
+    if (
+        expected.get("graph_version") != graph_plan.get("graph_version")
+        or expected.get("graph_plan_sha256") != actual_graph_plan_hash
+        or expected.get("nodes") != graph_plan.get("nodes", {}).get("total")
+        or expected.get("relationships") != graph_plan.get("triples", {}).get("total")
+    ):
+        raise ValueError("graph artifacts differ from the approved Neo4j v2 ChangePlan")
+    safety = change_plan.get("safety")
+    if not isinstance(safety, Mapping) or any(
+        safety.get(key) != 0
+        for key in (
+            "v1_node_delta",
+            "v1_relationship_delta",
+            "database_deletions",
+            "file_deletions",
+            "deepseek_requests",
+        )
+    ):
+        raise ValueError("Neo4j v2 ChangePlan safety assertions are incomplete")
+    return change_plan
 
 
 class Neo4jHttpClient:
@@ -352,6 +414,9 @@ def execute(
     license_status: str,
     allow_nonempty_target: bool,
     batch_size: int,
+    change_plan_path: Path | None = None,
+    approved_plan_id: str | None = None,
+    approved_plan_hash: str | None = None,
 ) -> dict[str, Any]:
     validate_identifier(run_id, label="import run id")
     if license_status not in ALL_LICENSE_STATUSES:
@@ -363,6 +428,19 @@ def execute(
     if not resolved_plan_dir.is_dir() or not resolved_env_file.is_file():
         raise ValueError("graph plan directory or Neo4j secret file is missing")
     plan, nodes, triples = verify_plan(resolved_plan_dir)
+    if apply and plan.get("schema_version") == "book-graph-plan-v2":
+        if not change_plan_path or not approved_plan_id or not approved_plan_hash:
+            raise ValueError("v2 --apply requires an exact approved Neo4j ChangePlan")
+        resolved_change_plan = resolve_repository_path(
+            change_plan_path, label="Neo4j v2 ChangePlan",
+        )
+        verify_v2_change_plan(
+            resolved_change_plan,
+            approved_plan_id=approved_plan_id,
+            approved_plan_hash=approved_plan_hash,
+            graph_plan=plan,
+            graph_plan_path=resolved_plan_dir / "graph-plan.json",
+        )
     plan_license = str(plan["license_status"])
     if plan_license != license_status:
         raise ValueError("CLI license status must match the reviewed graph plan")
@@ -473,6 +551,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="explicitly permit a non-empty isolated target; never use for the existing graph",
     )
     parser.add_argument("--batch-size", type=int, default=500)
+    parser.add_argument("--change-plan", type=Path)
+    parser.add_argument("--plan-id")
+    parser.add_argument("--approved-plan-hash")
     return parser
 
 
@@ -487,6 +568,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             license_status=args.license_status,
             allow_nonempty_target=args.allow_nonempty_target,
             batch_size=args.batch_size,
+            change_plan_path=args.change_plan,
+            approved_plan_id=args.plan_id,
+            approved_plan_hash=args.approved_plan_hash,
         )
     except (OSError, ValueError, RuntimeError) as exc:
         print(f"[FAIL] book graph import did not complete: {type(exc).__name__}: {exc}")

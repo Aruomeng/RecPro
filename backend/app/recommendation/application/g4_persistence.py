@@ -231,6 +231,7 @@ def build_g4_projection_write_plan(
                 "channel_ranks": dict(ranks),
                 "rrf_score": candidate["score"],
                 "negative_penalty": candidate["negative_penalty"],
+                "graph_path_refs": list(candidate.get("graph_path_refs", [])),
             }
             items.append(
                 G4ItemFact(
