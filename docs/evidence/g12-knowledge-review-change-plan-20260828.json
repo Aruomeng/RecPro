@@ -1,0 +1,65 @@
+{
+  "schema_version": "recpro-g12-knowledge-review-plan-v1",
+  "plan_id": "aa49e42d-eb0e-5157-82f9-8a0cb7d99d01",
+  "created_at": "2026-08-28T19:18:00+08:00",
+  "git_commit": "36ea72215aa2f906e5688527ff721486c0a2a728",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "database_identity": "mysql://127.0.0.1:62306/recpro",
+  "intent": "Create two append-only knowledge review tables and one current-state view, append one permission, two role grants, one migration marker, and exactly 262 v2 review proposals. No action facts or Neo4j changes are included.",
+  "targets": [
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_proposal", "operation": "CREATE_AND_APPEND", "rows": 262},
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_action_fact", "operation": "CREATE", "rows": 0},
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_current_v", "operation": "CREATE", "rows": 0},
+    {"kind": "MYSQL", "identifier": "recpro.iam_permission:catalog.knowledge.review", "operation": "APPEND", "rows": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role_permission_fact:g12", "operation": "APPEND", "rows": 2},
+    {"kind": "MYSQL", "identifier": "recpro.recpro_schema_migration:g12", "operation": "APPEND", "rows": 1}
+  ],
+  "input_hashes": {
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/review-proposals.jsonl": "efb5f17a3547126522c822d2f0bca4a02cb84b1fb4f6870bbf3a698be6e4985a",
+    "backend/app/identity/domain.py": "8dde78c2775b1fc0802be8b080394bd440aa2ab3f16f4fb20161f3f234143c93",
+    "backend/app/knowledge_review/domain.py": "03cc021e17648f519ce510f605e49005789654cfd8e4232e18c85f0f0d9ccdf7",
+    "backend/app/knowledge_review/loader.py": "d88a0b7fa4259daaa3280b8da9390b47fdf2a25cc0ee5ca753ea72c089ee24ba",
+    "backend/app/knowledge_review/mysql.py": "55772d5c5ef566562868c914bf06286aa231e49237a0da86229ff452b22d9914",
+    "backend/app/knowledge_review/service.py": "1aedc016ac6171ff17604b3da5b587f49e6a4395136f5e74ef92ea67a68adaad",
+    "infra/mysql/migrations/010_g12_knowledge_review.sql": "5077633ac302e154353a1527ca8e1bd57e9f45f7b2b214f3907f11d12019a134",
+    "scripts/build_g12_knowledge_review_change_plan.py": "25ea349296a280bfa76a81c3380a91462bb385cba7739a6e5abc548fa3e33261",
+    "scripts/execute_g12_knowledge_review_plan.py": "62eb96f8b29c1f5d4e5d986aa036e3188183afcf0dcb1889f87b0c388476c659"
+  },
+  "max_changes": 266,
+  "dry_run": {
+    "schema_version": "g12-knowledge-review-dry-run-v1",
+    "status": "PASS",
+    "mode": "NO_WRITE_DRY_RUN",
+    "migration_sha256": "5077633ac302e154353a1527ca8e1bd57e9f45f7b2b214f3907f11d12019a134",
+    "statement_count": 6,
+    "new_tables": ["knowledge_review_proposal", "knowledge_review_action_fact"],
+    "new_views": ["knowledge_review_current_v"],
+    "permission_rows": 1,
+    "role_permission_fact_rows": 2,
+    "migration_marker_rows": 1,
+    "proposal_rows": 262,
+    "action_fact_rows": 0,
+    "maximum_rows": 266,
+    "database_connections": 0,
+    "database_writes": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0
+  },
+  "preconditions": [
+    "user approves unchanged plan_id and plan_hash before any database connection",
+    "both tables, the view, permission 16, G12 grants, marker, and all 262 proposals are absent",
+    "only CREATE TABLE, CREATE VIEW, and INSERT IGNORE statements are accepted",
+    "failure recovery is forward-only; no compensating deletion or schema removal"
+  ],
+  "safety": {
+    "database_deletions": 0,
+    "file_deletions": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "action_fact_rows": 0
+  },
+  "plan_hash": "b20bdbf7cf4d1c129eebdb2a4fbeaba61d797aa3780582c2c1566d26d6cb00f1"
+}
