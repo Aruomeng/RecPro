@@ -51,6 +51,7 @@ from backend.app.identity.security import (
 from backend.app.agent_workspace import AgentWorkspaceAuditBuffer
 from backend.app.agent_workspace.adapters.mysql_audit import MySQLAgentWorkspaceAuditAdapter
 from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
+from backend.app.agent_workspace.adapters.profile_reader import MySQLWorkspaceProfileReader
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.adapters.g4_mysql import (
     MySQLG4RecommendationTaskService,
@@ -745,6 +746,16 @@ def build_agent_workspace_audit_worker(
     )
 
 
+def build_agent_workspace_profile_reader(
+    settings: AppSettings,
+) -> MySQLWorkspaceProfileReader:
+    """Build a connection-on-use, rollback-only profile summary reader."""
+
+    if settings.app_env == "production":
+        raise ValueError("workspace profile reader requires a reviewed non-production root")
+    return MySQLWorkspaceProfileReader(_mysql_connection_factory(settings))
+
+
 def build_profile_outbox_worker(
     settings: AppSettings,
     *,
@@ -774,6 +785,7 @@ def build_profile_outbox_worker(
 
 __all__ = [
     "build_agent_workspace_audit_worker",
+    "build_agent_workspace_profile_reader",
     "build_formal_auth_resolver",
     "build_production_http_app",
     "build_demo_http_app",

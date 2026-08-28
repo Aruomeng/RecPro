@@ -2,6 +2,9 @@
 
 from .context import ContextObservation, ContextProvider, LocalDemoExternalContextProvider
 from .audit import AgentWorkspaceAuditBuffer, AuditCapacityError
+from .dispatcher import WorkspaceObservationCapacityError
+from .handlers import ExplorationWorkspaceReadTools
+from .topic_graph import SessionTopicGraph
 from .runtime import (
     AGENT_NAMES,
     AgentWorkspaceBroker,
@@ -21,4 +24,7 @@ __all__ = [
     "LocalDemoExternalContextProvider",
     "AgentWorkspaceAuditBuffer",
     "AuditCapacityError",
+    "ExplorationWorkspaceReadTools",
+    "SessionTopicGraph",
+    "WorkspaceObservationCapacityError",
 ]

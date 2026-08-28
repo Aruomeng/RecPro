@@ -67,7 +67,7 @@ export interface WorkspaceContextSummary {
 }
 
 export interface AgentWorkspaceSnapshot {
-  schema_version: "agent-workspace-v1";
+  schema_version: "agent-workspace-v1" | "agent-workspace-v2";
   workspace_id: string;
   session_id: string;
   mode: "guest" | "demo" | "authenticated";
@@ -78,6 +78,28 @@ export interface AgentWorkspaceSnapshot {
   recent_events: WorkspaceEvent[];
   sources: Array<{ source_id: string; kind: "INTERNAL" | "EXTERNAL_DEMO"; label: string; status: string; observed_at: string; expires_at: string }>;
   context_summary: WorkspaceContextSummary;
+  session_topic_graph?: SessionTopicGraph;
+}
+
+export interface SessionTopicGraph {
+  version: number;
+  nodes: Array<{
+    id: string;
+    type: "QUERY" | "TOPIC" | "RESOURCE" | "ROUTE" | "RECOMMENDATION_TASK";
+    label: string;
+    weight: number;
+    first_seen_at: string;
+    last_seen_at: string;
+    evidence_refs: string[];
+  }>;
+  edges: Array<{
+    id: string;
+    source: string;
+    target: string;
+    type: "MENTIONS" | "EXPLORED" | "OPENED" | "RECOMMENDED" | "REJECTED" | "CONTINUES";
+    weight: number;
+  }>;
+  truncated: boolean;
 }
 
 export const workspaceAgentStates: AgentWorkspaceState[] = ["IDLE", "OBSERVING", "PLANNING", "WORKING", "WAITING_USER", "COMPLETED", "DEGRADED", "FAILED"];
@@ -112,10 +134,13 @@ export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
 }
 
 export function isAgentWorkspaceSnapshot(value: unknown): value is AgentWorkspaceSnapshot {
-  if (!isRecord(value) || value.schema_version !== "agent-workspace-v1" || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo", "authenticated"].includes(String(value.mode))) return false;
+  if (!isRecord(value) || !["agent-workspace-v1", "agent-workspace-v2"].includes(String(value.schema_version)) || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo", "authenticated"].includes(String(value.mode))) return false;
   if (!isRecord(value.orchestrator) || !Array.isArray(value.agents) || value.agents.length !== 8 || !value.agents.every(isWorkspaceAgent)) return false;
   if (!Array.isArray(value.directives) || !value.directives.every(isDirective) || !Array.isArray(value.recent_events) || !value.recent_events.every(isWorkspaceEvent)) return false;
   if (!Array.isArray(value.sources) || !value.sources.every((source) => isRecord(source) && typeof source.source_id === "string" && ["INTERNAL", "EXTERNAL_DEMO"].includes(String(source.kind)) && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string")) return false;
   if (!isRecord(value.context_summary) || typeof value.context_summary.route !== "string" || typeof value.context_summary.query !== "string" || !Array.isArray(value.context_summary.external)) return false;
-  return value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item) || (Array.isArray(item) && item.length <= 20 && item.every((entry) => typeof entry === "string"))));
+  if (!value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item) || (Array.isArray(item) && item.length <= 20 && item.every((entry) => typeof entry === "string"))))) return false;
+  if (value.schema_version === "agent-workspace-v1") return value.session_topic_graph === undefined;
+  if (!isRecord(value.session_topic_graph) || !Number.isInteger(value.session_topic_graph.version) || !Array.isArray(value.session_topic_graph.nodes) || value.session_topic_graph.nodes.length > 64 || !Array.isArray(value.session_topic_graph.edges) || value.session_topic_graph.edges.length > 128 || typeof value.session_topic_graph.truncated !== "boolean") return false;
+  return value.session_topic_graph.nodes.every((node) => isRecord(node) && typeof node.id === "string" && ["QUERY", "TOPIC", "RESOURCE", "ROUTE", "RECOMMENDATION_TASK"].includes(String(node.type)) && typeof node.label === "string" && typeof node.weight === "number" && Array.isArray(node.evidence_refs)) && value.session_topic_graph.edges.every((edge) => isRecord(edge) && typeof edge.id === "string" && typeof edge.source === "string" && typeof edge.target === "string" && ["MENTIONS", "EXPLORED", "OPENED", "RECOMMENDED", "REJECTED", "CONTINUES"].includes(String(edge.type)) && typeof edge.weight === "number");
 }

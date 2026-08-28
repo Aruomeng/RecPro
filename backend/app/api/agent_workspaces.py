@@ -14,6 +14,7 @@ from backend.app.agent_workspace.application.public import (
     AgentWorkspaceBroker,
     WorkspaceCapacityError,
     WorkspaceNotFoundError,
+    WorkspaceObservationCapacityError,
     agent_catalog,
 )
 from backend.app.api.auth import PrincipalResolver, resolve_user_principal
@@ -36,7 +37,7 @@ class WorkspaceCreateRequest(StrictModel):
 
 
 class WorkspaceSnapshotResponse(StrictModel):
-    schema_version: Literal["agent-workspace-v1"]
+    schema_version: Literal["agent-workspace-v2"]
     workspace_id: UUID
     session_id: UUID
     mode: Literal["guest", "demo", "authenticated"]
@@ -47,6 +48,7 @@ class WorkspaceSnapshotResponse(StrictModel):
     recent_events: list[dict[str, Any]] = Field(max_length=40)
     sources: list[dict[str, Any]]
     context_summary: dict[str, Any]
+    session_topic_graph: dict[str, Any]
 
 
 class WorkspaceCreatedResponse(StrictModel):
@@ -126,7 +128,12 @@ def create_agent_workspace_router(
                 "The workspace mode does not match the active identity.", False, {},
             )
         try:
-            snapshot, replayed = broker.create(session_id=request.session_id, user_id=actor.user_id, mode=request.mode)
+            snapshot, replayed = broker.create(
+                session_id=request.session_id,
+                user_id=actor.user_id,
+                mode=request.mode,
+                personalization_enabled=actor.has_permission("personalization.profile.use"),
+            )
         except WorkspaceCapacityError as exc:
             raise PublicAPIError(429, ErrorCode.REQUEST_DEADLINE_EXCEEDED, "The bounded Agent workspace capacity has been reached.", True, {"max_workspaces": 32}) from exc
         workspace_id = str(snapshot["workspace_id"])
@@ -166,6 +173,14 @@ def create_agent_workspace_router(
             )
         except WorkspaceNotFoundError as exc:
             raise _not_found(exc) from exc
+        except WorkspaceObservationCapacityError as exc:
+            raise PublicAPIError(
+                429,
+                ErrorCode.REQUEST_DEADLINE_EXCEEDED,
+                "The bounded Workspace observation queue is full.",
+                True,
+                {"max_pending_observations": 64},
+            ) from exc
         except ValueError as exc:
             raise PublicAPIError(422, ErrorCode.INVALID_JSON, "The public workspace observation is invalid.", False, {"error_type": type(exc).__name__}) from exc
         return WorkspaceObservationResponse(workspace=WorkspaceSnapshotResponse.model_validate(snapshot), replayed=replayed)

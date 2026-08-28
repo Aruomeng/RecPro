@@ -21,6 +21,20 @@ from uuid import UUID, uuid4
 
 from backend.app.agent_workspace.context import ContextProvider, default_external_context_providers
 from backend.app.agent_workspace.audit import AgentWorkspaceAuditBuffer
+from backend.app.agent_workspace.dispatcher import (
+    WorkspaceObservationCapacityError,
+    WorkspaceObservationDispatcher,
+)
+from backend.app.agent_workspace.handlers import default_workspace_handlers
+from backend.app.agent_workspace.ports.handlers import (
+    WorkspaceAgentHandler,
+    WorkspaceAgentResult,
+    WorkspaceHandlerContext,
+    WorkspaceObservation,
+    WorkspaceProfileReadPort,
+    WorkspaceReadToolPort,
+)
+from backend.app.agent_workspace.topic_graph import SessionTopicGraph
 from backend.app.shared_kernel.contracts.autonomy import ROLE_PROFILES
 
 
@@ -83,6 +97,11 @@ class _Workspace:
     )
     external_context: list[dict[str, object]] = field(default_factory=list)
     replayed_task_ids: set[str] = field(default_factory=set)
+    personalization_enabled: bool = False
+    topic_graph: SessionTopicGraph = field(default_factory=SessionTopicGraph)
+    observation_fingerprints: dict[str, str] = field(default_factory=dict)
+    last_processed_context_version: int = 0
+    current_observation: dict[str, object] | None = None
 
 
 def _utc_now() -> datetime:
@@ -152,6 +171,11 @@ class AgentWorkspaceBroker:
         retention_seconds: float = 600.0,
         context_providers: tuple[ContextProvider, ...] | None = None,
         audit_buffer: AgentWorkspaceAuditBuffer | None = None,
+        handlers: tuple[WorkspaceAgentHandler, ...] | None = None,
+        read_tools: WorkspaceReadToolPort | None = None,
+        profile_reader: WorkspaceProfileReadPort | None = None,
+        max_concurrent_observations: int = 16,
+        max_pending_observations: int = 64,
         workspace_id_factory: Callable[[], UUID] = uuid4,
         directive_id_factory: Callable[[], UUID] = uuid4,
     ) -> None:
@@ -159,12 +183,26 @@ class AgentWorkspaceBroker:
         self._retention_seconds = retention_seconds
         self._context_providers = context_providers or default_external_context_providers()
         self._audit_buffer = audit_buffer
+        self._handlers = handlers or default_workspace_handlers(
+            read_tools=read_tools,
+            profile_reader=profile_reader,
+        )
+        self._max_concurrent_observations = max_concurrent_observations
+        self._max_pending_observations = max_pending_observations
+        self._dispatcher: WorkspaceObservationDispatcher | None = None
         self._workspace_id_factory = workspace_id_factory
         self._directive_id_factory = directive_id_factory
         self._workspaces: dict[UUID, _Workspace] = {}
         self._by_session: dict[tuple[UUID, int, str], UUID] = {}
 
-    def create(self, *, session_id: UUID, user_id: int, mode: str) -> tuple[dict[str, object], bool]:
+    def create(
+        self,
+        *,
+        session_id: UUID,
+        user_id: int,
+        mode: str,
+        personalization_enabled: bool = False,
+    ) -> tuple[dict[str, object], bool]:
         if mode not in {"guest", "demo", "authenticated"}:
             raise ValueError("workspace mode must be guest, demo, or authenticated")
         self._prune()
@@ -175,7 +213,10 @@ class AgentWorkspaceBroker:
         if len(self._workspaces) >= self._max_workspaces:
             raise WorkspaceCapacityError("agent workspace capacity reached")
         now = time.monotonic()
-        workspace = _Workspace(self._workspace_id_factory(), session_id, user_id, mode, now, now)
+        workspace = _Workspace(
+            self._workspace_id_factory(), session_id, user_id, mode, now, now,
+            personalization_enabled=personalization_enabled,
+        )
         workspace.agents = {name: _public_agent(name) for name in AGENT_NAMES}
         workspace.external_context = self._read_external_context()
         self._workspaces[workspace.workspace_id] = workspace
@@ -193,7 +234,7 @@ class AgentWorkspaceBroker:
     def snapshot(self, workspace_id: UUID, *, user_id: int) -> dict[str, object]:
         workspace = self._visible(workspace_id, user_id)
         return {
-            "schema_version": "agent-workspace-v1",
+            "schema_version": "agent-workspace-v2",
             "workspace_id": str(workspace.workspace_id),
             "session_id": str(workspace.session_id),
             "mode": workspace.mode,
@@ -203,12 +244,14 @@ class AgentWorkspaceBroker:
                 "role": "全局协作编排器",
                 "state": workspace.orchestrator_status,
                 "current_route": workspace.current_route,
+                "current_observation": workspace.current_observation,
             },
             "agents": list(workspace.agents.values()),
             "directives": [value for value in workspace.directives.values() if value.get("status") in {"PROPOSED", "AUTO_APPLIED", "ACCEPTED"}],
             "recent_events": list(workspace.events)[-40:],
             "sources": self._sources(workspace),
             "context_summary": {"route": workspace.current_route, "query": workspace.current_query, "external": workspace.external_context},
+            "session_topic_graph": workspace.topic_graph.snapshot(),
         }
 
     def observe(
@@ -227,8 +270,21 @@ class AgentWorkspaceBroker:
             raise ValueError("observation idempotency key is invalid")
         if idempotency_key in workspace.observation_key_set:
             return self.snapshot(workspace_id, user_id=user_id), True
-        self._remember_key(workspace, idempotency_key)
         clean = self._sanitize_payload(payload or {})
+        coalesced_fingerprint: str | None = None
+        if event_type in {"ROUTE_CHANGED", "READINESS_CHANGED", "RESOURCE_OPENED"}:
+            coalesced_fingerprint = sha256(
+                json.dumps(clean, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+            ).hexdigest()
+            if workspace.observation_fingerprints.get(event_type) == coalesced_fingerprint:
+                self._remember_key(workspace, idempotency_key)
+                return self.snapshot(workspace_id, user_id=user_id), True
+        dispatcher = self._runtime_dispatcher()
+        if dispatcher is not None and dispatcher.pending_count >= self._max_pending_observations:
+            raise WorkspaceObservationCapacityError("workspace observation queue capacity reached")
+        if coalesced_fingerprint is not None:
+            workspace.observation_fingerprints[event_type] = coalesced_fingerprint
+        self._remember_key(workspace, idempotency_key)
         workspace.context_version += 1
         workspace.last_active_at = time.monotonic()
         if event_type == "ROUTE_CHANGED" and isinstance(clean.get("route"), str):
@@ -237,9 +293,34 @@ class AgentWorkspaceBroker:
             workspace.current_query = str(clean["query"])
         if event_type == "READINESS_CHANGED":
             self._apply_readiness(workspace, clean)
-        self._publish(workspace, "OBSERVATION_ACCEPTED", {"observation_type": event_type, "source": "kiosk", "context_version": workspace.context_version})
-        self._coordinate(workspace, event_type, clean)
+        observed_at = _iso()
+        workspace.topic_graph.observe(event_type, clean, observed_at=observed_at)
+        observation = WorkspaceObservation(
+            workspace_id=workspace.workspace_id,
+            user_id=user_id,
+            mode=workspace.mode,
+            context_version=workspace.context_version,
+            event_type=event_type,
+            payload=clean,
+        )
+        self._publish(workspace, "OBSERVATION_ACCEPTED", {
+            "observation_type": event_type,
+            "source": "kiosk",
+            "context_version": workspace.context_version,
+            "processing": "QUEUED" if dispatcher is not None else "RULE_FALLBACK",
+        })
+        if dispatcher is None:
+            self._coordinate(workspace, event_type, clean)
+            workspace.last_processed_context_version = workspace.context_version
+        else:
+            dispatcher.submit(observation)
         return self.snapshot(workspace_id, user_id=user_id), False
+
+    async def wait_for_idle(self) -> None:
+        """Test/acceptance seam; HTTP clients should observe completion over SSE."""
+
+        if self._dispatcher is not None:
+            await self._dispatcher.wait_idle()
 
     def directive_action(self, workspace_id: UUID, *, user_id: int, directive_id: UUID, action: str) -> dict[str, object]:
         workspace = self._visible(workspace_id, user_id)
@@ -286,8 +367,13 @@ class AgentWorkspaceBroker:
     def bridge_task_terminal(self, workspace_id: UUID, *, user_id: int, status: str, task_id: UUID, trace_id: UUID | None = None) -> None:
         workspace = self._visible(workspace_id, user_id)
         workspace.orchestrator_status = "FAILED" if status == "FAILED" else "COMPLETED"
-        self._publish(workspace, "RECOMMENDATION_COMPLETED", {"status": status, "task_id": str(task_id), **({"trace_id": str(trace_id)} if trace_id else {})})
-        self._dispatch_policy(workspace, "RECOMMENDATION_COMPLETED", {"status": status})
+        payload = {
+            "status": status,
+            "task_id": str(task_id),
+            **({"trace_id": str(trace_id)} if trace_id else {}),
+        }
+        self._publish(workspace, "RECOMMENDATION_COMPLETED", payload)
+        self._queue_internal_observation(workspace, "RECOMMENDATION_COMPLETED", payload)
 
     def bridge_historical_actions(
         self,
@@ -347,7 +433,7 @@ class AgentWorkspaceBroker:
         workspace = self._visible(workspace_id, user_id)
         clean = self._sanitize_payload(action)
         self._dispatch(workspace, "FeedbackLearningAgent", action=str(clean.get("action", "PROPOSE_PROFILE_DELTA")), target=str(clean.get("target", "UserProfileAgent")), reason=str(clean.get("reason_code", "FEEDBACK_RECORDED")), confidence=clean.get("confidence"), evidence_refs=clean.get("evidence_refs"))
-        self._dispatch_policy(workspace, "FEEDBACK_RECORDED", clean)
+        self._queue_internal_observation(workspace, "FEEDBACK_RECORDED", clean)
 
     async def events(self, workspace_id: UUID, *, user_id: int, after_sequence: int = 0) -> AsyncIterator[dict[str, object] | None]:
         workspace = self._visible(workspace_id, user_id)
@@ -365,7 +451,236 @@ class AgentWorkspaceBroker:
         finally:
             workspace.subscribers.discard(queue)
 
+    def _queue_internal_observation(
+        self,
+        workspace: _Workspace,
+        event_type: str,
+        payload: Mapping[str, object],
+    ) -> None:
+        clean = self._sanitize_payload(payload)
+        workspace.context_version += 1
+        workspace.topic_graph.observe(event_type, clean, observed_at=_iso())
+        observation = WorkspaceObservation(
+            workspace_id=workspace.workspace_id,
+            user_id=workspace.user_id,
+            mode=workspace.mode,
+            context_version=workspace.context_version,
+            event_type=event_type,
+            payload=clean,
+        )
+        dispatcher = self._runtime_dispatcher()
+        self._publish(workspace, "OBSERVATION_ACCEPTED", {
+            "observation_type": event_type,
+            "source": "business_service",
+            "context_version": workspace.context_version,
+            "processing": "QUEUED" if dispatcher is not None else "RULE_FALLBACK",
+        })
+        if dispatcher is None:
+            self._coordinate(workspace, event_type, clean)
+            workspace.last_processed_context_version = workspace.context_version
+        else:
+            try:
+                dispatcher.submit(observation)
+            except WorkspaceObservationCapacityError:
+                self._publish(workspace, "OBSERVATION_DEGRADED", {
+                    "observation_type": event_type,
+                    "reason_code": "INTERNAL_QUEUE_CAPACITY_FALLBACK",
+                })
+                self._coordinate(workspace, event_type, clean)
+                workspace.last_processed_context_version = workspace.context_version
+
+    def _runtime_dispatcher(self) -> WorkspaceObservationDispatcher | None:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return None
+        if self._dispatcher is None:
+            self._dispatcher = WorkspaceObservationDispatcher(
+                processor=self._process_observation,
+                failure_handler=self._observation_failed,
+                max_concurrent=self._max_concurrent_observations,
+                max_pending=self._max_pending_observations,
+            )
+        return self._dispatcher
+
+    def _observation_failed(
+        self, observation: WorkspaceObservation, exc: Exception,
+    ) -> None:
+        workspace = self._workspaces.get(observation.workspace_id)
+        if workspace is None:
+            return
+        workspace.orchestrator_status = "DEGRADED"
+        workspace.current_observation = {
+            "event_type": observation.event_type,
+            "context_version": observation.context_version,
+            "status": "FAILED",
+        }
+        self._publish(workspace, "OBSERVATION_FAILED", {
+            "observation_type": observation.event_type,
+            "observation_context_version": observation.context_version,
+            "reason_code": "WORKSPACE_PROCESSING_FAILED",
+            "error_type": type(exc).__name__,
+        })
+
+    async def _process_observation(self, observation: WorkspaceObservation) -> None:
+        workspace = self._workspaces.get(observation.workspace_id)
+        if workspace is None or workspace.user_id != observation.user_id:
+            return
+        if observation.context_version <= workspace.last_processed_context_version:
+            self._publish(workspace, "OBSERVATION_SUPERSEDED", {
+                "observation_type": observation.event_type,
+                "observation_context_version": observation.context_version,
+                "reason_code": "STALE_CONTEXT_VERSION",
+            })
+            return
+        workspace.current_observation = {
+            "event_type": observation.event_type,
+            "context_version": observation.context_version,
+            "status": "PROCESSING",
+        }
+        workspace.orchestrator_status = "WORKING"
+        handlers = [
+            handler for handler in self._handlers
+            if observation.event_type in handler.observation_types
+            and not (
+                handler.agent_name == "UserProfileAgent"
+                and not workspace.personalization_enabled
+            )
+        ]
+        for handler in handlers:
+            decision_id = uuid4()
+            started = time.perf_counter()
+            self._set_agent(
+                workspace,
+                handler.agent_name,
+                "WORKING",
+                action=f"HANDLE_{observation.event_type}",
+                target="RecommendationOrchestrator",
+                reason="OBSERVATION_DISPATCHED",
+            )
+            self._publish(workspace, "AGENT_STARTED", {
+                "decision_id": str(decision_id),
+                "agent_name": handler.agent_name,
+                "action": f"HANDLE_{observation.event_type}",
+                "target": "RecommendationOrchestrator",
+                "reason_code": "OBSERVATION_DISPATCHED",
+                "observation_type": observation.event_type,
+                "observation_context_version": observation.context_version,
+                "replayed": False,
+            })
+            try:
+                result = await handler.handle(observation, self._handler_context(workspace))
+            except Exception as exc:
+                duration_ms = max(0, int((time.perf_counter() - started) * 1000))
+                self._set_agent(
+                    workspace, handler.agent_name, "FAILED",
+                    action=f"HANDLE_{observation.event_type}",
+                    target="RecommendationOrchestrator",
+                    reason="WORKSPACE_HANDLER_FAILED",
+                    duration_ms=duration_ms,
+                )
+                self._publish(workspace, "AGENT_FAILED", {
+                    "decision_id": str(decision_id),
+                    "agent_name": handler.agent_name,
+                    "action": f"HANDLE_{observation.event_type}",
+                    "target": "RecommendationOrchestrator",
+                    "reason_code": "WORKSPACE_HANDLER_FAILED",
+                    "error_type": type(exc).__name__,
+                    "duration_ms": duration_ms,
+                    "observation_context_version": observation.context_version,
+                })
+                continue
+            self._apply_handler_result(
+                workspace,
+                result,
+                decision_id=decision_id,
+                context_version=observation.context_version,
+                measured_ms=max(0, int((time.perf_counter() - started) * 1000)),
+            )
+        workspace.last_processed_context_version = observation.context_version
+        workspace.current_observation = {
+            "event_type": observation.event_type,
+            "context_version": observation.context_version,
+            "status": "COMPLETED",
+        }
+        workspace.orchestrator_status = "OBSERVING"
+        self._publish(workspace, "OBSERVATION_COMPLETED", {
+            "observation_type": observation.event_type,
+            "observation_context_version": observation.context_version,
+            "handler_count": len(handlers),
+        })
+
+    def _handler_context(self, workspace: _Workspace) -> WorkspaceHandlerContext:
+        return WorkspaceHandlerContext(
+            route=workspace.current_route,
+            query=workspace.current_query,
+            top_topics=workspace.topic_graph.top_topics(),
+            external_context=tuple(workspace.external_context),
+            source_statuses=dict(workspace.source_statuses),
+            personalization_enabled=workspace.personalization_enabled,
+        )
+
+    def _apply_handler_result(
+        self,
+        workspace: _Workspace,
+        result: WorkspaceAgentResult,
+        *,
+        decision_id: UUID,
+        context_version: int,
+        measured_ms: int,
+    ) -> None:
+        state = {
+            "SUCCESS": "COMPLETED",
+            "DEGRADED": "DEGRADED",
+            "FAILED": "FAILED",
+            "WAITING_USER": "WAITING_USER",
+        }.get(result.outcome, "FAILED")
+        for tool_call in result.tool_calls[:8]:
+            self._publish(workspace, "AGENT_TOOL_CALL", {
+                "decision_id": str(decision_id),
+                "agent_name": result.agent_name,
+                "tool_call": tool_call,
+                "observation_context_version": context_version,
+            })
+        self._set_agent(
+            workspace,
+            result.agent_name,
+            state,
+            action=result.action,
+            target=result.target,
+            reason=result.reason_code,
+            confidence=result.confidence,
+            duration_ms=measured_ms,
+            evidence_refs=result.evidence_refs,
+        )
+        terminal_event = "AGENT_COMPLETED" if state in {"COMPLETED", "DEGRADED"} else "AGENT_FAILED"
+        self._publish(workspace, terminal_event, {
+            "decision_id": str(decision_id),
+            "agent_name": result.agent_name,
+            "action": result.action,
+            "target": result.target,
+            "reason_code": result.reason_code,
+            "confidence": result.confidence,
+            "duration_ms": measured_ms,
+            "evidence_refs": list(result.evidence_refs),
+            "outcome": result.outcome,
+            "observation_context_version": context_version,
+        })
+        for proposal in result.directives:
+            self._propose(
+                workspace,
+                proposal.directive_type,
+                proposal.scope,
+                proposal.behavior,
+                proposal.payload,
+                proposal.reason_code,
+                proposal.confidence,
+                proposal.evidence_refs,
+                reversible=proposal.reversible,
+            )
+
     def _coordinate(self, workspace: _Workspace, event_type: str, payload: Mapping[str, object]) -> None:
+        """Explicit no-event-loop fallback retained for offline dry-runs only."""
         if event_type == "QUERY_SUBMITTED":
             self._dispatch(workspace, "IntentUnderstandingAgent", action="RETURN_RESULT", target="RecommendationOrchestrator", reason="QUERY_CONTEXT_NORMALIZED", confidence=0.86, evidence_refs=("session:query",))
             return

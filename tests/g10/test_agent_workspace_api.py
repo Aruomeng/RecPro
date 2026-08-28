@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import time
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -39,7 +40,18 @@ class AgentWorkspaceAPITests(unittest.TestCase):
                 json={"observation_id": observation_id, "event_type": "GRAPH_NODE_SELECTED", "payload": {"entity_id": "topic:1", "label": "多智能体"}},
             )
             self.assertEqual(202, observed.status_code, observed.text)
-            self.assertTrue(any(item["type"] == "SUGGEST_NEXT_ACTION" for item in observed.json()["workspace"]["directives"]))
+            self.assertEqual("agent-workspace-v2", observed.json()["workspace"]["schema_version"])
+            current = observed.json()["workspace"]
+            for _ in range(20):
+                if any(item["type"] == "SUGGEST_NEXT_ACTION" for item in current["directives"]):
+                    break
+                time.sleep(0.01)
+                current = client.get(
+                    f"/api/v1/agent-workspaces/{workspace_id}",
+                    headers={"X-Demo-User-Id": "9000001"},
+                ).json()
+            self.assertTrue(any(item["type"] == "SUGGEST_NEXT_ACTION" for item in current["directives"]))
+            self.assertTrue(current["session_topic_graph"]["nodes"])
             catalog = client.get("/api/v1/agents")
             self.assertEqual(8, len(catalog.json()["agents"]))
 

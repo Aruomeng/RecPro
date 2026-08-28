@@ -6,5 +6,12 @@ from backend.app.agent_workspace.runtime import (
     WorkspaceNotFoundError,
     agent_catalog,
 )
+from backend.app.agent_workspace.dispatcher import WorkspaceObservationCapacityError
 
-__all__ = ["AgentWorkspaceBroker", "WorkspaceCapacityError", "WorkspaceNotFoundError", "agent_catalog"]
+__all__ = [
+    "AgentWorkspaceBroker",
+    "WorkspaceCapacityError",
+    "WorkspaceNotFoundError",
+    "WorkspaceObservationCapacityError",
+    "agent_catalog",
+]

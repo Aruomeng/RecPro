@@ -21,6 +21,7 @@ from pathlib import Path
 from backend.app.catalog.runtime.g4_ports import build_g4_readonly_runtime
 from backend.app.composition import (
     build_agent_workspace_audit_worker,
+    build_agent_workspace_profile_reader,
     build_research_behavior_service,
     build_research_exploration_service,
     build_research_feedback_service,
@@ -31,7 +32,11 @@ from backend.app.config import load_configuration
 
 from scripts.g4_operator_runtime import load_existing_chroma_collection
 from backend.app.recommendation.progress import RecommendationProgressBroker
-from backend.app.agent_workspace import AgentWorkspaceAuditBuffer, AgentWorkspaceBroker
+from backend.app.agent_workspace import (
+    AgentWorkspaceAuditBuffer,
+    AgentWorkspaceBroker,
+    ExplorationWorkspaceReadTools,
+)
 
 
 GRAPH_VERSION = "lib-books-v1-20260810"
@@ -161,6 +166,8 @@ def create_g4_feedback_app():
         max_workspaces=32,
         retention_seconds=600.0,
         audit_buffer=workspace_audit_buffer,
+        read_tools=ExplorationWorkspaceReadTools(exploration_service),
+        profile_reader=build_agent_workspace_profile_reader(settings),
     )
     identity_service = (
         build_local_identity_service(settings)
