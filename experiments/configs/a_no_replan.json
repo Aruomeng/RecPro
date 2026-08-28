@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"A_NO_REPLAN","label":"消融：无重规划","mode":"ABLATION","ranker":"FULL","policy":"DYNAMIC","graph_max_hops":3,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":false,"explanation":"TEMPLATE","fixed_pipeline":false,"single_change":"replan"}

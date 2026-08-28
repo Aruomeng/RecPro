@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"Proposed","label":"LibraMAS 完整机制","mode":"PROPOSED","ranker":"FULL","policy":"DYNAMIC","graph_max_hops":3,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":false,"business_agents":8,"orchestrator":true}

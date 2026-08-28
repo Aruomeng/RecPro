@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"B1","label":"内容相似度基线","mode":"BASELINE","ranker":"CONTENT","policy":"FIXED","graph_max_hops":0,"vector_enabled":true,"feedback_enabled":false,"diversity_enabled":false,"replan_enabled":false,"explanation":"TEMPLATE","fixed_pipeline":true}

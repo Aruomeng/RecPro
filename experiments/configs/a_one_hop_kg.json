@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"A_ONE_HOP_KG","label":"消融：仅一跳图谱","mode":"ABLATION","ranker":"FULL","policy":"DYNAMIC","graph_max_hops":1,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":false,"single_change":"multi_hop_graph"}

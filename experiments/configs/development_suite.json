@@ -1,0 +1,22 @@
+{
+  "schema_version": "experiment-suite-config-v1",
+  "suite_id": "libra-development-proxy-v1",
+  "classification": "DEVELOPMENT_PROXY",
+  "configs": [
+    "b0_popularity.json",
+    "b1_content.json",
+    "b2_fixed_output.json",
+    "b3_fixed_pipeline.json",
+    "proposed_full.json",
+    "a_no_policy.json",
+    "a_no_feedback.json",
+    "a_no_kg.json",
+    "a_one_hop_kg.json",
+    "a_no_vector.json",
+    "a_no_diversity.json",
+    "a_no_replan.json",
+    "a_template_explanation.json",
+    "a_llm_explanation_fixture.json"
+  ],
+  "fault_matrix": ["F_VECTOR_TIMEOUT","F_GRAPH_TIMEOUT","F_LLM_INVALID","F_LLM_TIMEOUT","F_CHANNEL_EMPTY","F_LOW_RANK_QUALITY","F_PROFILE_OUTBOX","F_MYSQL_DOWN"]
+}

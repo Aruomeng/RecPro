@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"A_NO_KG","label":"消融：无知识图谱","mode":"ABLATION","ranker":"FULL","policy":"DYNAMIC","graph_max_hops":0,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":false,"single_change":"knowledge_graph"}

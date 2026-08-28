@@ -13,6 +13,9 @@ htmlcov/
 node_modules/
 dist/
 artifacts/
+# Experiment runs are immutable local artifacts.  Configurations remain tracked,
+# while predictions/reports never enter source-control or overwrite prior runs.
+experiments/runs/
 # User-provided scraped books and local license evidence are inspected by the
 # intake gate but are never committed as source or experiment artifacts.
 data/incoming/books/

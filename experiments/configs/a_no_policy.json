@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"A_NO_POLICY","label":"消融：无动态策略","mode":"ABLATION","ranker":"FULL","policy":"FIXED","graph_max_hops":3,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":false,"single_change":"policy"}

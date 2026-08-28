@@ -1,0 +1,56 @@
+{
+  "schema_version": "libra-stage6-development-experiment-v1",
+  "classification": "DEVELOPMENT_PROXY",
+  "confirmation_eligible": false,
+  "dataset": {
+    "version": "lib-development-proxy-20260828-v1",
+    "label_basis": ["Topic", "Category", "SubjectCode"],
+    "resources": 14571,
+    "tasks": 105,
+    "train": 61,
+    "validation": 20,
+    "test": 24,
+    "resources_sha256": "6cf28ff4f4a01c19ee1cafa6db6818ff92c0c312279ad35a2e04d8a130ee8ceb",
+    "test_sha256": "bff6fe85b3ca99cd6adf3ab8b5e63dc39030eced4481d6f834c4ef33605d9941"
+  },
+  "run": {
+    "run_id": "libra-dev-suite-20260829-v2",
+    "systems": 14,
+    "predictions": 336,
+    "prediction_sha256": "bb99341987f1dfb340190ae8b0abb81e66be62e962763461d132b9f5f63cbabf",
+    "semantic_result_sha256": "56890a2d004021d16655127935a4ec6aeb7770e22834f3adff7199c75791b81d",
+    "replay_semantic_result_sha256": "56890a2d004021d16655127935a4ec6aeb7770e22834f3adff7199c75791b81d",
+    "semantic_replay_matches": true,
+    "fault_predictions": 64,
+    "fault_prediction_sha256": "f211d31b0065b4d609b753c3fde68383ebd80eef51e6c119ba00b8fcd4104b30"
+  },
+  "fairness": {
+    "b2_proposed_same_candidates_and_scores": true,
+    "b3_proposed_same_candidates_and_scores": true,
+    "b3_proposed_same_fault_tools_and_timeouts": true
+  },
+  "fault_matrix": {
+    "fault_types": 8,
+    "degradation_success_rate": 1.0,
+    "trace_completeness": 1.0
+  },
+  "selected_development_metrics": {
+    "proposed_ndcg_at_10": 0.991938,
+    "one_hop_kg_ndcg_at_10": 1.0,
+    "proposed_topic_diversity": 0.220833,
+    "one_hop_kg_topic_diversity": 0.208333
+  },
+  "interpretation": "The one-hop proxy achieved slightly higher NDCG@10 while the full mechanism achieved higher topic diversity. This is a mechanism smoke test over proxy labels, not evidence that either graph strategy improves real-reader accuracy.",
+  "safety": {
+    "deepseek_requests": 0,
+    "mysql_reads": 0,
+    "mysql_writes": 0,
+    "neo4j_reads": 0,
+    "neo4j_writes": 0,
+    "file_deletions": 0,
+    "database_deletes": 0,
+    "overwritten_runs": 0,
+    "container_changes": 0,
+    "volume_changes": 0
+  }
+}

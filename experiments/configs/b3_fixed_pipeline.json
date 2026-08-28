@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"B3","label":"固定流水线","mode":"BASELINE","ranker":"FULL","policy":"DYNAMIC","graph_max_hops":3,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":true,"same_ranking_as":"Proposed"}

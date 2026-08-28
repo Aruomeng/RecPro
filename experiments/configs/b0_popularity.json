@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"B0","label":"热门度基线","mode":"BASELINE","ranker":"POPULARITY","policy":"FIXED","graph_max_hops":0,"vector_enabled":false,"feedback_enabled":false,"diversity_enabled":false,"replan_enabled":false,"explanation":"TEMPLATE","fixed_pipeline":true}

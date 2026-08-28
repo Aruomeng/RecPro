@@ -1,0 +1,1 @@
+{"schema_version":"experiment-system-config-v1","system_id":"B2","label":"固定输出策略","mode":"BASELINE","ranker":"FULL","policy":"FIXED","graph_max_hops":3,"vector_enabled":true,"feedback_enabled":true,"diversity_enabled":true,"replan_enabled":true,"explanation":"TEMPLATE","fixed_pipeline":false,"same_ranking_as":"Proposed"}
