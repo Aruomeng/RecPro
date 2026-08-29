@@ -1,0 +1,108 @@
+{
+  "schema_version": "recpro-neo4j-readonly-final-plan-v1",
+  "plan_id": "6f3e03bd-ea67-522e-9a27-39743cda53e9",
+  "created_at": "2026-08-29T09:32:00Z",
+  "git_commit": "f7fe4c128198b591f3a51b2b0036dd518ea3e97e",
+  "classification": "S2_INFRA_APPEND_CLEAN_REBUILD",
+  "mode": "APPLY",
+  "intent": "Retain the failed replica and all of its files, containers, and volumes unchanged. Create one new isolated Community replica with explicit data and log volumes, append the frozen v1/v2 graph, use a bounded 600-second graceful stop with exit-code validation, restore the original read-only config, and accept only exact counts and unchanged source.",
+  "replica": {
+    "project_name": "recpro-neo4j-readonly-final-20260829",
+    "image": "neo4j:5.26.28-community@sha256:362542416de6c09a971484d1893878016cc3b5cdec166e54b1c824a220ecd6b9",
+    "data_volume": "recpro_neo4j_readonly_final_20260829_data",
+    "log_volume": "recpro_neo4j_readonly_final_20260829_logs",
+    "http_port": 62948,
+    "bolt_port": 62968,
+    "credential_file": ".env.neo4j-readonly-final.local",
+    "normal_start_mode": "READ_ONLY"
+  },
+  "retained_failed_replica": {
+    "container": "recpro-neo4j-readonly-20260829-neo4j-readonly-1",
+    "data_volume": "recpro_neo4j_readonly_20260829_data",
+    "log_volume": "d598518033332e76743170202e1e62e93ab98525f4b98ca5099add056177dc8a",
+    "allowed_changes": 0
+  },
+  "graph_append": {
+    "v1": {"nodes": 63388, "relationships": 191865},
+    "v2": {"nodes": 78129, "relationships": 206848},
+    "total_nodes": 141517,
+    "total_relationships": 398713,
+    "schema_statements_max": 18
+  },
+  "source_guard": {
+    "v1_nodes": 63388,
+    "v1_relationships": 191865,
+    "v2_nodes": 78129,
+    "v2_relationships": 206848,
+    "must_remain_unchanged": true
+  },
+  "maximum_changes": {
+    "new_containers": 1,
+    "new_volumes": 2,
+    "new_secret_files": 1,
+    "controlled_container_stops": 2,
+    "controlled_container_starts_after_create": 2,
+    "container_config_replacements": 2,
+    "replica_nodes": 141517,
+    "replica_relationships": 398713,
+    "source_graph_changes": 0,
+    "failed_replica_changes": 0,
+    "mysql_rows": 0,
+    "chroma_records": 0,
+    "deepseek_requests": 0
+  },
+  "input_hashes": {
+    "compose.neo4j-readonly-final.yaml": "cbfccf075d95a093f970b6de15719ebbc49120979539f8ba412deaf66ae7eabd",
+    "scripts/import_book_graph.py": "a85cd48e963b377335a142cd8aad5f6876c350dc370ade12b08a70ab63c39ab5",
+    "scripts/execute_neo4j_readonly_final_plan.py": "4f832caa3dea8c4cb622c1320317ca4abf50fba95c5f4e03ff7f26881e1353e4",
+    "scripts/build_neo4j_readonly_final_plan.py": "b4691927c7808b0f0223d2a6a9fa28569fdaf3fb780938434363c5d3d7abb775",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/graph-plan.json": "0416217c1552ed3795c0e51e6581d00476cf6d188d25452f278747ca3b1b35eb",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/nodes.jsonl": "d9dba3e2d5a863aa4329cb3bac96d9da969c408fce81458afbb85dc6b7c97c43",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/triples.jsonl": "d8dbcf335c972b18111965fe79943ccae1f870d989b88e180bd6e6473f3585f0",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/graph-plan.json": "597683b113341aa8ba9f19b7bac7b0ef72b8192a97247d982f20da4062f4e2a4",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/nodes.jsonl": "b3a15f4155bdc1e87a9b5431345bcd5c56969f46ba0ca51ddbbc57e3e74cfcda",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/triples.jsonl": "026184432d1f9683444f5d33aa7e6bb0222741308e0e578a6278af973b102298"
+  },
+  "dry_run": {
+    "schema_version": "neo4j-readonly-final-dry-run-v1",
+    "mode": "NO_CONNECTION_NO_WRITE_DRY_RUN",
+    "new_containers": 1,
+    "new_volumes": 2,
+    "new_secret_files": 1,
+    "controlled_container_stops_max": 2,
+    "controlled_container_starts_after_create_max": 2,
+    "graceful_stop_timeout_seconds": 600,
+    "config_replacements_max": 2,
+    "replica_nodes_max": 141517,
+    "replica_relationships_max": 398713,
+    "container_deletions": 0,
+    "volume_deletions": 0,
+    "file_deletions": 0,
+    "database_deletions": 0,
+    "source_graph_writes": 0,
+    "deepseek_requests": 0,
+    "docker_connections": 0,
+    "database_connections": 0
+  },
+  "preconditions": [
+    "the user approves this exact plan_id and plan_hash before Docker or database access",
+    "the new project, ports, named volumes, and credential file are absent",
+    "the failed replica and both of its volumes remain unchanged",
+    "the source v1/v2 counts match source_guard immediately before apply",
+    "the new container has exactly two explicit named mounts and no anonymous volume",
+    "the graph is exactly empty before append and matches frozen counts before final stop",
+    "the post-import stop waits up to 600 seconds and requires exit code zero without OOM",
+    "the endpoint is accepted only after original config restoration, read-only online state, exact replica counts, and unchanged source counts",
+    "failure recovery is forward-only; no container, volume, file, database, log, graph fact, or constraint is deleted or replaced"
+  ],
+  "safety": {
+    "file_deletions": 0,
+    "database_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0,
+    "failed_replica_changes": 0,
+    "source_graph_writes": 0,
+    "deepseek_requests": 0
+  },
+  "plan_hash": "1dc3f9353d34b8483b03df5d2785ee97b96791ffe280467bc52238bc1f08da08"
+}
