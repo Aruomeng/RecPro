@@ -16,6 +16,7 @@ from backend.app.knowledge_review import (
 from backend.app.main import create_app
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from scripts.execute_g12_knowledge_review_plan import dry_run_report, statements
+from scripts.execute_g12_knowledge_review_successor import dry_run_report as successor_dry_run_report
 
 
 NOW = datetime(2026, 8, 28, 12, 0, tzinfo=UTC)
@@ -128,6 +129,16 @@ class KnowledgeReviewMigrationTests(unittest.TestCase):
         self.assertEqual(266, report["maximum_rows"])
         self.assertEqual(0, report["database_connections"])
         self.assertEqual(0, report["neo4j_writes"])
+
+    def test_successor_requires_exact_partial_state_and_adds_no_privilege_grant(self) -> None:
+        report = successor_dry_run_report()
+        self.assertEqual(2, report["expected_existing_empty_tables"])
+        self.assertEqual(1, report["view_statements"])
+        self.assertEqual(262, report["proposal_rows"])
+        self.assertEqual(266, report["maximum_rows"])
+        self.assertEqual(0, report["privilege_grants"])
+        self.assertEqual(0, report["database_connections"])
+        self.assertEqual(0, report["database_physical_deletions"])
 
 
 if __name__ == "__main__":
