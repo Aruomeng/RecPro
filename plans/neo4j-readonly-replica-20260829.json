@@ -1,0 +1,82 @@
+{
+  "schema_version": "recpro-neo4j-readonly-replica-plan-v1",
+  "plan_id": "0c0b9a46-d0d6-5ed9-aade-aad139486266",
+  "created_at": "2026-08-29T08:32:00Z",
+  "git_commit": "1ec9f848a3c308c7e9f02088d192c20465d67a7b",
+  "classification": "S2_INFRA_APPEND",
+  "mode": "APPLY",
+  "intent": "Create one new isolated Neo4j Community container and one new volume, append the frozen v1 and v2 graph artifacts, then enforce data-database read-only mode before the endpoint may be used by the research runtime. The existing library Neo4j container, volume, users, nodes, relationships, constraints, ports, and configuration remain unchanged.",
+  "replica": {
+    "project_name": "recpro-neo4j-readonly-20260829",
+    "service_name": "neo4j-readonly",
+    "volume_name": "recpro_neo4j_readonly_20260829_data",
+    "image": "neo4j:5.26.28-community@sha256:362542416de6c09a971484d1893878016cc3b5cdec166e54b1c824a220ecd6b9",
+    "http_host": "127.0.0.1",
+    "http_port": 62748,
+    "bolt_port": 62768,
+    "database": "neo4j",
+    "credential_user": "neo4j",
+    "credential_file": ".env.neo4j-readonly.local",
+    "normal_start_mode": "READ_ONLY"
+  },
+  "graph_append": {
+    "v1": {"nodes": 63388, "relationships": 191865},
+    "v2": {"nodes": 78129, "relationships": 206848},
+    "total_nodes": 141517,
+    "total_relationships": 398713,
+    "schema_statements_max": 18
+  },
+  "source_guard": {
+    "v1_nodes": 63388,
+    "v1_relationships": 191865,
+    "v2_nodes": 78129,
+    "v2_relationships": 206848,
+    "must_remain_unchanged": true
+  },
+  "input_hashes": {
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/graph-plan.json": "597683b113341aa8ba9f19b7bac7b0ef72b8192a97247d982f20da4062f4e2a4",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/nodes.jsonl": "b3a15f4155bdc1e87a9b5431345bcd5c56969f46ba0ca51ddbbc57e3e74cfcda",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/triples.jsonl": "026184432d1f9683444f5d33aa7e6bb0222741308e0e578a6278af973b102298",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/graph-plan.json": "0416217c1552ed3795c0e51e6581d00476cf6d188d25452f278747ca3b1b35eb",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/nodes.jsonl": "d9dba3e2d5a863aa4329cb3bac96d9da969c408fce81458afbb85dc6b7c97c43",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/triples.jsonl": "d8dbcf335c972b18111965fe79943ccae1f870d989b88e180bd6e6473f3585f0",
+    "compose.neo4j-readonly.yaml": "d96afc801d308e915d57c399aab176e29ae0236d484a36ba52246a2a6f3da494",
+    "scripts/build_neo4j_readonly_replica_plan.py": "c716ddfe759e54f8bd3c92a1f7ff973b2e9abd9eb6a53ffed4deb07c2de28af3",
+    "scripts/execute_neo4j_readonly_replica_plan.py": "96406b0c699baf960d5bd7d7a444382c6a4ba2ebad77fbf3279d580d8acc7b8d",
+    "scripts/import_book_graph.py": "a85cd48e963b377335a142cd8aad5f6876c350dc370ade12b08a70ab63c39ab5"
+  },
+  "maximum_changes": {
+    "new_containers": 1,
+    "new_volumes": 1,
+    "new_secret_files": 1,
+    "replica_nodes": 141517,
+    "replica_relationships": 398713,
+    "runtime_configuration_changes": 2,
+    "existing_graph_changes": 0,
+    "deepseek_requests": 0,
+    "mysql_rows": 0,
+    "chroma_records": 0
+  },
+  "preconditions": [
+    "reviewed commit is exactly 1ec9f848a3c308c7e9f02088d192c20465d67a7b and the tracked worktree is clean",
+    "the user approves this exact plan_id and canonical plan_hash before Docker, credentials, or any network connection is used",
+    "the replica project, container, volume, ports, and secret file are all absent before the first action",
+    "the existing source graph contains the exact frozen v1 and v2 counts immediately before apply",
+    "all tracked executor, Compose, and graph artifact hashes match input_hashes",
+    "the replica starts read-only and is made temporarily writable only through the system database after identity checks",
+    "the temporary writable exception is removed in a fail-safe finally block and normal-start read-only configuration remains enabled",
+    "the endpoint is accepted only after v1/v2 counts match and the writable exception is empty",
+    "failure recovery is forward-only; no container, volume, file, graph fact, or constraint is deleted or replaced"
+  ],
+  "safety": {
+    "file_deletions": 0,
+    "database_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0,
+    "existing_container_changes": 0,
+    "existing_volume_changes": 0,
+    "source_graph_writes": 0,
+    "deepseek_requests": 0
+  },
+  "plan_hash": "7e4171e8707bfc95dfba42e525af90e9ff5ad419e26b1da8b4136843e11c59dc"
+}
