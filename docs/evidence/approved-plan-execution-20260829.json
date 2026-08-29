@@ -13,7 +13,7 @@
   "g12_knowledge_review": {
     "original_plan_id": "aa49e42d-eb0e-5157-82f9-8a0cb7d99d01",
     "original_plan_hash": "b20bdbf7cf4d1c129eebdb2a4fbeaba61d797aa3780582c2c1566d26d6cb00f1",
-    "status": "PARTIAL_FAIL_FORWARD",
+    "status": "APPLIED_AND_RECONCILED_AFTER_FAIL_FORWARD",
     "failure_code": "MYSQL_CREATE_VIEW_PRIVILEGE_DENIED",
     "existing_empty_tables": ["knowledge_review_proposal", "knowledge_review_action_fact"],
     "existing_view": 0,
@@ -28,7 +28,17 @@
     "current_view": 1,
     "finalizer_plan_id": "5bbc45d0-c31c-5cf5-bfc7-4546751c6f08",
     "finalizer_plan_hash": "e27921281205e1c66a5fe959c45eae5089fe5a84e4c6978856b25b7fe02088ba",
-    "finalizer_executed": false
+    "finalizer_executed": true,
+    "finalizer_rows_written": 266,
+    "final_counts": {
+      "proposal_rows": 262,
+      "action_fact_rows": 0,
+      "current_view_rows": 262,
+      "pending_view_rows": 262,
+      "permission_rows": 1,
+      "role_permission_fact_rows": 2,
+      "migration_marker_rows": 1
+    }
   },
   "neo4j_v2": {
     "plan_id": "921516ba-7f53-57dd-9c50-9b871b4a3d99",
@@ -51,6 +61,8 @@
     "container_changes": 0,
     "volume_changes": 0,
     "chroma_writes": 0,
-    "deepseek_requests": 0
+    "deepseek_requests": 0,
+    "final_backend_tests_passed": 674,
+    "final_frontend_tests_passed": 70
   }
 }
