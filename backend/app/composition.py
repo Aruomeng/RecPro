@@ -609,6 +609,9 @@ def build_research_g4_http_app_from_runtime(
     )
 
     async def check_graph() -> object:
+        readiness = getattr(runtime.graph, "check_readiness", None)
+        if callable(readiness):
+            return await readiness(graph_version=runtime.graph_version)
         return await runtime.graph.recall(
             terms=("__recpro_readiness__",),
             graph_version=runtime.graph_version,

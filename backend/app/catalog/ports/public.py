@@ -47,6 +47,8 @@ class CatalogUnitOfWork(Protocol):
 class GraphRecallPort(Protocol):
     """Read-only graph recall boundary; it never owns a write transaction."""
 
+    async def check_readiness(self, *, graph_version: str) -> None: ...
+
     async def recall(
         self,
         *,

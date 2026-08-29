@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.run_research_workbench import validate_configuration
+from scripts.run_research_workbench import merge_runtime_values, validate_configuration
 
 
 class ResearchWorkbenchTests(unittest.TestCase):
@@ -56,6 +56,32 @@ class ResearchWorkbenchTests(unittest.TestCase):
 
         self.assertIn("RECPRO_NEO4J_READ_USER must be configured", issues)
         self.assertIn("RECPRO_NEO4J_READ_PASSWORD must be configured", issues)
+
+    def test_final_graph_secrets_override_only_runtime_graph_identity(self) -> None:
+        values = merge_runtime_values(
+            {"RECPRO_LLM_API_KEY": "llm-secret"},
+            {
+                "RECPRO_NEO4J_ADMIN_USER": "source-admin",
+                "RECPRO_NEO4J_ADMIN_PASSWORD": "source-secret",
+                "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT": "62475",
+            },
+            {
+                "RECPRO_FINAL_NEO4J_PROJECT_NAME": "final-project",
+                "RECPRO_FINAL_NEO4J_HTTP_HOST_PORT": "62948",
+                "RECPRO_FINAL_NEO4J_BOLT_HOST_PORT": "62968",
+                "RECPRO_FINAL_NEO4J_PASSWORD": "final-secret",
+            },
+        )
+
+        self.assertEqual("62948", values["RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT"])
+        self.assertEqual("neo4j", values["RECPRO_NEO4J_READ_USER"])
+        self.assertEqual("final-secret", values["RECPRO_NEO4J_READ_PASSWORD"])
+        self.assertEqual("source-admin", values["RECPRO_NEO4J_ADMIN_USER"])
+        self.assertEqual("source-secret", values["RECPRO_NEO4J_ADMIN_PASSWORD"])
+
+    def test_incomplete_final_graph_secret_bundle_is_rejected(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "incomplete"):
+            merge_runtime_values({}, {}, {"RECPRO_FINAL_NEO4J_PASSWORD": "present"})
 
 
 if __name__ == "__main__":

@@ -17,6 +17,14 @@ from backend.app.catalog.domain.models import GraphRecallEvidence
 _GRAPH_VERSION_LIMIT = 64
 _MAX_TERMS = 16
 _MAX_LIMIT = 50
+
+
+def _validate_graph_version(value: str) -> str:
+    if not isinstance(value, str) or not value.strip() or len(value) > _GRAPH_VERSION_LIMIT:
+        raise ValueError("graph version is invalid")
+    return value.strip()
+
+
 _RECALL_QUERY = (
     "MATCH (b:Book {graph_version: $graph_version})-[:IN_TOPIC|HAS_KEYWORD|CLASSIFIED_AS]->(term) "
     "WHERE term.name IN $terms OR term.code IN $terms "
@@ -36,6 +44,10 @@ _V2_RECALL_QUERY = (
     "edge_ids: [rel IN relationships(p) | rel.edge_key]})[..32] AS path_evidence "
     "RETURN b.entity_id AS external_id, path_evidence "
     "ORDER BY external_id LIMIT $limit"
+)
+_READINESS_QUERY = (
+    "MATCH (n:Book {graph_version: $graph_version}) "
+    "RETURN 1 LIMIT 1"
 )
 
 
@@ -103,6 +115,25 @@ class Neo4jGraphReader:
                 for row in rows
             )
         return tuple(self._parse_row(row, graph_version=graph_version) for row in rows)
+
+    async def check_readiness(self, *, graph_version: str) -> None:
+        """Run a bounded read-only probe for the selected graph version.
+
+        Readiness must not execute the production multi-hop recall query: on a
+        cold Neo4j Community instance that query can legitimately exceed the
+        recall timeout even while the database is healthy.  A single indexed
+        Book existence check proves the selected version is queryable without
+        scanning the graph or returning any user-facing data.
+        """
+
+        normalized_version = _validate_graph_version(graph_version)
+        rows = await asyncio.to_thread(
+            self._run_query,
+            {"graph_version": normalized_version},
+            _READINESS_QUERY,
+        )
+        if not rows:
+            raise ConnectionError("Neo4j graph version is unavailable")
 
     def _run_query(
         self,

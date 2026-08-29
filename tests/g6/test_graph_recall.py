@@ -40,7 +40,27 @@ class FixtureV2GraphReader(Neo4jGraphReader):
         ]]}]
 
 
+class FixtureReadinessGraphReader(Neo4jGraphReader):
+    def _run_query(self, parameters, statement):
+        self.parameters = parameters
+        self.statement = statement
+        return [{"row": [1]}]
+
+
 class GraphRecallTests(unittest.TestCase):
+    def test_readiness_uses_a_bounded_version_probe(self) -> None:
+        reader = FixtureReadinessGraphReader(
+            endpoint="http://127.0.0.1:62948/db/neo4j/tx/commit",
+            username="readonly",
+            password="test-only",
+        )
+        asyncio.run(reader.check_readiness(graph_version="lib-books-v2-20260828"))
+        self.assertEqual(
+            {"graph_version": "lib-books-v2-20260828"}, reader.parameters
+        )
+        self.assertIn("MATCH (n:Book", reader.statement)
+        self.assertIn("LIMIT 1", reader.statement)
+
     def test_reader_is_parameterized_and_returns_stable_evidence(self) -> None:
         reader = FixtureGraphReader(
             endpoint="http://127.0.0.1:62675/db/neo4j/tx/commit",

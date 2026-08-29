@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from http.client import HTTPConnection
+import json
 import os
 from pathlib import Path
 import shutil
@@ -20,12 +22,50 @@ from scripts.validate_runtime_env import read_env
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+BUNDLED_NODE = (
+    Path.home()
+    / ".cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+)
 TRUE_FLAGS = (
     "RECPRO_G4_HTTP_ENABLED",
     "RECPRO_G5_INTERACTION_HTTP_ENABLED",
     "RECPRO_G4_LLM_INTENT_ENABLED",
     "RECPRO_G4_LLM_EXPLANATION_ENABLED",
 )
+FINAL_GRAPH_KEYS = (
+    "RECPRO_FINAL_NEO4J_PROJECT_NAME",
+    "RECPRO_FINAL_NEO4J_HTTP_HOST_PORT",
+    "RECPRO_FINAL_NEO4J_BOLT_HOST_PORT",
+    "RECPRO_FINAL_NEO4J_PASSWORD",
+)
+EXPECTED_GRAPH_COUNTS = {
+    "lib-books-v1-20260810": (63388, 191865),
+    "lib-books-v2-20260828": (78129, 206848),
+}
+FINAL_GRAPH_ACCEPTANCE = (
+    PROJECT_ROOT
+    / "artifacts/verification/neo4j-readonly-replica"
+    / "neo4j-readonly-final-20260829-001/acceptance.json"
+)
+
+
+def merge_runtime_values(
+    host_values: Mapping[str, str],
+    secret_values: Mapping[str, str],
+    graph_values: Mapping[str, str],
+) -> dict[str, str]:
+    missing = [name for name in FINAL_GRAPH_KEYS if not graph_values.get(name, "").strip()]
+    if missing:
+        raise RuntimeError(f"final read-only graph secrets are incomplete: {','.join(missing)}")
+    values = {**host_values, **secret_values}
+    values.update({
+        "RECPRO_LIBRARY_NEO4J_PROJECT_NAME": graph_values["RECPRO_FINAL_NEO4J_PROJECT_NAME"],
+        "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT": graph_values["RECPRO_FINAL_NEO4J_HTTP_HOST_PORT"],
+        "RECPRO_LIBRARY_NEO4J_BOLT_HOST_PORT": graph_values["RECPRO_FINAL_NEO4J_BOLT_HOST_PORT"],
+        "RECPRO_NEO4J_READ_USER": "neo4j",
+        "RECPRO_NEO4J_READ_PASSWORD": graph_values["RECPRO_FINAL_NEO4J_PASSWORD"],
+    })
+    return values
 
 
 def validate_configuration(values: Mapping[str, str]) -> tuple[str, ...]:
@@ -83,6 +123,86 @@ def require_http(url: str, *, label: str) -> None:
         connection.close()
 
 
+def neo4j_rows(
+    *, port: int, database: str, username: str, password: str,
+    statement: str, parameters: Mapping[str, object] | None = None,
+) -> list[list[object]]:
+    authorization = base64.b64encode(f"{username}:{password}".encode()).decode()
+    connection = HTTPConnection("127.0.0.1", port, timeout=15)
+    try:
+        connection.request(
+            "POST",
+            f"/db/{database}/tx/commit",
+            body=json.dumps({"statements": [{
+                "statement": statement,
+                "parameters": dict(parameters or {}),
+                "resultDataContents": ["row"],
+            }]}).encode(),
+            headers={
+                "Authorization": f"Basic {authorization}",
+                "Content-Type": "application/json",
+            },
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read().decode())
+    finally:
+        connection.close()
+    if response.status >= 400 or payload.get("errors"):
+        raise RuntimeError("final Neo4j rejected the read-only preflight query")
+    results = payload.get("results", [])
+    if len(results) != 1:
+        raise RuntimeError("final Neo4j returned an invalid preflight result")
+    return [item.get("row", []) for item in results[0].get("data", [])]
+
+
+def require_final_readonly_graph(values: Mapping[str, str]) -> dict[str, object]:
+    port = int(values["RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT"])
+    username = values["RECPRO_NEO4J_READ_USER"]
+    password = values["RECPRO_NEO4J_READ_PASSWORD"]
+    state = neo4j_rows(
+        port=port, database="system", username=username, password=password,
+        statement=(
+            "SHOW DATABASES YIELD name, access, currentStatus "
+            "WHERE name = 'neo4j' RETURN name, access, currentStatus"
+        ),
+    )
+    if state != [["neo4j", "read-only", "online"]]:
+        raise RuntimeError("final Neo4j is not online/read-only")
+    acceptance = json.loads(FINAL_GRAPH_ACCEPTANCE.resolve(strict=True).read_text(encoding="utf-8"))
+    if acceptance.get("status") != "PASS":
+        raise RuntimeError("final Neo4j acceptance evidence is not PASS")
+    accepted_counts = acceptance.get("replica_counts")
+    expected_evidence = {
+        "v1": [*EXPECTED_GRAPH_COUNTS["lib-books-v1-20260810"]],
+        "v2": [*EXPECTED_GRAPH_COUNTS["lib-books-v2-20260828"]],
+    }
+    if accepted_counts != expected_evidence:
+        raise RuntimeError("final Neo4j acceptance evidence counts differ")
+    node_rows = neo4j_rows(
+        port=port, database="neo4j", username=username, password=password,
+        statement="MATCH (n) RETURN count(n)",
+    )
+    relationship_rows = neo4j_rows(
+        port=port, database="neo4j", username=username, password=password,
+        statement="MATCH ()-[r]->() RETURN count(r)",
+    )
+    expected_totals = [
+        sum(value[0] for value in EXPECTED_GRAPH_COUNTS.values()),
+        sum(value[1] for value in EXPECTED_GRAPH_COUNTS.values()),
+    ]
+    if node_rows != [[expected_totals[0]]] or relationship_rows != [[expected_totals[1]]]:
+        raise RuntimeError("final Neo4j live total counts differ from acceptance")
+    return {
+        "access": "read-only",
+        "status": "online",
+        "counts": {
+            version: {"nodes": value[0], "relationships": value[1]}
+            for version, value in EXPECTED_GRAPH_COUNTS.items()
+        },
+        "live_totals": {"nodes": expected_totals[0], "relationships": expected_totals[1]},
+    }
+
+
 def preflight(
     values: Mapping[str, str], *, backend_port: int, frontend_port: int
 ) -> dict[str, object]:
@@ -96,6 +216,7 @@ def preflight(
     graph_port = int(values["RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT"])
     require_tcp(mysql_host, mysql_port, label="isolated MySQL")
     require_http(f"http://127.0.0.1:{graph_port}/", label="isolated library Neo4j")
+    graph_acceptance = require_final_readonly_graph(values)
     chroma_path = PROJECT_ROOT / values.get("RECPRO_G4_CHROMA_PATH", "data/chroma")
     chroma_packages = PROJECT_ROOT / values.get(
         "RECPRO_G4_CHROMA_SITE_PACKAGES",
@@ -105,14 +226,16 @@ def preflight(
         raise RuntimeError("versioned Chroma data or its isolated runtime is unavailable")
     if not (PROJECT_ROOT / "frontend" / "node_modules").is_dir():
         raise RuntimeError("frontend dependencies are unavailable; run npm ci in frontend")
-    if shutil.which("npm") is None:
-        raise RuntimeError("npm is unavailable")
     return {
         "status": "READY",
         "backend_url": f"http://127.0.0.1:{backend_port}",
         "frontend_url": f"http://127.0.0.1:{frontend_port}",
         "mysql": f"{mysql_host}:{mysql_port}",
         "neo4j": f"127.0.0.1:{graph_port}",
+        "neo4j_access": graph_acceptance["access"],
+        "neo4j_status": graph_acceptance["status"],
+        "neo4j_counts": graph_acceptance["counts"],
+        "neo4j_live_totals": graph_acceptance["live_totals"],
         "llm_provider": "deepseek",
         "llm_model": "deepseek-v4-flash",
         "g4_enabled": True,
@@ -126,7 +249,12 @@ def wait_for_url(url: str, *, timeout: float) -> None:
     target = urlsplit(url)
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        connection = HTTPConnection(target.hostname, target.port, timeout=2)
+        remaining = max(0.1, deadline - time.monotonic())
+        connection = HTTPConnection(
+            target.hostname,
+            target.port,
+            timeout=min(20.0, remaining),
+        )
         try:
             connection.request("GET", target.path or "/")
             response = connection.getresponse()
@@ -152,7 +280,14 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
 def run(args: argparse.Namespace) -> int:
     host_values = read_env(args.env_file.resolve(strict=True))
     secret_values = read_env(args.secrets_file.resolve(strict=True))
-    values = {**host_values, **secret_values}
+    graph_values = read_env(args.graph_secrets_file.resolve(strict=True))
+    values = merge_runtime_values(host_values, secret_values, graph_values)
+    node = args.node.expanduser()
+    if not node.is_file() or not os.access(node, os.X_OK):
+        raise RuntimeError(f"stable Node.js executable is unavailable: {node}")
+    vite = PROJECT_ROOT / "frontend/node_modules/vite/bin/vite.js"
+    if not vite.is_file():
+        raise RuntimeError("Vite runtime entrypoint is unavailable")
     report = preflight(
         values, backend_port=args.backend_port, frontend_port=args.frontend_port
     )
@@ -178,16 +313,14 @@ def run(args: argparse.Namespace) -> int:
     )
     frontend = subprocess.Popen(
         [
-            args.npm,
-            "--prefix",
-            "frontend",
-            "run",
-            "dev",
-            "--",
+            str(node),
+            str(vite),
+            "--host",
+            "127.0.0.1",
             "--port",
             str(args.frontend_port),
         ],
-        cwd=PROJECT_ROOT,
+        cwd=PROJECT_ROOT / "frontend",
         env=environment,
     )
     processes = (backend, frontend)
@@ -230,11 +363,20 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets"
     )
+    parser.add_argument(
+        "--graph-secrets-file",
+        type=Path,
+        default=PROJECT_ROOT / ".env.neo4j-readonly-final.local",
+    )
     parser.add_argument("--backend-port", type=int, default=8000)
     parser.add_argument("--frontend-port", type=int, default=5173)
     parser.add_argument("--startup-timeout", type=float, default=90.0)
     parser.add_argument("--python", default=sys.executable)
-    parser.add_argument("--npm", default="npm")
+    parser.add_argument(
+        "--node",
+        type=Path,
+        default=BUNDLED_NODE if BUNDLED_NODE.is_file() else Path(shutil.which("node") or "node"),
+    )
     parser.add_argument("--check-only", action="store_true")
     return parser
 
