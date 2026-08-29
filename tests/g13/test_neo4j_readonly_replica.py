@@ -12,6 +12,8 @@ from scripts.execute_neo4j_readonly_replica_successor import (
     _tar_config,
     dry_run_report as successor_dry_run_report,
 )
+from scripts.build_neo4j_readonly_final_plan import build_plan as build_final_plan
+from scripts.execute_neo4j_readonly_final_plan import dry_run_report as final_dry_run_report
 from scripts.import_book_graph import canonical_json
 
 
@@ -115,6 +117,41 @@ class Neo4jReadOnlyReplicaPlanTests(unittest.TestCase):
             members = archive.getmembers()
             self.assertEqual(["neo4j.conf"], [member.name for member in members])
             self.assertEqual(0o600, members[0].mode)
+
+    def test_final_dry_run_has_explicit_additive_budget(self) -> None:
+        report = final_dry_run_report()
+
+        self.assertEqual(1, report["new_containers"])
+        self.assertEqual(2, report["new_volumes"])
+        self.assertEqual(600, report["graceful_stop_timeout_seconds"])
+        self.assertEqual(141517, report["replica_nodes_max"])
+        self.assertEqual(0, report["container_deletions"])
+        self.assertEqual(0, report["volume_deletions"])
+        self.assertEqual(0, report["docker_connections"])
+        self.assertEqual(0, report["database_connections"])
+
+    def test_final_plan_is_deterministic_and_retains_failed_replica(self) -> None:
+        first = build_final_plan(
+            reviewed_commit="f" * 40,
+            created_at="2026-08-29T10:00:00Z",
+        )
+        second = build_final_plan(
+            reviewed_commit="f" * 40,
+            created_at="2026-08-29T10:00:00Z",
+        )
+
+        self.assertEqual(first, second)
+        self.assertEqual(0, first["retained_failed_replica"]["allowed_changes"])
+        self.assertEqual(2, first["maximum_changes"]["new_volumes"])
+        self.assertEqual(600, first["dry_run"]["graceful_stop_timeout_seconds"])
+        self.assertTrue(all(value == 0 for value in first["safety"].values()))
+
+    def test_final_compose_names_both_data_and_log_volumes(self) -> None:
+        source = Path("compose.neo4j-readonly-final.yaml").read_text(encoding="utf-8")
+
+        self.assertIn("final_neo4j_data:/data", source)
+        self.assertIn("final_neo4j_logs:/logs", source)
+        self.assertIn('NEO4J_server_databases_default__to__read__only: "true"', source)
 
 
 if __name__ == "__main__":
