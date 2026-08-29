@@ -43,6 +43,9 @@ ROLE_FACT_KEYS = (
     "g12:role:librarian:catalog.knowledge.review:v1",
     "g12:role:research_admin:catalog.knowledge.review:v1",
 )
+DOCKER = Path("/Applications/编程/Docker.app/Contents/Resources/bin/docker")
+MYSQL_CONTAINER = "recpro-g2-tianyuhang-20260809a-mysql-1"
+MYSQL_IMAGE = "mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6"
 
 
 def dry_run_report() -> dict[str, object]:
@@ -148,6 +151,36 @@ async def _assert_partial_state(connection: Any) -> None:
         raise ValueError("G12 successor partial-state counts do not match the approved zero baseline")
 
 
+def _create_view_with_container_admin(statement: str) -> None:
+    compact = re.sub(r"\s+", " ", statement.strip()).upper()
+    if not compact.startswith("CREATE VIEW KNOWLEDGE_REVIEW_CURRENT_V AS "):
+        raise ValueError("G12 successor admin statement is outside the CREATE VIEW allowlist")
+    if re.search(r"\b(GRANT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b", compact):
+        raise ValueError("G12 successor admin statement contains a forbidden capability")
+    inspected = subprocess.run(
+        [str(DOCKER), "inspect", "--format", "{{.State.Running}}|{{.Config.Image}}", MYSQL_CONTAINER],
+        cwd=PROJECT_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if inspected.returncode != 0 or inspected.stdout.strip() != f"true|{MYSQL_IMAGE}":
+        raise ValueError("G12 successor MySQL container identity is not approved")
+    executed = subprocess.run(
+        [
+            str(DOCKER), "exec", "-i", MYSQL_CONTAINER, "sh", "-c",
+            'exec mysql --protocol=socket -uroot -p"$MYSQL_ROOT_PASSWORD" recpro',
+        ],
+        cwd=PROJECT_ROOT,
+        input=statement + ";\n",
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if executed.returncode != 0:
+        raise RuntimeError("G12 successor container-local CREATE VIEW failed")
+
+
 async def apply(args: argparse.Namespace) -> dict[str, object]:
     plan = validate_plan(
         args.plan.resolve(strict=True),
@@ -159,7 +192,6 @@ async def apply(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("G12 proposal artifact count differs from the approved successor budget")
     approved = statements()
     runtime = read_env(args.env_file.resolve(strict=True))
-    secrets = read_env(args.admin_env_file.resolve(strict=True))
     port = runtime.get("RECPRO_MYSQL_HOST_PORT") or runtime.get("RECPRO_MYSQL_PORT", "")
     database = runtime.get("RECPRO_MYSQL_DATABASE", "")
     identity = f"mysql://127.0.0.1:{port}/{database}"
@@ -167,24 +199,15 @@ async def apply(args: argparse.Namespace) -> dict[str, object]:
         raise ValueError("G12 successor database identity is not approved")
     migration_user = runtime.get("RECPRO_MYSQL_MIGRATION_USER", "")
     migration_password = runtime.get("RECPRO_MYSQL_MIGRATION_PASSWORD", "")
-    admin_user = secrets.get("RECPRO_MYSQL_ADMIN_USER", "")
-    admin_password = secrets.get("RECPRO_MYSQL_ADMIN_PASSWORD", "")
-    if not all((migration_user, migration_password, admin_user, admin_password)):
-        raise ValueError("G12 successor requires configured migration and admin identities")
+    if not all((migration_user, migration_password)):
+        raise ValueError("G12 successor requires the configured migration identity")
     migration = await asyncmy.connect(
         host="127.0.0.1", port=int(port), user=migration_user,
         password=migration_password, db=database, autocommit=False,
     )
-    admin = None
     try:
         await _assert_partial_state(migration)
-        admin = await asyncmy.connect(
-            host="127.0.0.1", port=int(port), user=admin_user,
-            password=admin_password, db=database, autocommit=False,
-        )
-        async with admin.cursor() as cursor:
-            await cursor.execute(approved[2])
-        await admin.commit()
+        _create_view_with_container_admin(approved[2])
         if await _object_type(migration, "knowledge_review_current_v") != "VIEW":
             raise RuntimeError("G12 successor view was not created")
         affected = 0
@@ -247,8 +270,6 @@ async def apply(args: argparse.Namespace) -> dict[str, object]:
         await migration.rollback()
         raise
     finally:
-        if admin is not None:
-            admin.close()
         migration.close()
 
 
@@ -259,7 +280,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--plan-id", default="")
     parser.add_argument("--approved-plan-hash", default="")
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.host")
-    parser.add_argument("--admin-env-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
     args = parser.parse_args(argv)
     report = asyncio.run(apply(args)) if args.apply else dry_run_report()
     print(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True))

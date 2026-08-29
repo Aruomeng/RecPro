@@ -30,7 +30,8 @@ def build_plan(*, reviewed_commit: str, created_at: str, database_identity: str)
         "classification": "S1_APPEND",
         "mode": "APPLY",
         "database_identity": database_identity,
-        "intent": "Resume from the exact G12 partial state: retain two existing empty append-only tables, create only the missing read-only view with the configured admin identity, then append one permission, two role grants, one migration marker, and exactly 262 proposals with the migration identity. No GRANT statement, action fact, update, overwrite, or deletion is allowed.",
+        "container_identity": "recpro-g2-tianyuhang-20260809a-mysql-1|mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6",
+        "intent": "Resume from the exact G12 partial state: retain two existing empty append-only tables, create only the missing read-only view through the frozen MySQL container-local root socket identity, then append one permission, two role grants, one migration marker, and exactly 262 proposals with the migration identity. No GRANT statement, action fact, update, overwrite, container replacement, or deletion is allowed.",
         "partial_state": {
             "knowledge_review_proposal": {"object": "BASE TABLE", "rows": 0},
             "knowledge_review_action_fact": {"object": "BASE TABLE", "rows": 0},
@@ -55,7 +56,7 @@ def build_plan(*, reviewed_commit: str, created_at: str, database_identity: str)
         "preconditions": [
             "user approves this exact successor plan_id and plan_hash before any database connection",
             "the two G12 tables exist with zero rows; the view, permission, role facts, marker, and proposals are absent",
-            "the configured admin identity executes exactly one CREATE VIEW statement and no GRANT statement",
+            "the frozen running MySQL container and image digest match; its local root socket identity executes exactly one CREATE VIEW statement and no GRANT statement",
             "the migration identity executes only three fixed INSERT IGNORE seeds and 262 bounded proposal INSERT IGNORE statements",
             "failure recovery remains forward-only; no table, view, fact, permission, or proposal is removed",
         ],
@@ -67,6 +68,7 @@ def build_plan(*, reviewed_commit: str, created_at: str, database_identity: str)
             "privilege_grants": 0,
             "action_fact_rows": 0,
             "existing_table_replacements": 0,
+            "container_changes": 0,
         },
     }
     plan["plan_hash"] = sha256(canonical(plan)).hexdigest()
