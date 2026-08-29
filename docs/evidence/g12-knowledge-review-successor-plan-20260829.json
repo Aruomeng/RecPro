@@ -1,0 +1,74 @@
+{
+  "schema_version": "recpro-g12-knowledge-review-successor-plan-v1",
+  "plan_id": "395a6af6-b208-5a1e-8e6f-f16278d6a72b",
+  "created_at": "2026-08-29T08:14:30+08:00",
+  "git_commit": "9b42b753d13b059de7e719addcc3f48f773e6109",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "database_identity": "mysql://127.0.0.1:62306/recpro",
+  "container_identity": "recpro-g2-tianyuhang-20260809a-mysql-1|mysql:8.4.10@sha256:8dbcf531a03aade657e181b9cf2f1d1803ce621a1d55610cb44cb531ab7d7db6",
+  "intent": "Resume from the exact G12 partial state: retain two existing empty append-only tables, create only the missing read-only view through the frozen MySQL container-local root socket identity, then append one permission, two role grants, one migration marker, and exactly 262 proposals with the migration identity. No GRANT statement, action fact, update, overwrite, container replacement, or deletion is allowed.",
+  "partial_state": {
+    "knowledge_review_proposal": {"object": "BASE TABLE", "rows": 0},
+    "knowledge_review_action_fact": {"object": "BASE TABLE", "rows": 0},
+    "knowledge_review_current_v": {"object": "ABSENT"},
+    "permission_rows": 0,
+    "role_permission_fact_rows": 0,
+    "migration_marker_rows": 0
+  },
+  "targets": [
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_current_v", "operation": "CREATE", "rows": 0},
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_proposal", "operation": "APPEND", "rows": 262},
+    {"kind": "MYSQL", "identifier": "recpro.iam_permission:catalog.knowledge.review", "operation": "APPEND", "rows": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role_permission_fact:g12", "operation": "APPEND", "rows": 2},
+    {"kind": "MYSQL", "identifier": "recpro.recpro_schema_migration:g12", "operation": "APPEND", "rows": 1}
+  ],
+  "input_hashes": {
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/review-proposals.jsonl": "efb5f17a3547126522c822d2f0bca4a02cb84b1fb4f6870bbf3a698be6e4985a",
+    "backend/app/knowledge_review/domain.py": "03cc021e17648f519ce510f605e49005789654cfd8e4232e18c85f0f0d9ccdf7",
+    "backend/app/knowledge_review/loader.py": "d88a0b7fa4259daaa3280b8da9390b47fdf2a25cc0ee5ca753ea72c089ee24ba",
+    "infra/mysql/migrations/010_g12_knowledge_review.sql": "5077633ac302e154353a1527ca8e1bd57e9f45f7b2b214f3907f11d12019a134",
+    "scripts/build_g12_knowledge_review_successor_plan.py": "1420e9dde9cbc080d6e6f105c58512c6f0c8a242c858aff032b731433043dfdf",
+    "scripts/execute_g12_knowledge_review_plan.py": "62eb96f8b29c1f5d4e5d986aa036e3188183afcf0dcb1889f87b0c388476c659",
+    "scripts/execute_g12_knowledge_review_successor.py": "4acf5431f637e66071359279fac097baedc28c5d72ae8b13cc6c94db4e7c971b"
+  },
+  "max_changes": 266,
+  "dry_run": {
+    "schema_version": "g12-knowledge-review-successor-dry-run-v1",
+    "status": "PASS",
+    "mode": "NO_WRITE_DRY_RUN",
+    "expected_existing_empty_tables": 2,
+    "view_statements": 1,
+    "permission_rows": 1,
+    "role_permission_fact_rows": 2,
+    "migration_marker_rows": 1,
+    "proposal_rows": 262,
+    "action_fact_rows": 0,
+    "maximum_rows": 266,
+    "database_connections": 0,
+    "database_writes": 0,
+    "privilege_grants": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0
+  },
+  "preconditions": [
+    "user approves this exact successor plan_id and plan_hash before any database connection",
+    "the two G12 tables exist with zero rows; the view, permission, role facts, marker, and proposals are absent",
+    "the frozen running MySQL container and image digest match; its local root socket identity executes exactly one CREATE VIEW statement and no GRANT statement",
+    "the migration identity executes only three fixed INSERT IGNORE seeds and 262 bounded proposal INSERT IGNORE statements",
+    "failure recovery remains forward-only; no table, view, fact, permission, or proposal is removed"
+  ],
+  "safety": {
+    "database_deletions": 0,
+    "file_deletions": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "privilege_grants": 0,
+    "action_fact_rows": 0,
+    "existing_table_replacements": 0,
+    "container_changes": 0
+  },
+  "plan_hash": "92260468f60a9a86a7342a766888f42328fa4e0270d0b96ffeb6f1fdf68249d2"
+}

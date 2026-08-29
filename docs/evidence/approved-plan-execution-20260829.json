@@ -1,0 +1,52 @@
+{
+  "schema_version": "recpro-approved-plan-execution-evidence-v1",
+  "recorded_at": "2026-08-29T08:14:30+08:00",
+  "g10_workspace_audit": {
+    "plan_id": "64d20bfd-371c-5f55-ba82-034adac0a2b7",
+    "plan_hash": "46160f5af647fe9ba064b514d8f1df6e6c8c924c94aadee3ef4142e237979a93",
+    "status": "APPLIED_AND_RECONCILED",
+    "workspace_event_rows": 11,
+    "directive_fact_rows": 5,
+    "migration_marker_rows": 1,
+    "total_rows": 17
+  },
+  "g12_knowledge_review": {
+    "original_plan_id": "aa49e42d-eb0e-5157-82f9-8a0cb7d99d01",
+    "original_plan_hash": "b20bdbf7cf4d1c129eebdb2a4fbeaba61d797aa3780582c2c1566d26d6cb00f1",
+    "status": "PARTIAL_FAIL_FORWARD",
+    "failure_code": "MYSQL_CREATE_VIEW_PRIVILEGE_DENIED",
+    "existing_empty_tables": ["knowledge_review_proposal", "knowledge_review_action_fact"],
+    "existing_view": 0,
+    "proposal_rows": 0,
+    "action_fact_rows": 0,
+    "permission_rows": 0,
+    "role_permission_fact_rows": 0,
+    "migration_marker_rows": 0,
+    "successor_plan_id": "395a6af6-b208-5a1e-8e6f-f16278d6a72b",
+    "successor_plan_hash": "92260468f60a9a86a7342a766888f42328fa4e0270d0b96ffeb6f1fdf68249d2",
+    "successor_executed": false
+  },
+  "neo4j_v2": {
+    "plan_id": "921516ba-7f53-57dd-9c50-9b871b4a3d99",
+    "plan_hash": "1823824cab05343a4e5714de9cf04aa1d2dd61fa92d497d03971166acce4eb20",
+    "status": "APPLIED_AND_RECONCILED",
+    "graph_version": "lib-books-v2-20260828",
+    "v2_nodes": 78129,
+    "v2_relationships": 206848,
+    "v1_nodes_before": 63388,
+    "v1_nodes_after": 63388,
+    "v1_relationships_before": 191865,
+    "v1_relationships_after": 191865,
+    "first_attempt": "TIMEOUT_BEFORE_GRAPH_FACTS",
+    "successful_run_id": "lib-books-v2-apply-20260829b",
+    "reconcile_run_id": "lib-books-v2-reconcile-20260829a"
+  },
+  "safety": {
+    "database_physical_deletions": 0,
+    "file_deletions": 0,
+    "container_changes": 0,
+    "volume_changes": 0,
+    "chroma_writes": 0,
+    "deepseek_requests": 0
+  }
+}
