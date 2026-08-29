@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from hashlib import sha256
+from pathlib import Path
+import unittest
+
+from scripts.build_neo4j_readonly_replica_plan import build_plan
+from scripts.execute_neo4j_readonly_replica_plan import apply_plan, dry_run_report
+from scripts.import_book_graph import canonical_json
+
+
+class Neo4jReadOnlyReplicaPlanTests(unittest.TestCase):
+    def test_dry_run_has_exact_graph_and_zero_connection_budget(self) -> None:
+        report = dry_run_report()
+
+        self.assertEqual(63388, report["v1"]["nodes"])
+        self.assertEqual(191865, report["v1"]["relationships"])
+        self.assertEqual(78129, report["v2"]["nodes"])
+        self.assertEqual(206848, report["v2"]["relationships"])
+        self.assertEqual(0, report["docker_connections"])
+        self.assertEqual(0, report["database_connections"])
+        self.assertEqual(0, report["database_deletions"])
+        self.assertEqual(0, report["container_deletions"])
+        self.assertEqual(0, report["volume_deletions"])
+
+    def test_plan_is_deterministic_additive_and_binds_all_inputs(self) -> None:
+        reviewed_commit = "a" * 40
+        created_at = datetime(2026, 8, 29, 4, 10, tzinfo=UTC).isoformat()
+        first = build_plan(reviewed_commit=reviewed_commit, created_at=created_at)
+        second = build_plan(reviewed_commit=reviewed_commit, created_at=created_at)
+
+        self.assertEqual(first, second)
+        self.assertEqual("S2_INFRA_APPEND", first["classification"])
+        self.assertEqual(141517, first["graph_append"]["total_nodes"])
+        self.assertEqual(398713, first["graph_append"]["total_relationships"])
+        self.assertEqual(1, first["maximum_changes"]["new_containers"])
+        self.assertEqual(1, first["maximum_changes"]["new_volumes"])
+        self.assertTrue(first["source_guard"]["must_remain_unchanged"])
+        self.assertTrue(all(value == 0 for value in first["safety"].values()))
+        self.assertIn("compose.neo4j-readonly.yaml", first["input_hashes"])
+        self.assertIn(
+            "scripts/execute_neo4j_readonly_replica_plan.py",
+            first["input_hashes"],
+        )
+        without_hash = dict(first)
+        without_hash.pop("plan_hash")
+        self.assertEqual(
+            first["plan_hash"],
+            sha256(canonical_json(without_hash).encode()).hexdigest(),
+        )
+
+    def test_compose_is_local_additive_and_read_only_by_default(self) -> None:
+        source = Path("compose.neo4j-readonly.yaml").read_text(encoding="utf-8")
+
+        self.assertIn(
+            'NEO4J_server_databases_default__to__read__only: "true"', source
+        )
+        self.assertIn("127.0.0.1:${RECPRO_READONLY_NEO4J_HTTP_HOST_PORT", source)
+        self.assertIn("127.0.0.1:${RECPRO_READONLY_NEO4J_BOLT_HOST_PORT", source)
+        self.assertIn("readonly_neo4j_data:/data", source)
+        self.assertNotIn("external: true", source)
+
+    def test_unsafe_run_id_fails_before_docker_or_database_access(self) -> None:
+        with self.assertRaisesRegex(ValueError, "run id"):
+            apply_plan(
+                plan={}, source_env_file=Path(".env.user-secrets"),
+                run_id="../../outside",
+            )
+
+
+if __name__ == "__main__":
+    unittest.main()

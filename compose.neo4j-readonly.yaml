@@ -1,0 +1,33 @@
+name: "${RECPRO_READONLY_NEO4J_PROJECT_NAME:?set_RECPRO_READONLY_NEO4J_PROJECT_NAME}"
+
+services:
+  neo4j-readonly:
+    image: "neo4j:5.26.28-community@sha256:362542416de6c09a971484d1893878016cc3b5cdec166e54b1c824a220ecd6b9"
+    environment:
+      NEO4J_AUTH: "neo4j/${RECPRO_READONLY_NEO4J_PASSWORD:?set_RECPRO_READONLY_NEO4J_PASSWORD}"
+      # The data database is read-only on every normal start. The governed
+      # importer may temporarily add neo4j to server.databases.writable through
+      # the system database, then must remove it before exposing the endpoint.
+      NEO4J_server_databases_default__to__read__only: "true"
+      TZ: "UTC"
+    ports:
+      - "127.0.0.1:${RECPRO_READONLY_NEO4J_HTTP_HOST_PORT:?set_RECPRO_READONLY_NEO4J_HTTP_HOST_PORT}:7474"
+      - "127.0.0.1:${RECPRO_READONLY_NEO4J_BOLT_HOST_PORT:?set_RECPRO_READONLY_NEO4J_BOLT_HOST_PORT}:7687"
+    volumes:
+      - "readonly_neo4j_data:/data"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - >-
+          bash -ec 'wget --quiet --spider --timeout=5 --tries=1
+          http://127.0.0.1:7474/ >/dev/null 2>&1 &&
+          (echo > /dev/tcp/127.0.0.1/7687)'
+      interval: 10s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+    restart: unless-stopped
+
+volumes:
+  readonly_neo4j_data:
+    name: "${RECPRO_READONLY_NEO4J_VOLUME_NAME:?set_RECPRO_READONLY_NEO4J_VOLUME_NAME}"
