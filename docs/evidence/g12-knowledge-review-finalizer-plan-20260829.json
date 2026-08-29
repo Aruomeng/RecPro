@@ -1,0 +1,73 @@
+{
+  "schema_version": "recpro-g12-knowledge-review-finalizer-plan-v1",
+  "plan_id": "5bbc45d0-c31c-5cf5-bfc7-4546751c6f08",
+  "created_at": "2026-08-29T11:15:30+08:00",
+  "git_commit": "693fae89b2aee19af08699f1ab7cd81ee742ae01",
+  "classification": "S1_APPEND",
+  "mode": "APPLY",
+  "database_identity": "mysql://127.0.0.1:62306/recpro",
+  "intent": "From the exact state with two empty tables and the read-only view present, append only one permission, two role grants, one migration marker, and 262 proposals using the bounded migration identity. No schema, admin, privilege grant, update, overwrite, container, Neo4j, DeepSeek, or deletion operation is allowed.",
+  "partial_state": {
+    "knowledge_review_proposal": {"object": "BASE TABLE", "rows": 0},
+    "knowledge_review_action_fact": {"object": "BASE TABLE", "rows": 0},
+    "knowledge_review_current_v": {"object": "VIEW"},
+    "permission_rows": 0,
+    "role_permission_fact_rows": 0,
+    "migration_marker_rows": 0
+  },
+  "targets": [
+    {"kind": "MYSQL", "identifier": "recpro.knowledge_review_proposal", "operation": "APPEND", "rows": 262},
+    {"kind": "MYSQL", "identifier": "recpro.iam_permission:catalog.knowledge.review", "operation": "APPEND", "rows": 1},
+    {"kind": "MYSQL", "identifier": "recpro.iam_role_permission_fact:g12", "operation": "APPEND", "rows": 2},
+    {"kind": "MYSQL", "identifier": "recpro.recpro_schema_migration:g12", "operation": "APPEND", "rows": 1}
+  ],
+  "input_hashes": {
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/review-proposals.jsonl": "efb5f17a3547126522c822d2f0bca4a02cb84b1fb4f6870bbf3a698be6e4985a",
+    "backend/app/knowledge_review/domain.py": "03cc021e17648f519ce510f605e49005789654cfd8e4232e18c85f0f0d9ccdf7",
+    "backend/app/knowledge_review/loader.py": "d88a0b7fa4259daaa3280b8da9390b47fdf2a25cc0ee5ca753ea72c089ee24ba",
+    "infra/mysql/migrations/010_g12_knowledge_review.sql": "5077633ac302e154353a1527ca8e1bd57e9f45f7b2b214f3907f11d12019a134",
+    "scripts/build_g12_knowledge_review_finalizer_plan.py": "78f1ddd66b41846945f7abd256c40f241acfcf0cf8d427652b12dc8c10c77c81",
+    "scripts/execute_g12_knowledge_review_finalizer.py": "73794a4adf20348ca9faa0940587f3d4fda03be9ee5fc59d259c392b276178b3",
+    "scripts/execute_g12_knowledge_review_plan.py": "62eb96f8b29c1f5d4e5d986aa036e3188183afcf0dcb1889f87b0c388476c659"
+  },
+  "max_changes": 266,
+  "dry_run": {
+    "schema_version": "g12-knowledge-review-finalizer-dry-run-v1",
+    "status": "PASS",
+    "mode": "NO_WRITE_DRY_RUN",
+    "expected_existing_tables": 2,
+    "expected_existing_views": 1,
+    "permission_rows": 1,
+    "role_permission_fact_rows": 2,
+    "migration_marker_rows": 1,
+    "proposal_rows": 262,
+    "action_fact_rows": 0,
+    "maximum_rows": 266,
+    "database_connections": 0,
+    "database_writes": 0,
+    "admin_operations": 0,
+    "privilege_grants": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0
+  },
+  "preconditions": [
+    "user approves this exact finalizer plan_id and plan_hash before any database connection",
+    "both tables exist and are empty; the current-state view exists; permission, role facts, marker, proposals, and actions are absent",
+    "the migration identity executes only three fixed INSERT IGNORE seeds and 262 bounded proposal INSERT IGNORE statements",
+    "failure recovery remains forward-only; no schema or fact is removed"
+  ],
+  "safety": {
+    "database_deletions": 0,
+    "file_deletions": 0,
+    "schema_changes": 0,
+    "admin_operations": 0,
+    "privilege_grants": 0,
+    "neo4j_writes": 0,
+    "deepseek_requests": 0,
+    "container_changes": 0,
+    "action_fact_rows": 0
+  },
+  "plan_hash": "e27921281205e1c66a5fe959c45eae5089fe5a84e4c6978856b25b7fe02088ba"
+}

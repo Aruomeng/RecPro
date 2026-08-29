@@ -24,7 +24,11 @@
     "migration_marker_rows": 0,
     "successor_plan_id": "395a6af6-b208-5a1e-8e6f-f16278d6a72b",
     "successor_plan_hash": "92260468f60a9a86a7342a766888f42328fa4e0270d0b96ffeb6f1fdf68249d2",
-    "successor_executed": false
+    "successor_executed": "VIEW_CREATED_ONLY",
+    "current_view": 1,
+    "finalizer_plan_id": "5bbc45d0-c31c-5cf5-bfc7-4546751c6f08",
+    "finalizer_plan_hash": "e27921281205e1c66a5fe959c45eae5089fe5a84e4c6978856b25b7fe02088ba",
+    "finalizer_executed": false
   },
   "neo4j_v2": {
     "plan_id": "921516ba-7f53-57dd-9c50-9b871b4a3d99",
