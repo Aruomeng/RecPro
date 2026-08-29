@@ -1,0 +1,100 @@
+{
+  "schema_version": "recpro-neo4j-readonly-replica-successor-plan-v1",
+  "plan_id": "17c98beb-8c1b-5289-9956-6ee0d3af4c95",
+  "created_at": "2026-08-29T09:12:00Z",
+  "git_commit": "ebd803aace896cd44791870fa769dfefff1b7a0e",
+  "classification": "S2_INFRA_APPEND_FAIL_FORWARD",
+  "mode": "APPLY",
+  "intent": "Resume the exact Community-edition partial state without cleanup or recreation. Temporarily replace the generated configuration of the same already-created replica container, restart it writable, append only frozen v1/v2 graph facts, restore the byte-identical original configuration in a finally block, and restart read-only. The source graph and every existing container, volume, database, and historical fact remain unchanged.",
+  "partial_state": {
+    "container_name": "recpro-neo4j-readonly-20260829-neo4j-readonly-1",
+    "container_id": "cfc35e79b316551cc3c3ba6c517d59b1795a5ae2d46d1307fcf8ad79ed6be450",
+    "container_image": "neo4j:5.26.28-community@sha256:362542416de6c09a971484d1893878016cc3b5cdec166e54b1c824a220ecd6b9",
+    "container_status": "running/healthy",
+    "data_volume_name": "recpro_neo4j_readonly_20260829_data",
+    "log_volume_name": "d598518033332e76743170202e1e62e93ab98525f4b98ca5099add056177dc8a",
+    "credential_file": ".env.neo4j-readonly.local",
+    "credential_file_mode": "0600",
+    "database_status": "offline/read-only",
+    "replica_graph_import_started": false,
+    "config_sha256": "6ad19e79db3efe2e3e96e69b0f04a7c291fdeac8ea9e58e8b437aa6270d5c75e"
+  },
+  "graph_append": {
+    "v1": {"nodes": 63388, "relationships": 191865},
+    "v2": {"nodes": 78129, "relationships": 206848},
+    "total_nodes": 141517,
+    "total_relationships": 398713,
+    "schema_statements_max": 18
+  },
+  "source_guard": {
+    "v1_nodes": 63388,
+    "v1_relationships": 191865,
+    "v2_nodes": 78129,
+    "v2_relationships": 206848,
+    "must_remain_unchanged": true
+  },
+  "maximum_changes": {
+    "container_config_replacements": 2,
+    "same_container_restarts": 2,
+    "replica_nodes": 141517,
+    "replica_relationships": 398713,
+    "new_containers": 0,
+    "new_volumes": 0,
+    "new_secret_files": 0,
+    "source_graph_changes": 0,
+    "mysql_rows": 0,
+    "chroma_records": 0,
+    "deepseek_requests": 0
+  },
+  "input_hashes": {
+    "scripts/import_book_graph.py": "a85cd48e963b377335a142cd8aad5f6876c350dc370ade12b08a70ab63c39ab5",
+    "scripts/execute_neo4j_readonly_replica_successor.py": "4d04fb6f90f5fc3a970e6e01d2c87fbba3c2f8ff5871dc68aad436f4566dbdc4",
+    "scripts/build_neo4j_readonly_replica_successor_plan.py": "6e99dc607402809117d75f30784b47aed33207ae1e1967d91d321e044abdd51a",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/graph-plan.json": "0416217c1552ed3795c0e51e6581d00476cf6d188d25452f278747ca3b1b35eb",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/nodes.jsonl": "d9dba3e2d5a863aa4329cb3bac96d9da969c408fce81458afbb85dc6b7c97c43",
+    "artifacts/verification/book-graph/lib-graph-plan-20260810-002/triples.jsonl": "d8dbcf335c972b18111965fe79943ccae1f870d989b88e180bd6e6473f3585f0",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/graph-plan.json": "597683b113341aa8ba9f19b7bac7b0ef72b8192a97247d982f20da4062f4e2a4",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/nodes.jsonl": "b3a15f4155bdc1e87a9b5431345bcd5c56969f46ba0ca51ddbbc57e3e74cfcda",
+    "artifacts/verification/book-graph-v2/lib-books-v2-20260828/triples.jsonl": "026184432d1f9683444f5d33aa7e6bb0222741308e0e578a6278af973b102298"
+  },
+  "dry_run": {
+    "schema_version": "neo4j-readonly-replica-successor-dry-run-v1",
+    "mode": "NO_CONNECTION_NO_WRITE_DRY_RUN",
+    "existing_container_restarts_max": 2,
+    "container_config_replacements_max": 2,
+    "replica_nodes_max": 141517,
+    "replica_relationships_max": 398713,
+    "new_containers": 0,
+    "new_volumes": 0,
+    "new_secret_files": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0,
+    "file_deletions": 0,
+    "database_deletions": 0,
+    "source_graph_writes": 0,
+    "deepseek_requests": 0,
+    "docker_connections": 0,
+    "database_connections": 0
+  },
+  "preconditions": [
+    "the user approves this exact successor plan_id and plan_hash before Docker or database access",
+    "the exact existing replica container, named data volume, anonymous log volume, credential file mode, image digest, and generated config hash match partial_state",
+    "the source v1/v2 graph counts match source_guard immediately before apply",
+    "after the first same-container restart the replica is read-write and both graph-version counts are exactly zero",
+    "the finally block always restores the byte-identical original config and restarts the same container read-only",
+    "acceptance requires exact replica counts, unchanged source counts, original config hash, and empty writable setting",
+    "failure recovery remains forward-only; no cleanup, replacement, overwrite of graph facts, or deletion is allowed"
+  ],
+  "safety": {
+    "file_deletions": 0,
+    "database_deletions": 0,
+    "container_deletions": 0,
+    "volume_deletions": 0,
+    "new_containers": 0,
+    "new_volumes": 0,
+    "new_secret_files": 0,
+    "source_graph_writes": 0,
+    "deepseek_requests": 0
+  },
+  "plan_hash": "f3148690bc0ca531ecae6a4a0289ed92b45e39b117f8b8ab2f9ce67f2ccc17e5"
+}
