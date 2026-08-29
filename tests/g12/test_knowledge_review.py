@@ -17,6 +17,7 @@ from backend.app.main import create_app
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from scripts.execute_g12_knowledge_review_plan import dry_run_report, statements
 from scripts.execute_g12_knowledge_review_successor import dry_run_report as successor_dry_run_report
+from scripts.execute_g12_knowledge_review_finalizer import dry_run_report as finalizer_dry_run_report
 
 
 NOW = datetime(2026, 8, 28, 12, 0, tzinfo=UTC)
@@ -139,6 +140,14 @@ class KnowledgeReviewMigrationTests(unittest.TestCase):
         self.assertEqual(0, report["privilege_grants"])
         self.assertEqual(0, report["database_connections"])
         self.assertEqual(0, report["database_physical_deletions"])
+
+    def test_finalizer_is_pure_append_without_schema_or_admin_operations(self) -> None:
+        report = finalizer_dry_run_report()
+        self.assertEqual(2, report["expected_existing_tables"])
+        self.assertEqual(1, report["expected_existing_views"])
+        self.assertEqual(266, report["maximum_rows"])
+        self.assertEqual(0, report["admin_operations"])
+        self.assertEqual(0, report["database_connections"])
 
 
 if __name__ == "__main__":
