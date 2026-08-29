@@ -27,7 +27,7 @@ from backend.app.composition import (
     build_research_feedback_service,
     build_research_g4_http_app_from_runtime,
     build_local_identity_service,
-    build_local_knowledge_review_service,
+    build_mysql_knowledge_review_service,
 )
 from backend.app.config import load_configuration
 
@@ -40,7 +40,6 @@ from backend.app.agent_workspace import (
 )
 
 
-GRAPH_VERSION = "lib-books-v1-20260810"
 EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
@@ -120,7 +119,7 @@ def create_g4_feedback_app():
         collection_name=NAMESPACE_NAME,
         expected_metadata={
             "recpro_namespace_name": NAMESPACE_NAME,
-            "recpro_graph_version": GRAPH_VERSION,
+            "recpro_graph_version": settings.research_vector_source_graph_version,
             "recpro_embedding_version": EMBEDDING_VERSION,
             "recpro_index_version": INDEX_VERSION,
             "hnsw:space": "cosine",
@@ -138,7 +137,7 @@ def create_g4_feedback_app():
         graph_username=graph_username,
         graph_password=graph_password,
         chroma_collection=loaded.collection,
-        graph_version=GRAPH_VERSION,
+        graph_version=settings.research_graph_version,
         embedding_version=EMBEDDING_VERSION,
         index_version=INDEX_VERSION,
         namespace_name=NAMESPACE_NAME,
@@ -156,7 +155,7 @@ def create_g4_feedback_app():
         graph_endpoint=graph_endpoint,
         graph_username=graph_username,
         graph_password=graph_password,
-        graph_version=GRAPH_VERSION,
+        graph_version=settings.research_graph_version,
     )
     progress_broker = RecommendationProgressBroker(max_concurrent=8, retention_seconds=600.0)
     workspace_audit_buffer = AgentWorkspaceAuditBuffer(
@@ -177,6 +176,7 @@ def create_g4_feedback_app():
     application = build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
+        dataset_version=settings.research_dataset_version,
         enable_llm_provider=False,
         enable_llm_intent_provider=settings.g4_llm_intent_enabled,
         enable_llm_explanation_provider=settings.g4_llm_explanation_enabled,
@@ -189,8 +189,11 @@ def create_g4_feedback_app():
         agent_workspace_broker=workspace_broker,
         identity_service=identity_service,
         knowledge_review_service=(
-            build_local_knowledge_review_service()
+            build_mysql_knowledge_review_service(settings)
             if identity_service is not None else None
+        ),
+        knowledge_review_provider=(
+            "mysql-append-only-g12" if identity_service is not None else None
         ),
     )
     # Construction does not drain the buffer and therefore performs no write.

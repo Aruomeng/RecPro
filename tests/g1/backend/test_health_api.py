@@ -68,6 +68,30 @@ class HealthAPITest(unittest.TestCase):
         self.assertEqual("MOCK", body["components"]["llm"]["status"])
         self.assertNotIn("active_version", body["components"]["mysql"])
 
+    def test_readiness_can_report_real_knowledge_review_storage(self) -> None:
+        probe = FakeProbe(ComponentReadiness(ComponentStatus.UP, required=True))
+        with TestClient(
+            create_app(
+                settings=test_settings(),
+                readiness_probe=probe,
+                component_readiness_overrides={
+                    "knowledge_review": ComponentReadiness(
+                        ComponentStatus.UP,
+                        required=False,
+                        active_version="knowledge-review-g12-v1",
+                        provider="mysql-append-only-g12",
+                    )
+                },
+            )
+        ) as client:
+            component = client.get("/api/v1/health/ready").json()["components"][
+                "knowledge_review"
+            ]
+
+        self.assertEqual("UP", component["status"])
+        self.assertEqual("knowledge-review-g12-v1", component["active_version"])
+        self.assertEqual("mysql-append-only-g12", component["provider"])
+
     def test_unavailable_mysql_uses_uniform_error_response(self) -> None:
         probe = FakeProbe(
             ComponentReadiness(

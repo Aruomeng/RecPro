@@ -1,0 +1,50 @@
+{
+  "schema_version": "v2-runtime-activation-readonly-v1",
+  "observed_at": "2026-08-29T03:56:12Z",
+  "base_commit": "a6b3e7d35dfaaba783dee67826412adb65d68ad8",
+  "configuration": {
+    "active_graph_version": "lib-books-v2-20260828",
+    "catalog_dataset_version": "lib-books-v1-20260810",
+    "vector_source_graph_version": "lib-books-v1-20260810",
+    "vector_index_version": "lib-books-vector-v1-20260811"
+  },
+  "mysql_knowledge_review": {
+    "runtime_identity": "recpro_runtime",
+    "proposal_count": 262,
+    "returned_through_service_limit": 100,
+    "all_returned_pending": true,
+    "graph_versions": ["lib-books-v2-20260828"],
+    "writes": 0
+  },
+  "neo4j_public_graph": {
+    "version": "lib-books-v2-20260828",
+    "public_node_count": 62514,
+    "public_relationship_count": 145175,
+    "search_query": "人工智能",
+    "search_node_count": 10,
+    "search_relationship_count": 9,
+    "writes": 0
+  },
+  "neo4j_identity_boundary": {
+    "server_version": "5.26.28",
+    "edition": "community",
+    "configured_user_count": 1,
+    "dedicated_read_user_exists": false,
+    "verification_credential_mode": "admin-readonly-verification-only",
+    "research_http_runtime_started": false,
+    "blocker": "Neo4j Community does not provide the planned multi-user RBAC boundary; the fail-closed research entrypoint still requires separate RECPRO_NEO4J_READ_USER credentials and does not fall back to admin credentials."
+  },
+  "verification": {
+    "targeted_backend_tests": 45,
+    "full_backend_tests": 678,
+    "test_status": "PASS",
+    "deepseek_requests": 0,
+    "mysql_writes": 0,
+    "neo4j_writes": 0,
+    "chroma_writes": 0,
+    "file_deletions": 0,
+    "database_physical_deletions": 0,
+    "container_changes": 0,
+    "volume_changes": 0
+  }
+}

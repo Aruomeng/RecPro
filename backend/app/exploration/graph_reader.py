@@ -35,7 +35,7 @@ _GRAPH_STATS = (
     "MATCH (n {graph_version: $graph_version}) "
     "WHERE any(label IN labels(n) WHERE label IN $labels) "
     "WITH count(n) AS node_count "
-    "MATCH (a {graph_version: $graph_version})-[r]->(b {graph_version: $graph_version}) "
+    "MATCH ()-[r {graph_version: $graph_version}]->() "
     "WHERE type(r) IN $relationships "
     "RETURN node_count, count(r) AS relationship_count"
 )

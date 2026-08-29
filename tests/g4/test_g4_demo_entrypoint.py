@@ -82,9 +82,18 @@ class G4DemoEntrypointTests(unittest.TestCase):
         self.assertIs(module.app, application)
         loader.assert_called_once()
         runtime_builder.assert_called_once()
+        self.assertEqual(
+            "lib-books-v1-20260810",
+            loader.call_args.kwargs["expected_metadata"]["recpro_graph_version"],
+        )
+        self.assertEqual(
+            "lib-books-v2-20260828",
+            runtime_builder.call_args.kwargs["graph_version"],
+        )
         app_builder.assert_called_once_with(
             app_builder.call_args.args[0],
             runtime=runtime,
+            dataset_version="lib-books-v1-20260810",
             enable_llm_provider=False,
             enable_llm_intent_provider=True,
             enable_llm_explanation_provider=True,

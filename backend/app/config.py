@@ -92,6 +92,22 @@ class AppSettings(BaseSettings):
         max_length=48,
         pattern=r"^[a-z0-9][a-z0-9_-]{2,47}$",
     )
+    # The active Neo4j graph, MySQL catalog snapshot, and Chroma source graph
+    # are versioned independently.  The current v2 graph adds Work identity
+    # nodes while the existing immutable vector index still truthfully records
+    # the v1 Book snapshot from which it was built.
+    research_graph_version: str = Field(
+        default="lib-books-v2-20260828",
+        pattern=r"^lib-books-v[0-9]+-[0-9]{8}$",
+    )
+    research_dataset_version: str = Field(
+        default="lib-books-v1-20260810",
+        pattern=r"^lib-books-v[0-9]+-[0-9]{8}$",
+    )
+    research_vector_source_graph_version: str = Field(
+        default="lib-books-v1-20260810",
+        pattern=r"^lib-books-v[0-9]+-[0-9]{8}$",
+    )
     identity_mysql_user: str | None = Field(
         default=None, min_length=3, max_length=32,
         pattern=r"^[a-z][a-z0-9_]{2,31}$",

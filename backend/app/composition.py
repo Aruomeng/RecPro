@@ -52,7 +52,11 @@ from backend.app.agent_workspace import AgentWorkspaceAuditBuffer
 from backend.app.agent_workspace.adapters.mysql_audit import MySQLAgentWorkspaceAuditAdapter
 from backend.app.agent_workspace.application.audit_worker import AgentWorkspaceAuditWorker
 from backend.app.agent_workspace.adapters.profile_reader import MySQLWorkspaceProfileReader
-from backend.app.knowledge_review import InMemoryKnowledgeReviewRepository, KnowledgeReviewService
+from backend.app.knowledge_review import (
+    InMemoryKnowledgeReviewRepository,
+    KnowledgeReviewService,
+    MySQLKnowledgeReviewRepository,
+)
 from backend.app.knowledge_review.loader import load_v2_review_proposals
 from backend.app.recommendation.adapters.agent_logging_mysql import MySQLAgentExecutionLogWriter
 from backend.app.recommendation.adapters.g4_mysql import (
@@ -589,6 +593,7 @@ def build_research_g4_http_app_from_runtime(
     agent_workspace_broker: object | None = None,
     identity_service: IdentityService | None = None,
     knowledge_review_service: KnowledgeReviewService | None = None,
+    knowledge_review_provider: str | None = None,
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -651,6 +656,13 @@ def build_research_g4_http_app_from_runtime(
             provider="FeedbackLearningAgent" if feedback_api_enabled else None,
         ),
     }
+    if knowledge_review_service is not None:
+        component_overrides["knowledge_review"] = ComponentReadiness(
+            status=ComponentStatus.UP,
+            required=False,
+            active_version="knowledge-review-g12-v1",
+            provider=knowledge_review_provider or "configured-repository",
+        )
     return build_research_g4_http_app(
         settings,
         recommendation_service=recommendation_service,
@@ -682,6 +694,23 @@ def build_local_knowledge_review_service(
     )
     proposals = load_v2_review_proposals(path)
     return KnowledgeReviewService(InMemoryKnowledgeReviewRepository(proposals))
+
+
+def build_mysql_knowledge_review_service(
+    settings: AppSettings,
+    *,
+    connection_factory: ConnectionFactory | None = None,
+) -> KnowledgeReviewService:
+    """Build the real G12 repository without opening a database connection.
+
+    Reads use SELECT and librarian actions use the adapter's append-only
+    ``INSERT IGNORE`` boundary.  Keeping construction connection-free lets the
+    research composition remain fail-closed until an authenticated request
+    reaches the explicitly mounted librarian API.
+    """
+
+    factory = connection_factory or _mysql_connection_factory(settings)
+    return KnowledgeReviewService(MySQLKnowledgeReviewRepository(factory))
 
 
 def build_research_exploration_service(

@@ -131,6 +131,28 @@ class PublicGraphBoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 asyncio.run(reader.paths("book:1", "topic:1", max_hops=max_hops, limit=limit))
 
+    def test_stats_counts_versioned_relationships_without_endpoint_expansion(self) -> None:
+        class CapturingReader(PublicGraphReader):
+            def _query(self, statement, parameters):
+                self.statement = statement
+                self.parameters = parameters
+                return [{"row": [62514, 145175]}]
+
+        reader = CapturingReader(
+            endpoint="http://127.0.0.1:7474/db/neo4j/tx/commit",
+            username="readonly",
+            password="test-only",
+            graph_version="lib-books-v2-20260828",
+        )
+        result = asyncio.run(reader.stats())
+
+        self.assertEqual({"nodes": 62514, "relationships": 145175}, result)
+        self.assertIn("[r {graph_version: $graph_version}]", reader.statement)
+        self.assertNotIn("(a {graph_version", reader.statement)
+        self.assertEqual(
+            "lib-books-v2-20260828", reader.parameters["graph_version"]
+        )
+
 
 class ExplorationLayeringTests(unittest.IsolatedAsyncioTestCase):
     async def test_overview_cache_uses_ports_once(self) -> None:

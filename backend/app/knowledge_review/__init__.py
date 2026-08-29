@@ -7,10 +7,12 @@ from backend.app.knowledge_review.domain import (
     KnowledgeReviewStatus,
 )
 from backend.app.knowledge_review.memory import InMemoryKnowledgeReviewRepository
+from backend.app.knowledge_review.mysql import MySQLKnowledgeReviewRepository
 from backend.app.knowledge_review.service import KnowledgeReviewService
 
 __all__ = [
     "InMemoryKnowledgeReviewRepository",
+    "MySQLKnowledgeReviewRepository",
     "KnowledgeReviewAction",
     "KnowledgeReviewActionFact",
     "KnowledgeReviewProposal",

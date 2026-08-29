@@ -73,11 +73,11 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             with patch(
                 "scripts.g4_operator_runtime.load_existing_chroma_collection",
                 return_value=loaded,
-            ):
+            ) as loader:
                 with patch(
                     "backend.app.catalog.runtime.g4_ports.build_g4_readonly_runtime",
                     return_value=runtime,
-                ):
+                ) as runtime_builder:
                     with patch(
                         "backend.app.composition.build_research_feedback_service",
                         return_value=feedback,
@@ -93,11 +93,20 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
                                 module = importlib.import_module(MODULE)
 
         self.assertIs(module.app, application)
+        self.assertEqual(
+            "lib-books-v1-20260810",
+            loader.call_args.kwargs["expected_metadata"]["recpro_graph_version"],
+        )
+        self.assertEqual(
+            "lib-books-v2-20260828",
+            runtime_builder.call_args.kwargs["graph_version"],
+        )
         feedback_builder.assert_called_once()
         behavior_builder.assert_called_once()
         app_builder.assert_called_once_with(
             app_builder.call_args.args[0],
             runtime=runtime,
+            dataset_version="lib-books-v1-20260810",
             enable_llm_provider=False,
             enable_llm_intent_provider=True,
             enable_llm_explanation_provider=True,
@@ -110,6 +119,7 @@ class G4FeedbackDemoEntrypointTests(unittest.TestCase):
             agent_workspace_broker=ANY,
             identity_service=None,
             knowledge_review_service=None,
+            knowledge_review_provider=None,
         )
         self.assertEqual(0, application.state.agent_workspace_audit_buffer.pending_count)
         self.assertIsNone(application.state.agent_workspace_audit_worker)

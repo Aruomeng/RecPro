@@ -7,11 +7,13 @@ from uuid import NAMESPACE_URL, uuid5
 from fastapi.testclient import TestClient
 
 from backend.app.config import AppSettings
+from backend.app.composition import build_mysql_knowledge_review_service
 from backend.app.knowledge_review import (
     InMemoryKnowledgeReviewRepository,
     KnowledgeReviewAction,
     KnowledgeReviewProposal,
     KnowledgeReviewService,
+    MySQLKnowledgeReviewRepository,
 )
 from backend.app.main import create_app
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
@@ -77,6 +79,21 @@ class KnowledgeReviewServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(replayed)
         self.assertEqual(1, len(replay["actions"]))
         self.assertFalse(hasattr(self.service, "neo4j"))
+
+    async def test_mysql_builder_is_connection_free_and_uses_real_repository(self) -> None:
+        opened = False
+
+        async def connection_factory():
+            nonlocal opened
+            opened = True
+            raise AssertionError("builder must not open MySQL")
+
+        service = build_mysql_knowledge_review_service(
+            AppSettings(app_env="demo", mysql_password="isolated-test-password"),
+            connection_factory=connection_factory,
+        )
+        self.assertFalse(opened)
+        self.assertIsInstance(service._repository, MySQLKnowledgeReviewRepository)
 
 
 class KnowledgeReviewAPITests(unittest.TestCase):

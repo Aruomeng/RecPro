@@ -19,7 +19,6 @@ from backend.app.config import load_configuration
 from scripts.g4_operator_runtime import load_existing_chroma_collection
 
 
-GRAPH_VERSION = "lib-books-v1-20260810"
 EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
@@ -76,7 +75,7 @@ def create_g4_app():
         collection_name=NAMESPACE_NAME,
         expected_metadata={
             "recpro_namespace_name": NAMESPACE_NAME,
-            "recpro_graph_version": GRAPH_VERSION,
+            "recpro_graph_version": settings.research_vector_source_graph_version,
             "recpro_embedding_version": EMBEDDING_VERSION,
             "recpro_index_version": INDEX_VERSION,
             "hnsw:space": "cosine",
@@ -91,7 +90,7 @@ def create_g4_app():
         graph_username=_required("RECPRO_NEO4J_READ_USER"),
         graph_password=_required("RECPRO_NEO4J_READ_PASSWORD"),
         chroma_collection=loaded.collection,
-        graph_version=GRAPH_VERSION,
+        graph_version=settings.research_graph_version,
         embedding_version=EMBEDDING_VERSION,
         index_version=INDEX_VERSION,
         namespace_name=NAMESPACE_NAME,
@@ -101,6 +100,7 @@ def create_g4_app():
     return build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
+        dataset_version=settings.research_dataset_version,
         enable_llm_provider=False,
         enable_llm_intent_provider=settings.g4_llm_intent_enabled,
         enable_llm_explanation_provider=settings.g4_llm_explanation_enabled,

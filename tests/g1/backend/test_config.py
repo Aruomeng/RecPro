@@ -46,9 +46,30 @@ class ConfigurationTest(unittest.TestCase):
         self.assertEqual("mock", state.settings.llm_provider)
         self.assertFalse(state.settings.recommendation_pipeline_enabled)
         self.assertEqual(
+            "lib-books-v2-20260828", state.settings.research_graph_version
+        )
+        self.assertEqual(
+            "lib-books-v1-20260810",
+            state.settings.research_vector_source_graph_version,
+        )
+        self.assertEqual(
             PROJECT_ROOT / "contracts/config/examples/rec-1.0.0.json",
             state.settings.config_bundle_path,
         )
+
+    def test_research_data_versions_are_independent_and_strictly_validated(self) -> None:
+        settings = AppSettings(
+            mysql_password="isolated-test-password",
+            research_graph_version="lib-books-v3-20260901",
+            research_dataset_version="lib-books-v2-20260828",
+            research_vector_source_graph_version="lib-books-v2-20260828",
+        )
+        self.assertEqual("lib-books-v3-20260901", settings.research_graph_version)
+        with self.assertRaises(ValueError):
+            AppSettings(
+                mysql_password="isolated-test-password",
+                research_graph_version="latest",
+            )
 
     def test_missing_password_fails_closed(self) -> None:
         with patch.dict(os.environ, {}, clear=True):
