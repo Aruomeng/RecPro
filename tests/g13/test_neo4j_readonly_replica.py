@@ -7,6 +7,11 @@ import unittest
 
 from scripts.build_neo4j_readonly_replica_plan import build_plan
 from scripts.execute_neo4j_readonly_replica_plan import apply_plan, dry_run_report
+from scripts.build_neo4j_readonly_replica_successor_plan import build_plan as build_successor_plan
+from scripts.execute_neo4j_readonly_replica_successor import (
+    _tar_config,
+    dry_run_report as successor_dry_run_report,
+)
 from scripts.import_book_graph import canonical_json
 
 
@@ -67,6 +72,49 @@ class Neo4jReadOnlyReplicaPlanTests(unittest.TestCase):
                 plan={}, source_env_file=Path(".env.user-secrets"),
                 run_id="../../outside",
             )
+
+    def test_successor_dry_run_is_zero_connection_and_zero_deletion(self) -> None:
+        report = successor_dry_run_report()
+
+        self.assertEqual(141517, report["replica_nodes_max"])
+        self.assertEqual(398713, report["replica_relationships_max"])
+        self.assertEqual(2, report["container_config_replacements_max"])
+        self.assertEqual(0, report["new_containers"])
+        self.assertEqual(0, report["new_volumes"])
+        self.assertEqual(0, report["docker_connections"])
+        self.assertEqual(0, report["database_connections"])
+        self.assertEqual(0, report["container_deletions"])
+        self.assertEqual(0, report["volume_deletions"])
+
+    def test_successor_plan_binds_partial_state_and_is_deterministic(self) -> None:
+        kwargs = {
+            "reviewed_commit": "b" * 40,
+            "created_at": "2026-08-29T09:00:00Z",
+            "container_id": "c" * 64,
+            "config_sha256": "d" * 64,
+            "log_volume_name": "e" * 64,
+        }
+        first = build_successor_plan(**kwargs)
+        second = build_successor_plan(**kwargs)
+
+        self.assertEqual(first, second)
+        self.assertEqual("S2_INFRA_APPEND_FAIL_FORWARD", first["classification"])
+        self.assertEqual("c" * 64, first["partial_state"]["container_id"])
+        self.assertEqual("d" * 64, first["partial_state"]["config_sha256"])
+        self.assertEqual("e" * 64, first["partial_state"]["log_volume_name"])
+        self.assertEqual(0, first["maximum_changes"]["new_containers"])
+        self.assertEqual(0, first["maximum_changes"]["new_volumes"])
+        self.assertTrue(all(value == 0 for value in first["safety"].values()))
+
+    def test_successor_config_tar_contains_only_bounded_config_member(self) -> None:
+        import io
+        import tarfile
+
+        payload = _tar_config(b"server.databases.default_to_read_only=true\n")
+        with tarfile.open(fileobj=io.BytesIO(payload), mode="r") as archive:
+            members = archive.getmembers()
+            self.assertEqual(["neo4j.conf"], [member.name for member in members])
+            self.assertEqual(0o600, members[0].mode)
 
 
 if __name__ == "__main__":

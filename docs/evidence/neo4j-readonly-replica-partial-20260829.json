@@ -1,0 +1,43 @@
+{
+  "schema_version": "neo4j-readonly-replica-partial-evidence-v1",
+  "observed_at": "2026-08-29T08:49:00Z",
+  "approved_plan_id": "0c0b9a46-d0d6-5ed9-aade-aad139486266",
+  "approved_plan_hash": "7e4171e8707bfc95dfba42e525af90e9ff5ad419e26b1da8b4136843e11c59dc",
+  "status": "PARTIAL_FAIL_FORWARD",
+  "cause": "Neo4j Community 5.26.28 does not expose dbms.setConfigValue; starting a fresh default database with default_to_read_only=true left neo4j offline before import.",
+  "container": {
+    "name": "recpro-neo4j-readonly-20260829-neo4j-readonly-1",
+    "id": "cfc35e79b316551cc3c3ba6c517d59b1795a5ae2d46d1307fcf8ad79ed6be450",
+    "status": "running/healthy",
+    "database": "neo4j",
+    "database_status": "offline/read-only",
+    "system_database_status": "online/read-write"
+  },
+  "volumes": {
+    "planned_data_volume": "recpro_neo4j_readonly_20260829_data",
+    "implicit_image_log_volume": "d598518033332e76743170202e1e62e93ab98525f4b98ca5099add056177dc8a",
+    "actual_new_volume_count": 2,
+    "approved_new_volume_budget": 1,
+    "handling": "Both volumes are retained; no cleanup or deletion is permitted."
+  },
+  "credential_file": {
+    "path": ".env.neo4j-readonly.local",
+    "mode": "0600",
+    "secret_values_recorded": false
+  },
+  "generated_config_sha256": "6ad19e79db3efe2e3e96e69b0f04a7c291fdeac8ea9e58e8b437aa6270d5c75e",
+  "source_graph_counts": {
+    "v1": {"nodes": 63388, "relationships": 191865},
+    "v2": {"nodes": 78129, "relationships": 206848}
+  },
+  "source_graph_changes": 0,
+  "replica_import_started": false,
+  "acceptance_report_created": false,
+  "deletions": {
+    "files": 0,
+    "databases": 0,
+    "containers": 0,
+    "volumes": 0,
+    "graph_facts": 0
+  }
+}
