@@ -167,13 +167,18 @@ def request(*, deadline_at: datetime | None = None) -> OrchestrationRequest:
 
 
 class G4PortOrchestratorTests(unittest.TestCase):
-    def test_port_composition_reads_catalog_and_profile(self) -> None:
+    def test_port_composition_reuses_task_catalog_snapshot_and_reads_profile(self) -> None:
         catalog = FakeCatalog()
         result = asyncio.run(
             build_port_orchestrator(catalog, FakeProfile()).run(request())
         )
         self.assertEqual(TaskStatus.COMPLETED, result.status)
-        self.assertGreaterEqual(catalog.resource_calls, 2)
+        # ResourceSemanticAgent and CandidateRecallAgent share one bounded,
+        # task-scoped read-only snapshot.  Keeping this assertion exact makes
+        # the low-coupling/performance contract explicit instead of requiring
+        # duplicate catalog reads from each Agent.
+        self.assertEqual(1, catalog.resource_calls)
+        self.assertEqual(1, catalog.tag_calls)
         profile = next(item for item in result.dispatches if item.message.receiver == "UserProfileAgent")
         self.assertEqual("profile-port-test-v1:4", profile.result.payload["profile_version"])
         recall = next(item for item in result.dispatches if item.message.receiver == "CandidateRecallAgent")
