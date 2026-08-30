@@ -1,0 +1,277 @@
+{
+  "classification": "S2_CONTROLLED_UPDATE",
+  "created_at": "2026-08-31T00:00:00Z",
+  "environment": {
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "environment_id": "recpro_local_research_stage2_identity_closure",
+    "host_fingerprint": "sha256:39acd258036919a771bcdf0b5c8a0e55c686d704c6ce9d304e7a8129cda68a7c",
+    "index_namespace": null,
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "05a2a9ad7f71da03ebb5421c0ce4df3a3b729a0d",
+  "idempotency_key": "stage2-identity-closure-stage2-reader-closure-20260831",
+  "input_hashes": {
+    "backend/app/api/identity.py": "26806b01f4d1acf219550a4ab8e5b6f3a2b5c94cf24a5c723c1dca3d27416042",
+    "backend/app/composition.py": "45d9ed697859cfd642920637cf8f0bd8a7caefc27f5af8b5165ed63f2a2cf0e5",
+    "backend/app/config.py": "eb2c60f18462152963fe275a663242c5ddb85ec9713b6b099cf113f7f7d30cba",
+    "backend/app/identity/adapters/mysql.py": "54bc82e9756e4be1f71e5ba70221186b012332b85c7999dc2291a4e6f49188e2",
+    "backend/app/identity/application.py": "86223d164d066bf565ca7e6786dc957476db1b4b6330a6ce9ac8f665aca59b47",
+    "backend/app/identity/security.py": "4d867bfb147f7e455b4297b82d12e480d2cc57dc2e544511bb2d7c070e886743",
+    "scripts/build_stage2_identity_closure_plan.py": "de79a90285898ecd5d097078a3c3ff7e72c79a72f1bdca832a5a41a4ae01221d",
+    "scripts/execute_stage2_identity_closure.py": "da4148da30be20c9e51c21ca15d784ea0d3ed6a80f83a544c96b0f3ba04bb8f9"
+  },
+  "intent": "Create one non-person synthetic Stage 2 reader (user_id 10001), activate it, verify local login/refresh/logout, append four explicit personalization grants plus one behavior-learning withdrawal, and append one declared profile version. Only the allowlisted current account/session/projection fields may be updated; no recommendation, feedback, behavior, graph, vector, model, or historical-row deletion is permitted.",
+  "max_changes": 33,
+  "mode": "APPLY",
+  "plan_hash": "2a87eb15fca5dcfd2dbac6fc468f2020e2e3c198946574bee560ed1126634cfa",
+  "plan_id": "34dab63c-b9f1-56e8-8719-d12287530591",
+  "preconditions": [
+    "reviewed commit is exactly 05a2a9ad7f71da03ebb5421c0ce4df3a3b729a0d or a descendant preserving every input hash",
+    "the user separately approves this exact successor plan_id and plan_hash before a database connection that can write",
+    "MySQL target is exactly mysql://127.0.0.1:62306/recpro; the fixed baseline is {\"iam_action_token\": 1, \"iam_auth_session\": 0, \"iam_login_identifier\": 1, \"iam_password_credential\": 1, \"iam_refresh_token\": 0, \"iam_security_event\": 2, \"iam_user_account\": 1, \"user_declared_profile\": 2, \"user_declared_profile_history\": 2, \"user_personalization_consent_fact\": 0}",
+    "iam_user_account AUTO_INCREMENT is exactly 10001; no account, identifier, token, session, consent, or profile exists for the fixed Stage 2 reader",
+    "the normalized reader identifier is exactly LIBRAMAS-STAGE2-READER-20260831; it is a synthetic non-person test identity and is not user 1001 or 1002",
+    "the protected administrator credential file exists and its password is never printed, logged, or written to the plan",
+    "the reader credential output .env.stage2-reader-login.local is absent; the executor refuses to overwrite it",
+    "the explicit local G4 identity API is already running at http://127.0.0.1:8000 and readiness is checked before any POST",
+    "the executor uses only the identity endpoints: admin login, reader provision, activation, reader login, four consent grants, one behavior-learning withdrawal, profile update, one refresh rotation, and two logouts",
+    "only 23 append rows and 10 allowlisted current-state update operations are permitted; max_changes=33",
+    "recommendation, feedback, behavior, Agent Workspace audit, Neo4j, Chroma, and DeepSeek request counts remain exactly 0",
+    "a partial failure is retained for inspection and requires a new forward-only plan; no destructive schema/data operation, overwrite, container, or volume action is attempted"
+  ],
+  "request_run_id": "stage2-reader-closure-20260831",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": ".env.stage2-reader-login.local",
+      "kind": "FILE",
+      "operation": "CREATE"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "artifacts/verification/stage2-identity-closure/stage2-reader-closure-20260831/acceptance.json",
+      "kind": "FILE",
+      "operation": "CREATE"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_user_account:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_login_identifier:identifier=LIBRAMAS-STAGE2-READER-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_action_token:purpose=ACTIVATE_ACCOUNT:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_user_role_fact:user_id=10001:role=user",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_password_credential:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_auth_session:stage2-admin:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_auth_session:stage2-reader:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-admin-initial:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-reader-initial:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-reader-rotation:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-admin-login:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-account-provisioned:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-account-activated:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-reader-login:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-reader-logout:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_security_event:stage2-admin-logout:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.user_personalization_consent_fact:stage2-grants:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.user_personalization_consent_fact:stage2-withdraw:stage2-reader-closure-20260831",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.user_declared_profile_history:user_id=10001:version=1",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.user_declared_profile:user_id=10001:version=1",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_user_account:user_id=10000:last_login",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_action_token:stage2-activation:10001:consume",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_user_account:user_id=10001:activate",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_user_account:user_id=10001:last_login",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-reader-initial:stage2-reader-closure-20260831:consume",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_auth_session:stage2-reader:stage2-reader-closure-20260831:last_seen",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_auth_session:stage2-reader:stage2-reader-closure-20260831:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-reader:stage2-reader-closure-20260831:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_auth_session:stage2-admin:stage2-reader-closure-20260831:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "recpro.iam_refresh_token:stage2-admin:stage2-reader-closure-20260831:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    }
+  ]
+}
