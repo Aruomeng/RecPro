@@ -70,3 +70,20 @@ class AgentActionResponse(StrictModel):
     confidence: float = Field(ge=0, le=1)
     parameters: dict[str, Any] = Field(default_factory=dict)
     evidence_refs: list[str] = Field(default_factory=list)
+
+
+class RuntimeMetricResourceResponse(StrictModel):
+    """Non-sensitive metrics for one explicitly managed runtime resource."""
+
+    resource_type: str = Field(min_length=1, max_length=64)
+    metrics: dict[str, int | float | bool | None] = Field(default_factory=dict)
+
+
+class RuntimeDiagnosticsResponse(StrictModel):
+    """Bounded read-only diagnostics exposed only to research administrators."""
+
+    schema_version: Literal["runtime-diagnostics-v1"]
+    registry_closed: bool
+    resource_count: int = Field(ge=0, le=64)
+    resources: list[RuntimeMetricResourceResponse] = Field(default_factory=list, max_length=64)
+    collected_at: datetime

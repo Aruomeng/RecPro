@@ -103,6 +103,19 @@ class RuntimeResourceRegistry:
                 values.append(snapshot)
         return tuple(values)
 
+    def diagnostics_snapshot(self) -> dict[str, object]:
+        """Return the lifecycle state plus bounded resource snapshots.
+
+        The composition root may hand this method to a read-only diagnostics
+        adapter.  It contains no connection options or credentials; the HTTP
+        adapter applies its own public metric allowlist before serialization.
+        """
+
+        return {
+            "registry_closed": self._closed,
+            "resources": self.snapshots(),
+        }
+
     async def close(self) -> None:
         """Close all resources in reverse order; safe to call repeatedly."""
 

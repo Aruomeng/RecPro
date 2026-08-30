@@ -213,6 +213,7 @@ def create_app(
                 create_debug_router(
                     service=recommendation_service,
                     principal_resolver=effective_principal_resolver,
+                    runtime_metrics_provider=resource_registry.diagnostics_snapshot,
                 )
             )
     if feedback_service is not None or behavior_service is not None:

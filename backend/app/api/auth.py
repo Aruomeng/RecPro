@@ -130,10 +130,40 @@ def reject_demo_identity_for_debug(demo_user_id: int | None) -> None:
         )
 
 
+async def require_research_admin_principal(
+    *,
+    authorization: str | None,
+    demo_user_id: int | None,
+    principal_resolver: PrincipalResolver | None,
+) -> AuthenticatedPrincipal:
+    """Require a formal research-admin identity for opt-in diagnostics.
+
+    Research diagnostics must never accept the synthetic demo header.  Keeping
+    this check in the shared HTTP auth boundary prevents individual debug
+    endpoints from accidentally weakening the same policy.
+    """
+
+    reject_demo_identity_for_debug(demo_user_id)
+    principal = await require_bearer_principal(
+        authorization,
+        resolver=principal_resolver,
+    )
+    if not principal.has_role(RoleCode.RESEARCH_ADMIN.value):
+        raise PublicAPIError(
+            status_code=403,
+            code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
+            message="The research-admin role is required for Debug API access.",
+            retryable=False,
+            details={},
+        )
+    return principal
+
+
 __all__ = [
     "PrincipalResolver",
     "has_effective_permission",
     "reject_demo_identity_for_debug",
+    "require_research_admin_principal",
     "require_permission",
     "require_bearer_principal",
     "resolve_user_principal",
