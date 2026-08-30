@@ -7,7 +7,11 @@ import hashlib
 import re
 from uuid import NAMESPACE_URL, uuid5
 
-from backend.app.catalog.domain.models import IndexBuildPlan, ResourceSummary
+from backend.app.catalog.domain.models import (
+    IndexBuildPlan,
+    ResourceCandidateSummary,
+    ResourceSummary,
+)
 from backend.app.catalog.ports.public import (
     CatalogEvidenceReader,
     CatalogEvidenceSnapshot,
@@ -16,6 +20,38 @@ from backend.app.catalog.ports.public import (
 
 
 _SAFE_VERSION = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{1,63}$")
+
+
+def _candidate_summary(
+    resource: ResourceSummary | ResourceCandidateSummary,
+) -> ResourceCandidateSummary:
+    """Convert legacy full resource values at the compatibility boundary.
+
+    Older injected repositories still expose ``list_resources``. Keeping the
+    conversion here lets those adapters participate in the lightweight
+    evidence contract without making the Agent hot path depend on descriptive
+    fields that are only needed by detail/index use cases.
+    """
+
+    if isinstance(resource, ResourceCandidateSummary):
+        return resource
+    return ResourceCandidateSummary(
+        id=resource.id,
+        resource_type=resource.resource_type,
+        external_id=resource.external_id,
+        title=resource.title,
+        authors=resource.authors,
+        keywords=resource.keywords,
+        category_code=resource.category_code,
+        publication_year=resource.publication_year,
+        availability_status=resource.availability_status,
+        available_from=resource.available_from,
+        metadata_quality=resource.metadata_quality,
+        is_classic=resource.is_classic,
+        metadata_version=resource.metadata_version,
+        language=resource.language,
+        difficulty_level=resource.difficulty_level,
+    )
 
 
 def _namespace_name(prefix: str, index_version: str, target: str) -> str:
@@ -92,19 +128,37 @@ class TaskScopedCatalogEvidenceReader(CatalogEvidenceReader):
                 if callable(loader):
                     snapshot = await loader(available_at=available_at)
                 else:
-                    resources = await self._repository.list_resources(
-                        available_at=available_at,
+                    candidate_loader = getattr(
+                        self._repository, "list_resource_candidates", None
                     )
+                    if callable(candidate_loader):
+                        resources = await candidate_loader(available_at=available_at)
+                    else:
+                        resources = tuple(
+                            _candidate_summary(resource)
+                            for resource in await self._repository.list_resources(
+                                available_at=available_at,
+                            )
+                        )
                     tags = await self._repository.list_resource_tags(
                         resource_ids=tuple(resource.id for resource in resources),
                     )
                     snapshot = CatalogEvidenceSnapshot(
-                        resources=resources,
+                        resources=tuple(
+                            _candidate_summary(resource) for resource in resources
+                        ),
                         tags=tags,
                         available_at=available_at,
                     )
                 if not isinstance(snapshot, CatalogEvidenceSnapshot):
                     raise TypeError("catalog evidence reader returned an invalid snapshot")
+                snapshot = CatalogEvidenceSnapshot(
+                    resources=tuple(
+                        _candidate_summary(resource) for resource in snapshot.resources
+                    ),
+                    tags=snapshot.tags,
+                    available_at=snapshot.available_at,
+                )
                 self._cached_key = key
                 self._cached_snapshot = snapshot
             snapshot = self._cached_snapshot

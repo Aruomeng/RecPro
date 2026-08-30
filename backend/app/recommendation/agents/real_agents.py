@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid5
@@ -112,8 +113,12 @@ async def _read_catalog_evidence(
             {"operation": operation_name, "attempts": attempts, "outcome": "SUCCESS"},
         )
 
+    candidate_loader = getattr(catalog, "list_resource_candidates", None)
+    resource_reader = (
+        candidate_loader if callable(candidate_loader) else catalog.list_resources
+    )
     resources, resource_attempts = await call_with_retry(
-        lambda: catalog.list_resources(available_at=as_of),
+        lambda: resource_reader(available_at=as_of),
         operation_name=f"{operation_name}.resources",
         deadline_at=deadline_at,
         policy=retry_policy,
@@ -491,34 +496,11 @@ class CatalogCandidateRecallAgent:
         graph_attempts = 0
         graph_warning: tuple[str, ...] = ()
         graph_tool_calls: tuple[dict[str, object], ...] = ()
-        if self._graph is not None and self._graph_version and terms:
-            try:
-                graph_results, graph_attempts = await call_with_retry(
-                    lambda: self._graph.recall(
-                        terms=tuple(sorted(terms)),
-                        graph_version=self._graph_version or "",
-                        limit=limit,
-                    ),
-                    operation_name="catalog.graph_recall",
-                    deadline_at=message.deadline_at,
-                    policy=self._retry_policy,
-                )
-                graph_hits = {item.external_id: item for item in graph_results}
-                graph_tool_calls = (
-                    {
-                        "operation": "catalog.graph_recall",
-                        "attempts": graph_attempts,
-                        "outcome": "SUCCESS",
-                    },
-                )
-            except DependencyCallFailed as error:
-                graph_warning = ("GRAPH_RECALL_UNAVAILABLE",)
-                graph_attempts = error.attempts
-                graph_tool_calls = _failure_metadata(error)
         vector_hits: dict[str, Any] = {}
         vector_attempts = 0
         vector_warning: tuple[str, ...] = ()
         vector_tool_calls: tuple[dict[str, object], ...] = ()
+        graph_configured = self._graph is not None and bool(self._graph_version)
         vector_configured = all(
             value is not None
             for value in (
@@ -529,10 +511,46 @@ class CatalogCandidateRecallAgent:
             )
         )
         query_text = str(message.payload.get("query_text") or " ".join(sorted(terms))).strip()
-        if vector_configured and query_text:
+
+        async def _recall_graph() -> tuple[
+            dict[str, Any], int, tuple[str, ...], tuple[dict[str, object], ...]
+        ]:
+            if self._graph is None or not self._graph_version or not terms:
+                return {}, 0, (), ()
+            try:
+                graph_results, attempts = await call_with_retry(
+                    lambda: self._graph.recall(
+                        terms=tuple(sorted(terms)),
+                        graph_version=self._graph_version or "",
+                        limit=limit,
+                    ),
+                    operation_name="catalog.graph_recall",
+                    deadline_at=message.deadline_at,
+                    policy=self._retry_policy,
+                )
+                return (
+                    {item.external_id: item for item in graph_results},
+                    attempts,
+                    (),
+                    (
+                        {
+                            "operation": "catalog.graph_recall",
+                            "attempts": attempts,
+                            "outcome": "SUCCESS",
+                        },
+                    ),
+                )
+            except DependencyCallFailed as error:
+                return {}, error.attempts, ("GRAPH_RECALL_UNAVAILABLE",), _failure_metadata(error)
+
+        async def _recall_vector() -> tuple[
+            dict[str, Any], int, tuple[str, ...], tuple[dict[str, object], ...]
+        ]:
+            if not vector_configured or not query_text:
+                return {}, 0, (), ()
             try:
                 query_vector = self._query_embedder.embed(query_text)  # type: ignore[union-attr]
-                vector_results, vector_attempts = await call_with_retry(
+                vector_results, attempts = await call_with_retry(
                     lambda: self._vector.recall(  # type: ignore[union-attr]
                         query_vector=query_vector,
                         embedding_version=self._embedding_version or "",
@@ -543,21 +561,39 @@ class CatalogCandidateRecallAgent:
                     deadline_at=message.deadline_at,
                     policy=self._retry_policy,
                 )
-                vector_hits = {item.external_id: item for item in vector_results}
-                vector_tool_calls = (
-                    {
-                        "operation": "catalog.vector_recall",
-                        "attempts": vector_attempts,
-                        "outcome": "SUCCESS",
-                    },
+                return (
+                    {item.external_id: item for item in vector_results},
+                    attempts,
+                    (),
+                    (
+                        {
+                            "operation": "catalog.vector_recall",
+                            "attempts": attempts,
+                            "outcome": "SUCCESS",
+                        },
+                    ),
                 )
             except DependencyCallFailed as error:
-                vector_warning = ("VECTOR_RECALL_UNAVAILABLE",)
-                vector_attempts = error.attempts
-                vector_tool_calls = _failure_metadata(error)
+                return {}, error.attempts, ("VECTOR_RECALL_UNAVAILABLE",), _failure_metadata(error)
             except ValueError:
-                vector_warning = ("VECTOR_QUERY_UNAVAILABLE",)
-        graph_configured = self._graph is not None and bool(self._graph_version)
+                return {}, 0, ("VECTOR_QUERY_UNAVAILABLE",), ()
+
+        (graph_result, vector_result) = await asyncio.gather(
+            _recall_graph(),
+            _recall_vector(),
+        )
+        (
+            graph_hits,
+            graph_attempts,
+            graph_warning,
+            graph_tool_calls,
+        ) = graph_result
+        (
+            vector_hits,
+            vector_attempts,
+            vector_warning,
+            vector_tool_calls,
+        ) = vector_result
         optional_channel_configured = graph_configured or vector_configured
         graph_channel_ready = graph_configured and not graph_warning and bool(terms)
         vector_channel_ready = vector_configured and not vector_warning and bool(query_text)

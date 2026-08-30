@@ -8,6 +8,7 @@ from typing import Protocol
 
 from backend.app.catalog.domain.models import (
     GraphRecallEvidence,
+    ResourceCandidateSummary,
     ResourceSummary,
     ResourceTagEvidence,
     VectorRecallEvidence,
@@ -31,11 +32,22 @@ class CatalogRepository(Protocol):
     ) -> tuple[ResourceTagEvidence, ...]: ...
 
 
+class CatalogCandidateReader(Protocol):
+    """Read only the bounded metadata required by recommendation recall."""
+
+    async def list_resource_candidates(
+        self,
+        *,
+        available_at: datetime | None = None,
+        resource_type: str | None = None,
+    ) -> tuple[ResourceCandidateSummary, ...]: ...
+
+
 @dataclass(frozen=True, slots=True)
 class CatalogEvidenceSnapshot:
     """One immutable, read-only catalog view reused during a task."""
 
-    resources: tuple[ResourceSummary, ...]
+    resources: tuple[ResourceCandidateSummary, ...]
     tags: tuple[ResourceTagEvidence, ...]
     available_at: datetime | None = None
 
@@ -59,7 +71,7 @@ class CatalogProjectionReader(Protocol):
         *,
         resource_ids: tuple[int, ...],
         available_at: datetime | None = None,
-    ) -> tuple[ResourceSummary, ...]: ...
+    ) -> tuple[ResourceCandidateSummary, ...]: ...
 
 
 class CatalogUnitOfWork(Protocol):

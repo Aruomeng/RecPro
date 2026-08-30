@@ -2,6 +2,7 @@
 
 from backend.app.catalog.domain.models import (
     IndexBuildPlan,
+    ResourceCandidateSummary,
     ResourceSummary,
     ResourceTagEvidence,
     VectorRecallEvidence,
@@ -9,6 +10,7 @@ from backend.app.catalog.domain.models import (
 
 __all__ = [
     "IndexBuildPlan",
+    "ResourceCandidateSummary",
     "ResourceSummary",
     "ResourceTagEvidence",
     "VectorRecallEvidence",

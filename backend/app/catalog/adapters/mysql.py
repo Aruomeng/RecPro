@@ -8,8 +8,13 @@ from typing import Any
 
 import asyncmy
 
-from backend.app.catalog.domain.models import ResourceSummary, ResourceTagEvidence
+from backend.app.catalog.domain.models import (
+    ResourceCandidateSummary,
+    ResourceSummary,
+    ResourceTagEvidence,
+)
 from backend.app.catalog.ports.public import (
+    CatalogCandidateReader,
     CatalogEvidenceSnapshot,
     CatalogRepository,
     CatalogUnitOfWork,
@@ -37,7 +42,7 @@ def _db_datetime(value: datetime) -> datetime:
     return value.astimezone(UTC).replace(tzinfo=None)
 
 
-class MySQLCatalogRepository(CatalogRepository):
+class MySQLCatalogRepository(CatalogRepository, CatalogCandidateReader):
     """Read-only resource and tag queries bound to one active connection."""
 
     def __init__(self, connection: Any) -> None:
@@ -99,7 +104,7 @@ class MySQLCatalogRepository(CatalogRepository):
     ) -> CatalogEvidenceSnapshot:
         """Read resources and their tags once for one orchestration task."""
 
-        resources = await self.list_resources(
+        resources = await self.list_resource_candidates(
             available_at=available_at,
             resource_type=resource_type,
         )
@@ -112,13 +117,68 @@ class MySQLCatalogRepository(CatalogRepository):
             available_at=available_at,
         )
 
+    async def list_resource_candidates(
+        self,
+        *,
+        available_at: datetime | None = None,
+        resource_type: str | None = None,
+    ) -> tuple[ResourceCandidateSummary, ...]:
+        """Read only the bounded metadata needed by recall and ranking.
+
+        Abstract text and access URLs can be large and are not used until a
+        selected resource is projected for a detail view. Keeping them out of
+        this query reduces MySQL transfer and Python allocation on every
+        recommendation task while preserving the full ``list_resources``
+        contract for detail and index use cases.
+        """
+
+        predicates = ["availability_status <> 'REMOVED'"]
+        parameters: list[object] = []
+        if available_at is not None:
+            predicates.append("available_from <= %s")
+            parameters.append(_db_datetime(available_at))
+        if resource_type is not None:
+            predicates.append("resource_type = %s")
+            parameters.append(resource_type)
+        query = (
+            "SELECT id, resource_type, external_id, title, authors_json, "
+            "keywords_json, category_code, publication_year, availability_status, "
+            "available_from, metadata_quality, is_classic, metadata_version, "
+            "language, difficulty_level FROM resource_catalog WHERE "
+            + " AND ".join(predicates)
+            + " ORDER BY id"
+        )
+        async with self._connection.cursor() as cursor:
+            await cursor.execute(query, tuple(parameters))
+            rows = await cursor.fetchall()
+        return tuple(
+            ResourceCandidateSummary(
+                id=int(row[0]),
+                resource_type=str(row[1]),
+                external_id=str(row[2]),
+                title=str(row[3]),
+                authors=_json_array(row[4]),
+                keywords=_json_array(row[5]),
+                category_code=str(row[6]) if row[6] is not None else None,
+                publication_year=int(row[7]) if row[7] is not None else None,
+                availability_status=str(row[8]),
+                available_from=row[9],
+                metadata_quality=float(row[10]),
+                is_classic=bool(row[11]),
+                metadata_version=int(row[12]),
+                language=str(row[13]) if row[13] is not None else None,
+                difficulty_level=int(row[14]) if row[14] is not None else None,
+            )
+            for row in rows
+        )
+
     async def list_resources_by_ids(
         self,
         *,
         resource_ids: tuple[int, ...],
         available_at: datetime | None = None,
-    ) -> tuple[ResourceSummary, ...]:
-        """Read only the selected resources needed by a result projection."""
+    ) -> tuple[ResourceCandidateSummary, ...]:
+        """Read only selected lightweight resources for a result projection."""
 
         unique_ids = tuple(sorted({int(resource_id) for resource_id in resource_ids}))
         if not unique_ids:
@@ -134,9 +194,9 @@ class MySQLCatalogRepository(CatalogRepository):
             predicates.append("available_from <= %s")
             parameters.append(_db_datetime(available_at))
         query = (
-            "SELECT id, resource_type, external_id, title, authors_json, abstract_text, "
+            "SELECT id, resource_type, external_id, title, authors_json, "
             "keywords_json, category_code, publication_year, availability_status, "
-            "available_from, access_url, metadata_quality, is_classic, metadata_version, "
+            "available_from, metadata_quality, is_classic, metadata_version, "
             "language, difficulty_level FROM resource_catalog WHERE "
             + " AND ".join(predicates)
             + " ORDER BY id"
@@ -145,24 +205,22 @@ class MySQLCatalogRepository(CatalogRepository):
             await cursor.execute(query, tuple(parameters))
             rows = await cursor.fetchall()
         return tuple(
-            ResourceSummary(
+            ResourceCandidateSummary(
                 id=int(row[0]),
                 resource_type=str(row[1]),
                 external_id=str(row[2]),
                 title=str(row[3]),
                 authors=_json_array(row[4]),
-                abstract_text=str(row[5]) if row[5] is not None else None,
-                keywords=_json_array(row[6]),
-                category_code=str(row[7]) if row[7] is not None else None,
-                publication_year=int(row[8]) if row[8] is not None else None,
-                availability_status=str(row[9]),
-                available_from=row[10],
-                access_url=str(row[11]) if row[11] is not None else None,
-                metadata_quality=float(row[12]),
-                is_classic=bool(row[13]),
-                metadata_version=int(row[14]),
-                language=str(row[15]) if row[15] is not None else None,
-                difficulty_level=int(row[16]) if row[16] is not None else None,
+                keywords=_json_array(row[5]),
+                category_code=str(row[6]) if row[6] is not None else None,
+                publication_year=int(row[7]) if row[7] is not None else None,
+                availability_status=str(row[8]),
+                available_from=row[9],
+                metadata_quality=float(row[10]),
+                is_classic=bool(row[11]),
+                metadata_version=int(row[12]),
+                language=str(row[13]) if row[13] is not None else None,
+                difficulty_level=int(row[14]) if row[14] is not None else None,
             )
             for row in rows
         )

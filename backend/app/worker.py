@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+import inspect
 from typing import Any
-
-import asyncmy
 
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
@@ -17,6 +16,7 @@ from backend.app.composition import build_profile_outbox_worker
 from backend.app.logging import configure_logging, get_logger
 from backend.app.observability.adapters import JsonConfigBundleReadinessProbe
 from backend.app.observability.domain import ComponentStatus
+from backend.app.platform.mysql import MySQLConnectionPool
 
 
 ConnectionFactory = Callable[[], Awaitable[Any]]
@@ -37,10 +37,22 @@ def _mysql_connection_factory(settings: Any) -> ConnectionFactory:
         "autocommit": False,
     }
 
-    async def connect() -> Any:
-        return await asyncmy.connect(**options)
+    return MySQLConnectionPool(
+        connection_options=options,
+        min_size=settings.mysql_pool_min_size,
+        max_size=settings.mysql_pool_max_size,
+        pool_recycle_seconds=settings.mysql_pool_recycle_seconds,
+        acquire_timeout_seconds=settings.mysql_pool_acquire_timeout_seconds,
+    )
 
-    return connect
+
+async def _close_factory(factory: object) -> None:
+    close = getattr(factory, "close", None)
+    if not callable(close):
+        return
+    result = close()
+    if inspect.isawaitable(result):
+        await result
 
 
 async def _wait_for_stop(stop_event: asyncio.Event | None) -> None:
@@ -126,35 +138,38 @@ async def run_worker(
         formula_version=settings.worker_formula_version,
         config_bundle_version=settings.config_bundle_version,
     )
-    while True:
-        if stop_event is not None and stop_event.is_set():
-            return
-        try:
-            receipts = await worker.run_once(limit=settings.worker_batch_limit)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            logger.exception("worker_poll_failed", worker_id=settings.worker_id)
-            raise
-        logger.info(
-            "worker_poll_completed",
-            worker_id=settings.worker_id,
-            receipt_count=len(receipts),
-        )
-        if receipts:
-            # Drain a bounded batch before sleeping so a backlog does not wait
-            # an entire interval between each batch.
-            await asyncio.sleep(0)
-            continue
-        if stop_event is None:
-            await asyncio.sleep(settings.worker_poll_interval_seconds)
-            continue
-        try:
-            await asyncio.wait_for(
-                stop_event.wait(), timeout=settings.worker_poll_interval_seconds
+    try:
+        while True:
+            if stop_event is not None and stop_event.is_set():
+                return
+            try:
+                receipts = await worker.run_once(limit=settings.worker_batch_limit)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception("worker_poll_failed", worker_id=settings.worker_id)
+                raise
+            logger.info(
+                "worker_poll_completed",
+                worker_id=settings.worker_id,
+                receipt_count=len(receipts),
             )
-        except asyncio.TimeoutError:
-            pass
+            if receipts:
+                # Drain a bounded batch before sleeping so a backlog does not wait
+                # an entire interval between each batch.
+                await asyncio.sleep(0)
+                continue
+            if stop_event is None:
+                await asyncio.sleep(settings.worker_poll_interval_seconds)
+                continue
+            try:
+                await asyncio.wait_for(
+                    stop_event.wait(), timeout=settings.worker_poll_interval_seconds
+                )
+            except asyncio.TimeoutError:
+                pass
+    finally:
+        await _close_factory(active_connection_factory)
 
 
 def main() -> None:

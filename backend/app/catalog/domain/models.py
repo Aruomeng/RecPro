@@ -28,6 +28,33 @@ class ResourceSummary:
 
 
 @dataclass(frozen=True, slots=True)
+class ResourceCandidateSummary:
+    """Lightweight resource view used by recall and ranking Agents.
+
+    Large descriptive fields such as the abstract and access URL stay in
+    ``ResourceSummary`` for detail/index use cases.  Candidate recall only
+    needs searchable metadata and ranking attributes, so this contract keeps
+    the hot path small and explicit.
+    """
+
+    id: int
+    resource_type: str
+    external_id: str
+    title: str
+    authors: tuple[str, ...]
+    keywords: tuple[str, ...]
+    category_code: str | None
+    publication_year: int | None
+    availability_status: str
+    available_from: datetime
+    metadata_quality: float
+    is_classic: bool
+    metadata_version: int
+    language: str | None
+    difficulty_level: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class ResourceTagEvidence:
     resource_id: int
     tag_id: int

@@ -155,10 +155,46 @@ def validate_worker(values: Mapping[str, str]) -> tuple[str, ...]:
     return tuple(issues)
 
 
+def validate_mysql_pool(values: Mapping[str, str]) -> tuple[str, ...]:
+    """Validate optional pool bounds before a process can open sockets."""
+
+    issues: list[str] = []
+    numeric_limits = {
+        "RECPRO_MYSQL_POOL_MIN_SIZE": (int, 0, 32),
+        "RECPRO_MYSQL_POOL_MAX_SIZE": (int, 1, 64),
+        "RECPRO_MYSQL_POOL_RECYCLE_SECONDS": (int, 60, 86400),
+        "RECPRO_MYSQL_POOL_ACQUIRE_TIMEOUT_SECONDS": (float, 0.0, 30.0),
+    }
+    parsed: dict[str, int | float] = {}
+    for key, (converter, lower, upper) in numeric_limits.items():
+        raw_value = values.get(key, "")
+        if not raw_value:
+            continue
+        try:
+            number = converter(raw_value)
+        except (TypeError, ValueError):
+            issues.append(f"{key} has an invalid numeric value")
+            continue
+        if converter is float:
+            valid = lower < number <= upper
+        else:
+            valid = lower <= number <= upper
+        if not valid:
+            issues.append(f"{key} is outside its safe range")
+            continue
+        parsed[key] = number
+    minimum = parsed.get("RECPRO_MYSQL_POOL_MIN_SIZE")
+    maximum = parsed.get("RECPRO_MYSQL_POOL_MAX_SIZE")
+    if minimum is not None and maximum is not None and minimum > maximum:
+        issues.append("RECPRO_MYSQL_POOL_MIN_SIZE cannot exceed RECPRO_MYSQL_POOL_MAX_SIZE")
+    return tuple(issues)
+
+
 def validate_common(values: Mapping[str, str]) -> tuple[str, ...]:
     issues: list[str] = []
     issues.extend(validate_llm(values))
     issues.extend(validate_worker(values))
+    issues.extend(validate_mysql_pool(values))
     required = {
         "RECPRO_CONFIG_BUNDLE_VERSION",
         "RECPRO_CONFIG_BUNDLE_PATH",

@@ -8,8 +8,6 @@ the runnable health skeleton separate from the research recommendation path.
 from __future__ import annotations
 
 from typing import Any
-
-import asyncmy
 from fastapi import FastAPI
 
 from backend.app.config import AppSettings
@@ -72,6 +70,7 @@ from backend.app.recommendation.application.persistent_orchestration import (
     PersistentOrchestrationService,
 )
 from backend.app.catalog.runtime.g4_ports import G4ReadOnlyRuntime
+from backend.app.platform.mysql import MySQLConnectionPool
 
 
 def _mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
@@ -87,10 +86,13 @@ def _mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
         "autocommit": False,
     }
 
-    async def connect() -> Any:
-        return await asyncmy.connect(**options)
-
-    return connect
+    return MySQLConnectionPool(
+        connection_options=options,
+        min_size=settings.mysql_pool_min_size,
+        max_size=settings.mysql_pool_max_size,
+        pool_recycle_seconds=settings.mysql_pool_recycle_seconds,
+        acquire_timeout_seconds=settings.mysql_pool_acquire_timeout_seconds,
+    )
 
 
 def _identity_mysql_connection_factory(settings: AppSettings) -> ConnectionFactory:
@@ -108,10 +110,13 @@ def _identity_mysql_connection_factory(settings: AppSettings) -> ConnectionFacto
         "autocommit": False,
     }
 
-    async def connect() -> Any:
-        return await asyncmy.connect(**options)
-
-    return connect
+    return MySQLConnectionPool(
+        connection_options=options,
+        min_size=settings.mysql_pool_min_size,
+        max_size=settings.mysql_pool_max_size,
+        pool_recycle_seconds=settings.mysql_pool_recycle_seconds,
+        acquire_timeout_seconds=settings.mysql_pool_acquire_timeout_seconds,
+    )
 
 
 def build_formal_auth_resolver(
@@ -356,6 +361,7 @@ def build_demo_mysql_http_app(
         catalog_repository_factory=MySQLCatalogRepository,
         config_bundle_version=settings.config_bundle_version,
         dataset_version=dataset_version,
+        connection_factory=_mysql_connection_factory(settings),
     )
     return build_demo_http_app(
         settings,
@@ -469,7 +475,7 @@ def build_research_g4_recommendation_service(
         prompt_version=getattr(settings, "prompt_bundle_version", None),
         deadline_seconds=deadline_seconds,
         connect_timeout=settings.mysql_connect_timeout_seconds,
-        connection_factory=connection_factory,
+        connection_factory=connection_factory or _mysql_connection_factory(settings),
     )
 
 

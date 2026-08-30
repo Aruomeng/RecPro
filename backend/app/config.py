@@ -86,6 +86,13 @@ class AppSettings(BaseSettings):
     )
     mysql_password: SecretStr
     mysql_connect_timeout_seconds: float = Field(default=3.0, gt=0.0, le=30.0)
+    # Connection pools are lazy (min size 0 by default) so importing or
+    # composing an application never opens a database connection.  The upper
+    # bound keeps one process from exhausting the shared research MySQL.
+    mysql_pool_min_size: int = Field(default=0, ge=0, le=32)
+    mysql_pool_max_size: int = Field(default=10, ge=1, le=64)
+    mysql_pool_recycle_seconds: int = Field(default=1800, ge=60, le=86400)
+    mysql_pool_acquire_timeout_seconds: float = Field(default=3.0, gt=0.0, le=30.0)
     persistence_probe_id: str = Field(
         default="g1-bootstrap-v1",
         min_length=3,
@@ -283,6 +290,12 @@ class AppSettings(BaseSettings):
         if any(character.isspace() for character in secret):
             raise ValueError("auth JWT secret must not contain whitespace")
         return value
+
+    @model_validator(mode="after")
+    def validate_mysql_pool_configuration(self) -> "AppSettings":
+        if self.mysql_pool_min_size > self.mysql_pool_max_size:
+            raise ValueError("mysql pool min size cannot exceed max size")
+        return self
 
     @model_validator(mode="after")
     def validate_auth_configuration(self) -> "AppSettings":
