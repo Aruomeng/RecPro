@@ -231,6 +231,11 @@ class AppSettings(BaseSettings):
     )
     agent_workspace_audit_max_facts: int = Field(default=512, ge=1, le=512)
     agent_workspace_audit_batch_limit: int = Field(default=32, ge=1, le=64)
+    # Low-frequency ambient planning is disabled by default.  The first
+    # runnable implementation is deterministic Fixture-only; a real DeepSeek
+    # adapter will require a separate approved request-budget plan.
+    background_planning_enabled: bool = False
+    background_planning_provider: Literal["disabled", "fixture"] = "disabled"
     cors_origins: tuple[str, ...] = ("http://localhost:5173",)
 
     @field_validator("config_bundle_path", mode="before")
@@ -433,6 +438,16 @@ class AppSettings(BaseSettings):
             )
         if self.agent_workspace_audit_plan_id in RETIRED_WORKSPACE_AUDIT_PLAN_IDS:
             raise ValueError("the previous workspace audit plan is retired")
+        return self
+
+    @model_validator(mode="after")
+    def validate_background_planning_configuration(self) -> "AppSettings":
+        if self.background_planning_enabled and self.background_planning_provider != "fixture":
+            raise ValueError("background planning requires the explicit fixture provider")
+        if not self.background_planning_enabled and self.background_planning_provider != "disabled":
+            raise ValueError("a disabled background planner cannot select a provider")
+        if self.background_planning_enabled and self.app_env == "production":
+            raise ValueError("fixture background planning is not a production provider")
         return self
 
 

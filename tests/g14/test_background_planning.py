@@ -17,6 +17,28 @@ from backend.app.agent_workspace import (
 )
 from backend.app.agent_workspace.ports.handlers import WorkspaceDirectiveProposal
 from backend.app.agent_workspace.ports.planning import PlanningContext
+from backend.app.agent_workspace.ports.planning import SanitizedPlanningContext, BackgroundPlanningResult
+
+
+class _CapturingPlanner:
+    def __init__(self) -> None:
+        self.contexts: list[SanitizedPlanningContext] = []
+
+    async def plan(self, context: SanitizedPlanningContext) -> BackgroundPlanningResult:
+        self.contexts.append(context)
+        return BackgroundPlanningResult(
+            evidence_refs=("workspace:context",),
+            confidence=0.8,
+        )
+
+
+class _ProfileReader:
+    def __init__(self) -> None:
+        self.calls: list[int] = []
+
+    async def summary(self, user_id: int) -> dict[str, object]:
+        self.calls.append(user_id)
+        return {"major": "图书情报", "user_id": user_id, "profile_version": "v1"}
 
 
 class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
@@ -116,6 +138,39 @@ class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(any(item["type"] == "SUGGEST_TOPICS" for item in snapshot["directives"]))
         self.assertEqual("PLANNED", snapshot["context_summary"]["background_planning"]["status"])
         self.assertEqual(0, sum(int(event.get("llm_requests", 0)) for event in events))
+
+    async def test_authenticated_consent_sends_only_bounded_profile_summary(self) -> None:
+        planner = _CapturingPlanner()
+        reader = _ProfileReader()
+        coordinator = BackgroundPlanningCoordinator(planner=planner)
+        broker = AgentWorkspaceBroker(
+            background_planner=coordinator,
+            profile_reader=reader,
+        )
+        created, _ = broker.create(
+            session_id=uuid4(),
+            user_id=10001,
+            mode="authenticated",
+            personalization_enabled=True,
+        )
+        await broker.wait_for_idle()
+        self.assertEqual([10001, 10001], reader.calls)
+        self.assertTrue(planner.contexts)
+        profile = planner.contexts[0].profile_summary
+        self.assertEqual({"major": "图书情报", "profile_version": "v1"}, profile)
+
+    async def test_guest_background_planning_never_reads_profile(self) -> None:
+        planner = _CapturingPlanner()
+        reader = _ProfileReader()
+        broker = AgentWorkspaceBroker(
+            background_planner=BackgroundPlanningCoordinator(planner=planner),
+            profile_reader=reader,
+        )
+        broker.create(session_id=uuid4(), user_id=9000002, mode="guest")
+        await broker.wait_for_idle()
+        self.assertEqual([], reader.calls)
+        self.assertTrue(planner.contexts)
+        self.assertIsNone(planner.contexts[0].profile_summary)
 
 
 if __name__ == "__main__":

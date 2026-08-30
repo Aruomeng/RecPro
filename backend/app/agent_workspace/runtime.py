@@ -730,6 +730,26 @@ class AgentWorkspaceBroker:
                 "llm_requests": 0,
             })
 
+        profile_summary: Mapping[str, object] | None = None
+        # Background planning receives a profile summary only for a formally
+        # authenticated account with explicit personalization consent.  The
+        # profile adapter is read-only and bounded; Guest, demo and
+        # unauthorised sessions never invoke it here.  A temporary profile
+        # read failure does not block the ambient policy path: the planner
+        # receives anonymous context and the normal UserProfileAgent result
+        # remains the source of any visible degradation signal.
+        if (
+            workspace.mode == "authenticated"
+            and workspace.user_id >= 10_000
+            and observation.context_personalization_enabled
+            and workspace.personalization_enabled
+            and self._profile_reader is not None
+        ):
+            try:
+                profile_summary = await self._profile_reader.summary(workspace.user_id)
+            except Exception:
+                profile_summary = None
+
         context = PlanningContext(
             workspace_id=workspace.workspace_id,
             session_id=workspace.session_id,
@@ -743,6 +763,7 @@ class AgentWorkspaceBroker:
             source_statuses=observation.context_source_statuses,
             external_context=observation.context_external_context,
             personalization_enabled=observation.context_personalization_enabled,
+            profile_summary=profile_summary,
         )
         outcome = await self._background_planner.plan(
             context,

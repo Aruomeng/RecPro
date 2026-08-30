@@ -20,7 +20,7 @@
 
 ## 验证证据
 
-- `tests/g14/test_background_planning.py`：预算、去重、敏感字段清理、Directive 白名单、Workspace 真实事件共 5 项通过。
+- `tests/g14/test_background_planning.py`：预算、去重、敏感字段清理、Directive 白名单、Workspace 真实事件、认证画像摘要边界和 Guest 隔离共 7 项通过。
 - `tests/g14/test_background_readiness.py`：默认关闭与 Fixture readiness 共 2 项通过。
 - 前端 `vue-tsc --noEmit` 通过。
 - `git diff --check` 通过。

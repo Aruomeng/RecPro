@@ -36,7 +36,9 @@ from backend.app.recommendation.progress import RecommendationProgressBroker
 from backend.app.agent_workspace import (
     AgentWorkspaceAuditBuffer,
     AgentWorkspaceBroker,
+    BackgroundPlanningCoordinator,
     ExplorationWorkspaceReadTools,
+    FixtureBackgroundPlanner,
 )
 
 
@@ -162,17 +164,31 @@ def create_g4_feedback_app():
         enabled=settings.agent_workspace_audit_enabled,
         max_facts=settings.agent_workspace_audit_max_facts,
     )
+    # Ambient planning is an explicit, deterministic fixture capability in
+    # the local research runtime.  It is disabled by default and cannot be
+    # enabled by the production composition.  A future DeepSeek adapter must
+    # be introduced behind its own request-budget ChangePlan rather than
+    # silently replacing this provider.
+    background_planner = (
+        BackgroundPlanningCoordinator(planner=FixtureBackgroundPlanner())
+        if settings.background_planning_enabled
+        else None
+    )
     workspace_broker = AgentWorkspaceBroker(
         max_workspaces=32,
         retention_seconds=600.0,
         audit_buffer=workspace_audit_buffer,
         read_tools=ExplorationWorkspaceReadTools(exploration_service),
         profile_reader=build_agent_workspace_profile_reader(settings),
+        background_planner=background_planner,
     )
     identity_service = (
         build_local_identity_service(settings)
         if settings.local_identity_api_enabled else None
     )
+    application_kwargs = {
+        "background_planning_enabled": True,
+    } if settings.background_planning_enabled else {}
     application = build_research_g4_http_app_from_runtime(
         settings,
         runtime=runtime,
@@ -195,6 +211,7 @@ def create_g4_feedback_app():
         knowledge_review_provider=(
             "mysql-append-only-g12" if identity_service is not None else None
         ),
+        **application_kwargs,
     )
     # Construction does not drain the buffer and therefore performs no write.
     # An approved operator path may explicitly invoke this worker later.
