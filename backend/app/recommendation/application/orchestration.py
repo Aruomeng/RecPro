@@ -28,6 +28,7 @@ from backend.app.catalog.ports.public import (
     QueryEmbeddingPort,
     VectorRecallPort,
 )
+from backend.app.catalog.application.public import TaskScopedCatalogEvidenceReader
 from backend.app.profile.ports.public import ProfileSnapshotReader
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
 from backend.app.llm.ports.public import TextCapabilityProvider
@@ -70,6 +71,7 @@ def build_port_orchestrator(
     silently multiplying requests over every ranked item.
     """
 
+    evidence_reader = TaskScopedCatalogEvidenceReader(catalog)
     agents = {
         agent.name: agent
         for agent in DEFAULT_RULE_AGENTS
@@ -80,12 +82,14 @@ def build_port_orchestrator(
             "UserProfileAgent": MySQLProfileAgent(profile, retry_policy=retry_policy),
             "ResourceSemanticAgent": CatalogResourceSemanticAgent(
                 catalog,
+                evidence_reader=evidence_reader,
                 graph=graph,
                 vector=vector,
                 retry_policy=retry_policy,
             ),
             "CandidateRecallAgent": CatalogCandidateRecallAgent(
                 catalog,
+                evidence_reader=evidence_reader,
                 graph=graph,
                 graph_version=graph_version,
                 vector=vector,

@@ -13,8 +13,11 @@ from backend.app.api.auth import PrincipalResolver, require_bearer_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
 from backend.app.api.models import ErrorResponse, StrictModel
-from backend.app.knowledge_review.domain import KnowledgeReviewAction, KnowledgeReviewStatus
-from backend.app.knowledge_review.service import KnowledgeReviewService
+from backend.app.knowledge_review.public import (
+    KnowledgeReviewAction,
+    KnowledgeReviewService,
+    KnowledgeReviewStatus,
+)
 from backend.app.shared_kernel.contracts.errors import ErrorCode
 
 

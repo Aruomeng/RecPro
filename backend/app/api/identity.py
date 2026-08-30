@@ -12,8 +12,7 @@ from pydantic import Field
 from backend.app.api.auth import PrincipalResolver, require_bearer_principal, require_permission
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.models import StrictModel
-from backend.app.identity.application import IdentityService, consent_evidence_hash
-from backend.app.identity.domain import (
+from backend.app.identity.public import (
     AccountStatusAction,
     ConsentAction,
     ConsentScope,
@@ -24,6 +23,8 @@ from backend.app.identity.domain import (
     RoleAction,
     RoleCode,
     UserAccount,
+    consent_evidence_hash,
+    IdentityService,
 )
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from backend.app.shared_kernel.contracts.errors import ErrorCode

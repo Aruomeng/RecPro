@@ -638,6 +638,62 @@ def _resource_projection(resource: Any) -> G4ResourceProjection:
     )
 
 
+def _result_resource_ids(result: OrchestrationResult) -> tuple[int, ...]:
+    """Extract the bounded set of ranked IDs needed by the write projection."""
+
+    raw_items = result.payload.get("items")
+    if not isinstance(raw_items, (list, tuple)):
+        return ()
+    resource_ids: list[int] = []
+    seen: set[int] = set()
+    for raw_item in raw_items:
+        if not isinstance(raw_item, Mapping):
+            continue
+        raw_id = raw_item.get("resource_id")
+        if isinstance(raw_id, bool):
+            continue
+        try:
+            resource_id = int(raw_id)
+        except (TypeError, ValueError):
+            continue
+        if resource_id < 1 or resource_id in seen:
+            continue
+        seen.add(resource_id)
+        resource_ids.append(resource_id)
+    if len(resource_ids) > 100:
+        raise ValueError("result projection contains too many resource IDs")
+    return tuple(resource_ids)
+
+
+async def _read_projection_resources(
+    catalog: Any,
+    result: OrchestrationResult,
+    *,
+    evaluation_at: datetime,
+) -> dict[int, G4ResourceProjection]:
+    """Materialize only ranked resources, with a compatibility fallback."""
+
+    resource_ids = _result_resource_ids(result)
+    if not resource_ids:
+        return {}
+    reader = getattr(catalog, "list_resources_by_ids", None)
+    if callable(reader):
+        resource_values = await reader(
+            resource_ids=resource_ids,
+            available_at=evaluation_at,
+        )
+    else:
+        # Older injected test adapters may not expose the optimized port.  The
+        # fallback keeps them compatible while the production MySQL adapter
+        # always takes the bounded-ID path above.
+        resource_values = await catalog.list_resources(available_at=evaluation_at)
+    return {
+        int(resource.id): _resource_projection(resource)
+        for resource in resource_values
+        if int(resource.id) in resource_ids
+    }
+
+
 class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
     """Opt-in RecommendationTaskService backed by the real G4 orchestrator.
 
@@ -743,11 +799,11 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
                     orchestration_request, progress_sink=progress_sink
                 )
             catalog = self._catalog_repository_factory(connection)
-            resource_values = await catalog.list_resources(available_at=evaluation_at)
-            resources = {
-                int(resource.id): _resource_projection(resource)
-                for resource in resource_values
-            }
+            resources = await _read_projection_resources(
+                catalog,
+                result,
+                evaluation_at=evaluation_at,
+            )
             started_at = datetime.now(UTC)
             plan = build_g4_projection_write_plan(
                 command,
@@ -890,11 +946,11 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
                     orchestration_request, progress_sink=progress_sink
                 )
             catalog = self._catalog_repository_factory(connection)
-            resource_values = await catalog.list_resources(available_at=evaluation_at)
-            resources = {
-                int(resource.id): _resource_projection(resource)
-                for resource in resource_values
-            }
+            resources = await _read_projection_resources(
+                catalog,
+                result,
+                evaluation_at=evaluation_at,
+            )
             started_at = datetime.now(UTC)
             plan = build_g4_projection_write_plan(
                 continuation.command,

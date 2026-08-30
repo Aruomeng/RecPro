@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Protocol
 
@@ -28,6 +29,37 @@ class CatalogRepository(Protocol):
         *,
         resource_ids: tuple[int, ...],
     ) -> tuple[ResourceTagEvidence, ...]: ...
+
+
+@dataclass(frozen=True, slots=True)
+class CatalogEvidenceSnapshot:
+    """One immutable, read-only catalog view reused during a task."""
+
+    resources: tuple[ResourceSummary, ...]
+    tags: tuple[ResourceTagEvidence, ...]
+    available_at: datetime | None = None
+
+
+class CatalogEvidenceReader(Protocol):
+    """Read the resource metadata and tag evidence needed by Agents."""
+
+    async def read_evidence_snapshot(
+        self,
+        *,
+        available_at: datetime | None = None,
+        resource_type: str | None = None,
+    ) -> CatalogEvidenceSnapshot: ...
+
+
+class CatalogProjectionReader(Protocol):
+    """Read only the resources selected for a persisted recommendation."""
+
+    async def list_resources_by_ids(
+        self,
+        *,
+        resource_ids: tuple[int, ...],
+        available_at: datetime | None = None,
+    ) -> tuple[ResourceSummary, ...]: ...
 
 
 class CatalogUnitOfWork(Protocol):

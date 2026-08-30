@@ -54,6 +54,12 @@ APPLICATION_FORBIDDEN_PARTS = {".adapters", ".infrastructure", ".platform", ".db
 API_FORBIDDEN_PARTS = {".adapters", ".infrastructure", ".platform", ".db", ".repository", ".repositories"}
 DETERMINISTIC_FORBIDDEN_PARTS = {".adapters", ".infrastructure", ".platform", ".db", ".repository", ".repositories"}
 AGENT_SHARED_MODULES = {"__init__", "base", "contracts", "public", "registry", "types"}
+PUBLIC_MODULE_SUFFIXES = (
+    ".application.public",
+    ".ports.public",
+    ".domain.public",
+    ".public",
+)
 BUSINESS_MODULES = {
     "agent_workspace",
     "catalog",
@@ -62,6 +68,8 @@ BUSINESS_MODULES = {
     "feedback",
     "observability",
     "evaluation",
+    "identity",
+    "knowledge_review",
 }
 
 
@@ -108,10 +116,15 @@ def _is_allowed_api_import(imported: str) -> bool:
         return True
     parts = imported.split(".")
     return (
-        len(parts) >= 5
+        len(parts) >= 4
         and parts[:2] == ["backend", "app"]
         and parts[2] in BUSINESS_MODULES
-        and parts[3:5] == ["application", "public"]
+        and (
+            parts[3:5] == ["application", "public"]
+            or parts[3:5] == ["ports", "public"]
+            or parts[3:5] == ["domain", "public"]
+            or parts[3:] == ["public"]
+        )
     )
 
 
@@ -234,9 +247,7 @@ def check_source(path: str, text: str) -> list[ArchitectureViolation]:
             source_module in BUSINESS_MODULES
             and imported_module in BUSINESS_MODULES
             and source_module != imported_module
-            and not imported.endswith(
-                (".application.public", ".ports.public", ".domain.public")
-            )
+            and not imported.endswith(PUBLIC_MODULE_SUFFIXES)
         ):
             violations.append(
                 ArchitectureViolation("CROSS_MODULE_INTERNAL_DEPENDENCY", path, line, imported)

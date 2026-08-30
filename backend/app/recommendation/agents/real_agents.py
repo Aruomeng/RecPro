@@ -7,6 +7,8 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.catalog.ports.public import (
+    CatalogEvidenceReader,
+    CatalogEvidenceSnapshot,
     CatalogRepository,
     GraphRecallPort,
     QueryEmbeddingPort,
@@ -84,6 +86,60 @@ def _failure_metadata(error: DependencyCallFailed) -> tuple[dict[str, object], .
             "operation": error.operation,
             "attempts": error.attempts,
             "outcome": "TIMEOUT" if error.timed_out else "RETRY_EXHAUSTED",
+        },
+    )
+
+
+async def _read_catalog_evidence(
+    catalog: CatalogRepository,
+    evidence_reader: CatalogEvidenceReader | None,
+    *,
+    as_of: datetime,
+    deadline_at: datetime,
+    retry_policy: RetryPolicy,
+    operation_name: str,
+) -> tuple[CatalogEvidenceSnapshot, tuple[dict[str, object], ...]]:
+    """Read one task-scoped evidence snapshot with legacy fallback support."""
+
+    if evidence_reader is not None:
+        snapshot, attempts = await call_with_retry(
+            lambda: evidence_reader.read_evidence_snapshot(available_at=as_of),
+            operation_name=operation_name,
+            deadline_at=deadline_at,
+            policy=retry_policy,
+        )
+        return snapshot, (
+            {"operation": operation_name, "attempts": attempts, "outcome": "SUCCESS"},
+        )
+
+    resources, resource_attempts = await call_with_retry(
+        lambda: catalog.list_resources(available_at=as_of),
+        operation_name=f"{operation_name}.resources",
+        deadline_at=deadline_at,
+        policy=retry_policy,
+    )
+    tags, tag_attempts = await call_with_retry(
+        lambda: catalog.list_resource_tags(
+            resource_ids=tuple(resource.id for resource in resources)
+        ),
+        operation_name=f"{operation_name}.tags",
+        deadline_at=deadline_at,
+        policy=retry_policy,
+    )
+    return CatalogEvidenceSnapshot(
+        resources=resources,
+        tags=tags,
+        available_at=as_of,
+    ), (
+        {
+            "operation": f"{operation_name}.resources",
+            "attempts": resource_attempts,
+            "outcome": "SUCCESS",
+        },
+        {
+            "operation": f"{operation_name}.tags",
+            "attempts": tag_attempts,
+            "outcome": "SUCCESS",
         },
     )
 
@@ -243,11 +299,13 @@ class CatalogResourceSemanticAgent:
         self,
         catalog: CatalogRepository,
         *,
+        evidence_reader: CatalogEvidenceReader | None = None,
         graph: GraphRecallPort | None = None,
         vector: VectorRecallPort | None = None,
         retry_policy: RetryPolicy = RetryPolicy(),
     ) -> None:
         self._catalog = catalog
+        self._evidence_reader = evidence_reader
         self._graph_enabled = graph is not None
         self._vector_enabled = vector is not None
         self._retry_policy = retry_policy
@@ -255,20 +313,16 @@ class CatalogResourceSemanticAgent:
     async def handle(self, message: AgentMessage) -> AgentResult[dict[str, object]]:
         as_of = _evaluation_at(message)
         try:
-            resources, resource_attempts = await call_with_retry(
-                lambda: self._catalog.list_resources(available_at=as_of),
-                operation_name="catalog.list_resources.probe",
+            evidence, evidence_tool_calls = await _read_catalog_evidence(
+                self._catalog,
+                self._evidence_reader,
+                as_of=as_of,
                 deadline_at=message.deadline_at,
-                policy=self._retry_policy,
+                retry_policy=self._retry_policy,
+                operation_name="catalog.read_evidence_snapshot.probe",
             )
-            tags, tag_attempts = await call_with_retry(
-                lambda: self._catalog.list_resource_tags(
-                    resource_ids=tuple(resource.id for resource in resources)
-                ),
-                operation_name="catalog.list_resource_tags.probe",
-                deadline_at=message.deadline_at,
-                policy=self._retry_policy,
-            )
+            resources = evidence.resources
+            tags = evidence.tags
         except DependencyCallFailed as error:
             return _result(
                 message,
@@ -331,8 +385,7 @@ class CatalogResourceSemanticAgent:
             warnings=warnings,
             fallback_used=False,
             tool_calls=(
-                {"operation": "catalog.list_resources.probe", "attempts": resource_attempts, "outcome": "SUCCESS"},
-                {"operation": "catalog.list_resource_tags.probe", "attempts": tag_attempts, "outcome": "SUCCESS"},
+                *evidence_tool_calls,
             ),
             decision=AgentDecision(
                 action=AgentActionType.PROBE_RESOURCES,
@@ -353,6 +406,7 @@ class CatalogCandidateRecallAgent:
         self,
         catalog: CatalogRepository,
         *,
+        evidence_reader: CatalogEvidenceReader | None = None,
         graph: GraphRecallPort | None = None,
         graph_version: str | None = None,
         vector: VectorRecallPort | None = None,
@@ -362,6 +416,7 @@ class CatalogCandidateRecallAgent:
         retry_policy: RetryPolicy = RetryPolicy(),
     ) -> None:
         self._catalog = catalog
+        self._evidence_reader = evidence_reader
         self._graph = graph
         self._graph_version = graph_version
         self._vector = vector
@@ -383,24 +438,21 @@ class CatalogCandidateRecallAgent:
         }
         limit = max(1, min(int(message.payload.get("limit", 5)), 20))
         try:
-            resources, resource_attempts = await call_with_retry(
-                lambda: self._catalog.list_resources(available_at=as_of),
-                operation_name="catalog.list_resources.recall",
+            evidence, evidence_tool_calls = await _read_catalog_evidence(
+                self._catalog,
+                self._evidence_reader,
+                as_of=as_of,
                 deadline_at=message.deadline_at,
-                policy=self._retry_policy,
+                retry_policy=self._retry_policy,
+                operation_name="catalog.read_evidence_snapshot.recall",
             )
+            resources = evidence.resources
             eligible = tuple(
                 resource for resource in resources
                 if not requested_types or resource.resource_type in requested_types
             )
-            tags, tag_attempts = await call_with_retry(
-                lambda: self._catalog.list_resource_tags(
-                    resource_ids=tuple(resource.id for resource in eligible)
-                ),
-                operation_name="catalog.list_resource_tags.recall",
-                deadline_at=message.deadline_at,
-                policy=self._retry_policy,
-            )
+            eligible_ids = {resource.id for resource in eligible}
+            tags = tuple(tag for tag in evidence.tags if tag.resource_id in eligible_ids)
         except DependencyCallFailed as error:
             return _result(
                 message,
@@ -687,8 +739,7 @@ class CatalogCandidateRecallAgent:
             + vector_warning,
             fallback_used=bool(coverage_warning or graph_warning or vector_warning),
             tool_calls=(
-                {"operation": "catalog.list_resources.recall", "attempts": resource_attempts, "outcome": "SUCCESS"},
-                {"operation": "catalog.list_resource_tags.recall", "attempts": tag_attempts, "outcome": "SUCCESS"},
+                *evidence_tool_calls,
             )
             + graph_tool_calls
             + vector_tool_calls,

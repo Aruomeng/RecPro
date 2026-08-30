@@ -12,7 +12,7 @@ import inspect
 from typing import Awaitable, Callable
 
 from backend.app.api.errors import PublicAPIError
-from backend.app.identity.domain import ROLE_PERMISSIONS, RoleCode
+from backend.app.identity.public import RoleCode, has_effective_permission
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from backend.app.shared_kernel.contracts.errors import ErrorCode
 
@@ -85,29 +85,6 @@ async def resolve_user_principal(
         return AuthenticatedPrincipal(user_id=demo_user_id, roles=frozenset({"user"}))
 
     raise _authentication_error()
-
-
-def has_effective_permission(principal: AuthenticatedPrincipal, permission: str) -> bool:
-    """Return the permission set implied by the verified identity.
-
-    A local ``VersionedPrincipalResolver`` enriches principals with the current
-    permission set, while an OIDC/JWKS adapter may intentionally return only
-    verified roles.  Deriving the fixed role permissions here keeps both
-    adapters subject to the same least-privilege boundary without duplicating
-    the role matrix in every HTTP route.  Consent-derived permissions remain
-    explicit fields on the principal and are never inferred from a role.
-    """
-
-    if principal.has_permission(permission):
-        return True
-    for raw_role in principal.roles:
-        try:
-            role = RoleCode(raw_role)
-        except ValueError:
-            continue
-        if permission in ROLE_PERMISSIONS.get(role, frozenset()):
-            return True
-    return False
 
 
 def require_permission(

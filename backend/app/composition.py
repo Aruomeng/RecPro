@@ -30,6 +30,7 @@ from backend.app.feedback.application.service import (
 )
 from backend.app.profile.adapters.behavior_mysql import MySQLBehaviorAppender
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
+from backend.app.profile.adapters.factory import MySQLProfileSnapshotReaderFactory
 from backend.app.profile.adapters.refresh_mysql import MySQLProfileRefreshAdapter
 from backend.app.profile.application.refresh import ProfileOutboxWorker
 from backend.app.observability.adapters.mysql_transition import MySQLStateTransitionWriter
@@ -807,7 +808,9 @@ def build_agent_workspace_profile_reader(
 
     if settings.app_env == "production":
         raise ValueError("workspace profile reader requires a reviewed non-production root")
-    return MySQLWorkspaceProfileReader(_mysql_connection_factory(settings))
+    return MySQLWorkspaceProfileReader(
+        MySQLProfileSnapshotReaderFactory(_mysql_connection_factory(settings))
+    )
 
 
 def build_profile_outbox_worker(
