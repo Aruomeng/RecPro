@@ -33,10 +33,11 @@ export const useRecommendationStore = defineStore("recommendation", () => {
   const items = computed(() => result.value?.items ?? []);
   const agentStates = computed(() => Object.fromEntries(AGENT_ROLES.map(([name]) => {
     const related = events.value.filter((event) => event.agent_name === name);
-    const latest = related.at(-1);
+    const latest = [...related].reverse().find((event) => ["AGENT_STARTED", "AGENT_COMPLETED", "AGENT_FAILED"].includes(event.event_type)) ?? related.at(-1);
     let state = "waiting";
     if (latest?.event_type === "AGENT_STARTED") state = "working";
-    if (latest?.event_type === "AGENT_COMPLETED") state = latest.outcome === "FAILED" ? "failed" : latest.fallback_used ? "degraded" : "complete";
+    if (latest?.event_type === "AGENT_FAILED" || latest?.outcome === "FAILED") state = "failed";
+    else if (latest?.event_type === "AGENT_COMPLETED") state = latest.fallback_used || latest.outcome === "PARTIAL" || latest.outcome === "DEGRADED" ? "degraded" : "complete";
     return [name, { state, event: latest }];
   })));
 
@@ -46,14 +47,14 @@ export const useRecommendationStore = defineStore("recommendation", () => {
     await recommendationRunClient.stream(accepted, () => auth.requestIdentity, (event) => {
       events.value.push(event);
       if (event.event_type === "TASK_FAILED") error.value = `协作任务失败：${event.error_code ?? "UNKNOWN"}`;
-    }, controller?.signal);
+    }, controller?.signal, auth.refresh);
     const state = await recommendationRunClient.state(accepted.task_id, auth.requestIdentity);
     if (state.result) {
       result.value = state.result;
       phase.value = state.result.status === "WAITING_CLARIFICATION" ? "clarification" : "success";
-    } else if (state.error_code) {
+    } else if (state.error_code || state.status === "FAILED") {
       phase.value = "error";
-      error.value = `协作任务失败：${state.error_code}`;
+      error.value = `协作任务失败：${state.error_code ?? "RUN_FAILED"}`;
     }
   }
 

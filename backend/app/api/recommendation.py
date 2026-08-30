@@ -15,7 +15,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Response
 from pydantic import Field, field_validator
 
-from backend.app.api.auth import PrincipalResolver, resolve_user_principal
+from backend.app.api.auth import PrincipalResolver, require_permission, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
 from backend.app.api.models import AgentActionResponse, ErrorResponse, StrictModel
@@ -377,6 +377,21 @@ def _resolve_demo_user(
     return resolved_user_id
 
 
+def _require_recommendation_access(
+    principal: AuthenticatedPrincipal, *, formal_auth: bool,
+) -> None:
+    """Apply the role boundary shared by sync and async recommendation APIs.
+
+    The local demo remains an explicitly isolated session-less user identity;
+    every Bearer request must carry the fixed ``user`` capability (or a
+    composed role that includes it).  Consent is handled separately by the
+    trusted command builder and only controls profile access.
+    """
+
+    if formal_auth:
+        require_permission(principal, "recommendation.self.execute")
+
+
 def _require_demo_identity(
     *,
     demo_user_id: int | None,
@@ -496,6 +511,7 @@ def create_recommendation_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_recommendation_access(principal, formal_auth=authorization is not None)
         try:
             result = await service.create_task(
                 build_recommendation_command(
@@ -556,6 +572,7 @@ def create_recommendation_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_recommendation_access(principal, formal_auth=authorization is not None)
         try:
             payload = await service.get_task(task_id, user_id=principal.user_id)
         except LookupError as exc:
@@ -617,6 +634,7 @@ def create_recommendation_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_recommendation_access(principal, formal_auth=authorization is not None)
         submit = getattr(service, "submit_clarification", None)
         if submit is None:
             raise PublicAPIError(

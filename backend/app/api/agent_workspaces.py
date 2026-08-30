@@ -13,11 +13,12 @@ from pydantic import Field
 from backend.app.agent_workspace.application.public import (
     AgentWorkspaceBroker,
     WorkspaceCapacityError,
+    WorkspaceConflictError,
     WorkspaceNotFoundError,
     WorkspaceObservationCapacityError,
     agent_catalog,
 )
-from backend.app.api.auth import PrincipalResolver, resolve_user_principal
+from backend.app.api.auth import PrincipalResolver, require_permission, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.models import ErrorResponse, StrictModel
 from backend.app.shared_kernel.contracts.errors import ErrorCode
@@ -107,6 +108,16 @@ def create_agent_workspace_router(
             resolver=principal_resolver,
         )
 
+    def require_workspace_access(
+        actor: AuthenticatedPrincipal, *, formal_auth: bool,
+    ) -> None:
+        # Guest exploration is intentionally read-only but still gets a
+        # session-scoped in-memory workspace.  A formal Bearer session must
+        # carry the explicit self-use capability; the session-less synthetic
+        # demo is allowed only by the resolver's isolated demo path.
+        if formal_auth:
+            require_permission(actor, "workspace.self.use")
+
     @router.get("/agents", response_model=AgentCatalogResponse, operation_id="agent_catalog_v1")
     async def agents() -> AgentCatalogResponse:
         return AgentCatalogResponse(agents=agent_catalog())
@@ -118,6 +129,7 @@ def create_agent_workspace_router(
         authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> WorkspaceCreatedResponse:
         actor = await principal(demo_user_id, authorization)
+        require_workspace_access(actor, formal_auth=authorization is not None)
         expected_mode = (
             "authenticated" if actor.session_id is not None
             else "guest" if not actor.roles else "demo"
@@ -132,7 +144,10 @@ def create_agent_workspace_router(
                 session_id=request.session_id,
                 user_id=actor.user_id,
                 mode=request.mode,
-                personalization_enabled=actor.has_permission("personalization.profile.use"),
+                personalization_enabled=(
+                    actor.has_permission("personalization.profile.use")
+                    or request.mode == "demo"
+                ),
             )
         except WorkspaceCapacityError as exc:
             raise PublicAPIError(429, ErrorCode.REQUEST_DEADLINE_EXCEEDED, "The bounded Agent workspace capacity has been reached.", True, {"max_workspaces": 32}) from exc
@@ -150,6 +165,7 @@ def create_agent_workspace_router(
         authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> WorkspaceSnapshotResponse:
         actor = await principal(demo_user_id, authorization)
+        require_workspace_access(actor, formal_auth=authorization is not None)
         try:
             return WorkspaceSnapshotResponse.model_validate(broker.snapshot(workspace_id, user_id=actor.user_id))
         except WorkspaceNotFoundError as exc:
@@ -166,10 +182,15 @@ def create_agent_workspace_router(
         if idempotency_key != str(request.observation_id):
             raise PublicAPIError(409, ErrorCode.REQUEST_ID_MISMATCH, "Idempotency-Key must equal observation_id.", False, {})
         actor = await principal(demo_user_id, authorization)
+        require_workspace_access(actor, formal_auth=authorization is not None)
         try:
             snapshot, replayed = broker.observe(
                 workspace_id, user_id=actor.user_id, event_type=request.event_type,
                 idempotency_key=idempotency_key, payload=request.payload,
+                personalization_enabled=(
+                    actor.has_permission("personalization.profile.use")
+                    or (authorization is None and actor.has_role("user"))
+                ),
             )
         except WorkspaceNotFoundError as exc:
             raise _not_found(exc) from exc
@@ -194,10 +215,27 @@ def create_agent_workspace_router(
         authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> DirectiveActionResponse:
         actor = await principal(demo_user_id, authorization)
+        require_workspace_access(actor, formal_auth=authorization is not None)
         try:
             return DirectiveActionResponse(directive=broker.directive_action(workspace_id, user_id=actor.user_id, directive_id=directive_id, action=request.action))
         except WorkspaceNotFoundError as exc:
             raise _not_found(exc) from exc
+        except WorkspaceConflictError as exc:
+            raise PublicAPIError(
+                409,
+                ErrorCode.STALE_CONTEXT_VERSION,
+                "The interaction directive is no longer actionable.",
+                False,
+                {"error_type": type(exc).__name__},
+            ) from exc
+        except ValueError as exc:
+            raise PublicAPIError(
+                422,
+                ErrorCode.INVALID_JSON,
+                "The interaction directive action is invalid.",
+                False,
+                {"error_type": type(exc).__name__},
+            ) from exc
 
     @router.get("/agent-workspaces/{workspace_id}/events", responses=errors, operation_id="agent_workspace_stream_events_v1")
     async def stream_workspace(
@@ -207,6 +245,7 @@ def create_agent_workspace_router(
         authorization: str | None = Header(default=None, alias="Authorization"),
     ) -> StreamingResponse:
         actor = await principal(demo_user_id, authorization)
+        require_workspace_access(actor, formal_auth=authorization is not None)
         try:
             broker.snapshot(workspace_id, user_id=actor.user_id)
         except WorkspaceNotFoundError as exc:

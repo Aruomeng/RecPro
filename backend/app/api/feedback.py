@@ -9,7 +9,7 @@ from uuid import UUID
 from fastapi import APIRouter, Header, Path, Response
 from pydantic import Field, field_validator, model_validator
 
-from backend.app.api.auth import PrincipalResolver, resolve_user_principal
+from backend.app.api.auth import PrincipalResolver, require_permission, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.health import CORRELATION_HEADERS, REQUEST_ID_PARAMETER
 from backend.app.api.models import AgentActionResponse, ErrorResponse, StrictModel
@@ -245,9 +245,11 @@ async def _principal(
     )
 
 
-def _require_behavior_consent(principal: object) -> None:
+def _require_behavior_consent(principal: object, *, formal_auth: bool) -> None:
     session_id = getattr(principal, "session_id", None)
     has_permission = getattr(principal, "has_permission", lambda _value: False)
+    if formal_auth:
+        require_permission(principal, "feedback.self.write")
     if session_id is not None and not has_permission("personalization.behavior.write"):
         raise PublicAPIError(
             status_code=403,
@@ -324,7 +326,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
-        _require_behavior_consent(principal)
+        _require_behavior_consent(principal, formal_auth=authorization is not None)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
@@ -441,7 +443,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
-        _require_behavior_consent(principal)
+        _require_behavior_consent(principal, formal_auth=authorization is not None)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)
@@ -547,7 +549,7 @@ def create_feedback_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
-        _require_behavior_consent(principal)
+        _require_behavior_consent(principal, formal_auth=authorization is not None)
         if workspace_broker is not None and agent_workspace_id is not None:
             try:
                 workspace_broker.snapshot(agent_workspace_id, user_id=principal.user_id)

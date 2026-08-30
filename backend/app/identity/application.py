@@ -18,6 +18,7 @@ from backend.app.identity.domain import (
     ConsentAction,
     ConsentFact,
     ConsentScope,
+    DeclaredProfile,
     IdentifierType,
     IdentityError,
     LoginResult,
@@ -105,7 +106,7 @@ class IdentityService:
         normalized = self._identifiers.normalize(identifier_type, identifier)
         identifier_hash = self._identifiers.digest(normalized)
         login_identifier = await self._repo.find_identifier(identifier_type, identifier_hash)
-        if login_identifier is None:
+        if login_identifier is None or login_identifier.status != "ACTIVE":
             self._passwords.burn_unknown(new_password)
             raise IdentityError("ACTION_TOKEN_INVALID")
         now = self._now()
@@ -133,7 +134,7 @@ class IdentityService:
         normalized = self._identifiers.normalize(identifier_type, identifier)
         identifier_hash = self._identifiers.digest(normalized)
         login_identifier = await self._repo.find_identifier(identifier_type, identifier_hash)
-        if login_identifier is None:
+        if login_identifier is None or login_identifier.status != "ACTIVE":
             self._passwords.burn_unknown(password)
             await self._event(
                 event_type="LOGIN", outcome="DENIED", user_id=None,
@@ -299,7 +300,7 @@ class IdentityService:
         login_identifier = await self._repo.find_identifier(
             identifier_type, self._identifiers.digest(normalized),
         )
-        if login_identifier is None:
+        if login_identifier is None or login_identifier.status != "ACTIVE":
             self._passwords.burn_unknown(new_password)
             raise IdentityError("ACTION_TOKEN_INVALID")
         existing = await self._repo.get_credential(login_identifier.user_id)
@@ -411,6 +412,51 @@ class IdentityService:
             session_uuid=actor.session_id, occurred_at=self._now(),
         ))
         return await self._repo.effective_consents(actor.user_id)
+
+    async def read_declared_profile(
+        self, *, actor: AuthenticatedPrincipal,
+    ) -> tuple[DeclaredProfile | None, bool]:
+        """Read a declared profile only after the matching consent is present.
+
+        The account and consent checks happen before the profile repository is
+        queried.  This keeps an unconsented profile out of both SQL traces and
+        recommendation context; the compatibility projection is not an
+        authority for consent.
+        """
+
+        _require_profile_actor(actor, "profile.self.read")
+        consents = await self._repo.effective_consents(actor.user_id)
+        granted = bool(consents[ConsentScope.DECLARED_PROFILE])
+        if not granted:
+            return None, False
+        return await self._repo.get_declared_profile(actor.user_id), True
+
+    async def update_declared_profile(
+        self, *, actor: AuthenticatedPrincipal, major: str | None,
+        grade: str | None, research_direction: str | None,
+        preferred_language: str | None,
+    ) -> DeclaredProfile:
+        """Append a new declared-profile version and refresh its projection."""
+
+        _require_profile_actor(actor, "profile.self.update")
+        consents = await self._repo.effective_consents(actor.user_id)
+        if not consents[ConsentScope.DECLARED_PROFILE]:
+            raise IdentityError("PERSONALIZATION_CONSENT_REQUIRED")
+        values = {
+            "major": _profile_text(major, 128),
+            "grade": _profile_text(grade, 32),
+            "research_direction": _profile_text(research_direction, 255),
+            "preferred_language": _profile_text(preferred_language, 32),
+        }
+        return await self._repo.save_declared_profile(
+            user_id=actor.user_id,
+            major=values["major"],
+            grade=values["grade"],
+            research_direction=values["research_direction"],
+            preferred_language=values["preferred_language"],
+            personalization_enabled=True,
+            now=self._now(),
+        )
 
     async def validate_principal(
         self, principal: AuthenticatedPrincipal,
@@ -529,6 +575,26 @@ class IdentityService:
 def _require_any_role(actor: AuthenticatedPrincipal, *roles: RoleCode) -> None:
     if not any(actor.has_role(role.value) for role in roles):
         raise IdentityError("ROLE_REQUIRED")
+
+
+def _require_profile_actor(actor: AuthenticatedPrincipal, permission: str) -> None:
+    if actor.session_id is None or not actor.has_role(RoleCode.USER.value):
+        raise IdentityError("USER_SESSION_REQUIRED")
+    if not actor.has_permission(permission):
+        raise IdentityError("ROLE_REQUIRED")
+
+
+def _profile_text(value: str | None, max_length: int) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise IdentityError("INVALID_PROFILE_INPUT")
+    clean = value.strip()
+    if not clean:
+        return None
+    if len(clean) > max_length:
+        raise IdentityError("INVALID_PROFILE_INPUT")
+    return clean
 
 
 def consent_evidence_hash(*, policy_version: str, scope: ConsentScope, action: ConsentAction) -> str:

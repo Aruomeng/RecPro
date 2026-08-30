@@ -15,6 +15,17 @@ class WorkspaceObservation:
     context_version: int
     event_type: str
     payload: Mapping[str, object]
+    # Capture the public context at acceptance time.  The dispatcher processes
+    # observations serially per workspace, but the mutable workspace can still
+    # receive a newer route/query while an earlier read is waiting on I/O.  A
+    # handler must reason about the version it was asked to process, not about
+    # whichever context happens to be current when it starts.
+    context_route: str = "/"
+    context_query: str = ""
+    context_top_topics: tuple[str, ...] = field(default_factory=tuple)
+    context_external_context: tuple[Mapping[str, object], ...] = field(default_factory=tuple)
+    context_source_statuses: Mapping[str, str] = field(default_factory=dict)
+    context_personalization_enabled: bool = False
 
 
 @dataclass(frozen=True, slots=True)

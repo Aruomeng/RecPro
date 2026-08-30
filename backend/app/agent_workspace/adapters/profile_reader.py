@@ -30,6 +30,11 @@ class MySQLWorkspaceProfileReader:
                 "confidence": max(0.0, min(1.0, snapshot.profile_confidence)),
                 "interest_count": min(len(snapshot.interests), 100),
                 "negative_count": min(len(snapshot.negatives), 100),
+                # Only the version and derived signal count are exposed to the
+                # global Agent workspace; declared profile text remains in the
+                # identity/profile boundary.
+                "declared_profile_version": snapshot.declared_profile_version,
+                "declared_signal_count": min(len(snapshot.declared_signals), 100),
             }
         finally:
             await connection.rollback()

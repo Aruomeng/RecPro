@@ -20,6 +20,7 @@ from backend.app.identity.domain import (
     ConsentAction,
     ConsentFact,
     ConsentScope,
+    DeclaredProfile,
     IdentifierType,
     IdentityError,
     LoginIdentifier,
@@ -46,6 +47,8 @@ class InMemoryIdentityRepository:
         self.refresh_tokens: dict[bytes, RefreshTokenRecord] = {}
         self.action_tokens: dict[tuple[ActionTokenPurpose, bytes], ActionTokenRecord] = {}
         self.consents: list[ConsentFact] = []
+        self.declared_profiles: dict[int, DeclaredProfile] = {}
+        self.declared_profile_history: list[DeclaredProfile] = []
         self.security_events: list[SecurityEvent] = []
         self.idempotency: dict[str, AccountProvisioningResult] = {}
 
@@ -286,6 +289,34 @@ class InMemoryIdentityRepository:
         for scope, fact in latest.items():
             result[scope] = fact.action is ConsentAction.GRANT
         return result
+
+    async def get_declared_profile(self, user_id: int) -> DeclaredProfile | None:
+        return deepcopy(self.declared_profiles.get(user_id))
+
+    async def save_declared_profile(
+        self, *, user_id: int, major: str | None, grade: str | None,
+        research_direction: str | None, preferred_language: str | None,
+        personalization_enabled: bool, now: datetime,
+    ) -> DeclaredProfile:
+        async with self._lock:
+            self._require_account(user_id)
+            current = self.declared_profiles.get(user_id)
+            fields = (major, grade, research_direction, preferred_language, personalization_enabled)
+            if current is not None and (
+                current.major, current.grade, current.research_direction,
+                current.preferred_language, current.personalization_enabled,
+            ) == fields:
+                return deepcopy(current)
+            version = (current.declared_version if current is not None else 0) + 1
+            profile = DeclaredProfile(
+                user_id=user_id, declared_version=version, major=major,
+                grade=grade, research_direction=research_direction,
+                preferred_language=preferred_language,
+                personalization_enabled=personalization_enabled, updated_at=_time(now),
+            )
+            self.declared_profile_history.append(deepcopy(profile))
+            self.declared_profiles[user_id] = deepcopy(profile)
+            return deepcopy(profile)
 
     async def append_security_event(self, event: SecurityEvent) -> None:
         if len(str(event.metadata)) > 2048:

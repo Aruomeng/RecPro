@@ -247,7 +247,12 @@ function presentError(error: unknown): string {
       REQUEST_DEADLINE_EXCEEDED: "推荐请求超时，请稍后重试。",
       RECOMMENDATION_REQUEST_TIMEOUT: "推荐请求未在浏览器等待时间内完成，请稍后重试。",
       INVALID_RECOMMENDATION_RESPONSE: "推荐响应未通过契约校验。",
+      INVALID_RUN_RESULT: "推荐结果字段不符合契约，未展示不可靠数据。",
     };
+    const details = error.details;
+    if (error.code === "INVALID_RUN_RESULT" && details && typeof details.path === "string") {
+      return `${messages.INVALID_RUN_RESULT}（字段 ${details.path}）`;
+    }
     return messages[error.code] ?? `推荐请求失败（${error.code}）。`;
   }
   return "推荐请求暂时失败，请稍后重试。";

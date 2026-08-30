@@ -22,6 +22,7 @@ from backend.app.api.recommendation import (
     RecommendationExecutionResponse,
     RecommendationTaskCreateRequest,
     _project_public_warnings,
+    _require_recommendation_access,
     _resolve_principal,
     _validate_request_shape,
     build_recommendation_command,
@@ -97,7 +98,7 @@ def create_recommendation_run_router(
     }
 
     async def principal(demo_user_id: int | None, authorization: str | None):
-        return await _resolve_principal(
+        actor = await _resolve_principal(
             request_user_id=None,
             authorization=authorization,
             demo_user_id=demo_user_id,
@@ -105,6 +106,8 @@ def create_recommendation_run_router(
             demo_identity_enabled=demo_identity_enabled,
             principal_resolver=principal_resolver,
         )
+        _require_recommendation_access(actor, formal_auth=authorization is not None)
+        return actor
 
     async def execute(command: RecommendationTaskCommand, idempotency_key: str, sink: Any, workspace_id: UUID | None, user_id: int) -> None:
         task_id, trace_id = derive_task_identity_values(command)

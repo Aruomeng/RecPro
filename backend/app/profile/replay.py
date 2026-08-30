@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Iterable
@@ -63,6 +64,24 @@ class NegativeSignal:
 
 
 @dataclass(frozen=True, slots=True)
+class DeclaredProfileForReplay:
+    """A consent-gated declared profile snapshot used by recommendation.
+
+    This value intentionally lives in the profile bounded context instead of
+    importing the IAM domain.  It is an as-of projection, and callers expose
+    only its version/hash or derived tag IDs to Agent payloads.
+    """
+
+    declared_version: int
+    major: str | None
+    grade: str | None
+    research_direction: str | None
+    preferred_language: str | None
+    personalization_enabled: bool
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class ProfileSnapshot:
     user_id: int
     as_of: datetime
@@ -74,6 +93,9 @@ class ProfileSnapshot:
     interests: tuple[InterestSignal, ...]
     negatives: tuple[NegativeSignal, ...]
     input_hash: str
+    declared_profile_version: int | None = None
+    declared_profile_hash: str | None = None
+    declared_signals: tuple[InterestSignal, ...] = ()
 
 
 def _bounded_weight(raw_signal: float) -> float:
@@ -105,6 +127,8 @@ def compute_profile_snapshot(
     as_of: datetime,
     events: Iterable[BehaviorForReplay],
     formula_version: str = "profile-g2-v1",
+    declared_profile: DeclaredProfileForReplay | None = None,
+    declared_signals: Iterable[InterestSignal] = (),
 ) -> ProfileSnapshot:
     """Compute a replay snapshot from facts at or before ``as_of``.
 
@@ -162,7 +186,45 @@ def compute_profile_snapshot(
         )
         for (tag_id, reason_code), raw in sorted(negative_raw.items())
     )
+    declared = tuple(
+        sorted(
+            (
+                signal
+                for signal in declared_signals
+                if declared_profile is not None
+                and declared_profile.personalization_enabled
+                and isinstance(signal.tag_id, int)
+                and not isinstance(signal.tag_id, bool)
+                and signal.tag_id > 0
+                and isinstance(signal.weight, (int, float))
+                and not isinstance(signal.weight, bool)
+                and math.isfinite(float(signal.weight))
+                and 0.0 <= float(signal.weight) <= 1.0
+            ),
+            key=lambda signal: (signal.tag_id, -signal.weight),
+        )
+    )
     focus = max(interests, key=lambda signal: (signal.raw_signal, -signal.tag_id), default=None)
+    declared_profile_hash: str | None = None
+    declared_payload: dict[str, object] | None = None
+    if declared_profile is not None:
+        declared_payload = {
+            "declared_version": declared_profile.declared_version,
+            "major": declared_profile.major,
+            "grade": declared_profile.grade,
+            "research_direction": declared_profile.research_direction,
+            "preferred_language": declared_profile.preferred_language,
+            "personalization_enabled": declared_profile.personalization_enabled,
+            "updated_at": declared_profile.updated_at.isoformat(),
+        }
+        declared_profile_hash = hashlib.sha256(
+            json.dumps(
+                declared_payload,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            ).encode("utf-8")
+        ).hexdigest()
     confidence = max(0.0, min(1.0, len(eligible) / 5.0))
     input_hash = hashlib.sha256(
         json.dumps(
@@ -171,6 +233,16 @@ def compute_profile_snapshot(
                 "as_of": as_of.isoformat(),
                 "formula_version": formula_version,
                 "events": [_canonical_event(event) for event in eligible],
+                "declared_profile": declared_payload,
+                "declared_signals": [
+                    {
+                        "tag_id": signal.tag_id,
+                        "weight": signal.weight,
+                        "source_count": signal.source_count,
+                        "last_event_at": signal.last_event_at.isoformat(),
+                    }
+                    for signal in declared
+                ],
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -188,4 +260,9 @@ def compute_profile_snapshot(
         interests=interests,
         negatives=negatives,
         input_hash=input_hash,
+        declared_profile_version=(
+            declared_profile.declared_version if declared_profile is not None else None
+        ),
+        declared_profile_hash=declared_profile_hash,
+        declared_signals=declared,
     )

@@ -15,8 +15,11 @@ const stateText: Record<string, string> = {
 };
 const eventText: Record<string, string> = {
   WORKSPACE_CREATED: "协作空间已建立", OBSERVATION_ACCEPTED: "接收新情境", AGENT_STARTED: "开始执行",
-  AGENT_COMPLETED: "完成局部任务", RECOMMENDATION_EVENT: "推荐链事件", RECOMMENDATION_COMPLETED: "推荐任务结束",
-  DIRECTIVE_PROPOSED: "提出交互建议", DIRECTIVE_ACTIONED: "用户处理建议",
+  AGENT_COMPLETED: "完成局部任务", AGENT_FAILED: "局部任务失败", AGENT_TOOL_CALL: "调用只读工具",
+  RECOMMENDATION_EVENT: "推荐链事件", RECOMMENDATION_COMPLETED: "推荐任务结束",
+  RECOMMENDATION_HISTORY_REPLAY: "历史真实动作回放", OBSERVATION_COMPLETED: "情境处理完成",
+  OBSERVATION_FAILED: "情境处理失败", OBSERVATION_SUPERSEDED: "情境已由新版本接替",
+  DIRECTIVE_PROPOSED: "提出交互建议", DIRECTIVE_ACTIONED: "用户处理建议", DIRECTIVE_EXPIRED: "交互建议已过期",
 };
 const selected = computed(() => workspace.selectedAgent);
 const stateDistribution = computed(() => Object.entries(workspace.agents.reduce<Record<string, number>>((acc, agent) => { acc[agent.state] = (acc[agent.state] ?? 0) + 1; return acc; }, {})).sort((a,b) => b[1]-a[1]));
@@ -31,7 +34,11 @@ function time(event: WorkspaceEvent): string {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(event.occurred_at));
 }
 async function accept(directive: InteractionDirective): Promise<void> {
-  await workspace.action(directive, "ACCEPT");
+  try {
+    await workspace.action(directive, "ACCEPT");
+  } catch {
+    return;
+  }
   const action = directive.payload.action;
   const query = directive.payload.query;
   if (typeof query === "string" && query.trim()) recommendation.query = query;
@@ -63,6 +70,7 @@ async function accept(directive: InteractionDirective): Promise<void> {
         <div class="workspace-status">
           <span><i :class="workspace.state" />{{ workspace.state === 'online' ? '事件流已连接' : workspace.state === 'connecting' ? '正在连接' : '协作流降级' }}</span>
           <b>{{ workspace.activeCount }} 位工作中</b><em v-if="workspace.degradedCount">{{ workspace.degradedCount }} 位需关注</em>
+          <small class="workspace-context">上下文 v{{ workspace.contextVersion }} · {{ workspace.currentObservation?.event_type || '等待新观察' }}</small>
         </div>
         <section class="workspace-overview-grid">
           <div><span>状态分布</span><p><b v-for="([state,count]) in stateDistribution" :key="state">{{ stateText[state] || state }} {{ count }}</b></p></div>

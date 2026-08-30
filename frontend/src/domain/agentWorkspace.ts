@@ -28,9 +28,10 @@ export interface InteractionDirective {
   evidence_refs: string[];
   confidence: number;
   created_at: string;
+  updated_at?: string;
   expires_at: string;
   reversible: boolean;
-  status: "PROPOSED" | "AUTO_APPLIED" | "ACCEPTED" | "DISMISSED" | "UNDONE";
+  status: "PROPOSED" | "AUTO_APPLIED" | "ACCEPTED" | "DISMISSED" | "UNDONE" | "EXPIRED" | "SUPERSEDED";
 }
 
 export interface WorkspaceEvent {
@@ -72,7 +73,7 @@ export interface AgentWorkspaceSnapshot {
   session_id: string;
   mode: "guest" | "demo" | "authenticated";
   context_version: number;
-  orchestrator: { name: string; role: string; state: AgentWorkspaceState; current_route: string };
+  orchestrator: { name: string; role: string; state: AgentWorkspaceState; current_route: string; current_observation?: Record<string, unknown> | null };
   agents: WorkspaceAgent[];
   directives: InteractionDirective[];
   recent_events: WorkspaceEvent[];
@@ -119,10 +120,12 @@ export function isWorkspaceAgent(value: unknown): value is WorkspaceAgent {
 export function isDirective(value: unknown): value is InteractionDirective {
   if (!isRecord(value)) return false;
   const types: DirectiveType[] = ["SUGGEST_TOPICS", "SET_PRIMARY_ENTRY", "PREFER_OUTPUT_TYPE", "SET_EXPLANATION_DENSITY", "SHOW_GUIDANCE", "SHOW_DEGRADED_NOTICE", "SUGGEST_NEXT_ACTION"];
+  const statuses = ["PROPOSED", "AUTO_APPLIED", "ACCEPTED", "DISMISSED", "UNDONE", "EXPIRED", "SUPERSEDED"];
   return typeof value.directive_id === "string" && typeof value.type === "string" && types.includes(value.type as DirectiveType) &&
     typeof value.scope === "string" && ["AUTO_APPLY", "SUGGESTION", "NOTICE"].includes(String(value.behavior)) &&
     isRecord(value.payload) && Array.isArray(value.reason_codes) && Array.isArray(value.evidence_refs) &&
-    typeof value.confidence === "number" && value.confidence >= 0 && value.confidence <= 1 && typeof value.created_at === "string" && typeof value.expires_at === "string";
+    typeof value.confidence === "number" && Number.isFinite(value.confidence) && value.confidence >= 0 && value.confidence <= 1 &&
+    typeof value.created_at === "string" && typeof value.expires_at === "string" && statuses.includes(String(value.status));
 }
 
 export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {

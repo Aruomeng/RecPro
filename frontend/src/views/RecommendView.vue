@@ -18,7 +18,10 @@ const errorText = computed(() => recommendation.error.startsWith("INVALID_RUN_RE
   ? `推荐结果契约校验失败（${recommendation.error.match(/\$[^: ]*/)?.[0] ?? "字段类型不匹配"}）。未展示不可靠数据，可安全重试同一请求。`
   : recommendation.error);
 const completedEvents = computed(() => recommendation.events.filter((event) => event.event_type === "AGENT_COMPLETED"));
-const activeEvent = computed(() => [...recommendation.events].reverse().find((event) => event.event_type === "AGENT_STARTED"));
+const activeEvent = computed(() => {
+  const latest = [...recommendation.events].reverse().find((event) => ["AGENT_STARTED", "AGENT_COMPLETED", "AGENT_FAILED"].includes(event.event_type));
+  return latest?.event_type === "AGENT_STARTED" ? latest : undefined;
+});
 const elapsedMs = computed(() => completedEvents.value.reduce((sum, event) => sum + (event.duration_ms ?? 0), 0));
 const resultSummary = computed(() => {
   const items = recommendation.items;

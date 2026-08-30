@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 
 import type { ConsentScope } from "../domain/identity";
 import { useAuthStore } from "../stores/auth";
@@ -15,6 +15,12 @@ const oneTimeCode = ref("");
 const busy = ref(false);
 const notice = ref("");
 const consentBusy = ref<ConsentScope | null>(null);
+const profileBusy = ref(false);
+const profileNotice = ref("");
+const major = ref("");
+const grade = ref("");
+const researchDirection = ref("");
+const preferredLanguage = ref("");
 
 const mustChangePassword = computed(() => Boolean(auth.authenticated && auth.account?.must_change_password));
 const title = computed(() => mustChangePassword.value ? "首次登录必须修改密码" : auth.onboardingOpen ? "选择个性化授权" : tab.value === "login" ? "登录智慧图书馆" : tab.value === "activate" ? "激活读者账号" : "使用重置码修改密码");
@@ -24,6 +30,14 @@ const consentOptions: Array<{ scope: ConsentScope; title: string; text: string }
   { scope: "BEHAVIOR_LEARNING", title: "行为学习", text: "允许收藏、评分、借阅等新行为形成长期学习事实。" },
   { scope: "RESEARCH_ANALYTICS", title: "研究分析", text: "允许脱敏决策事实用于本地论文研究分析。" },
 ];
+
+watch(() => [auth.onboardingOpen, auth.declaredProfile] as const, () => {
+  const profile = auth.declaredProfile;
+  major.value = profile?.major ?? "";
+  grade.value = profile?.grade ?? "";
+  researchDirection.value = profile?.research_direction ?? "";
+  preferredLanguage.value = profile?.preferred_language ?? "";
+}, { immediate: true });
 
 function close(): void {
   if (busy.value || mustChangePassword.value) return;
@@ -62,8 +76,27 @@ async function submit(): Promise<void> {
 }
 async function toggleConsent(scope: ConsentScope): Promise<void> {
   consentBusy.value = scope;
-  try { await auth.setConsent(scope, !auth.consents?.[scope], "LOGIN_ONBOARDING"); }
+  try {
+    await auth.setConsent(scope, !auth.consents?.[scope], "LOGIN_ONBOARDING");
+    profileNotice.value = "";
+  } catch {
+    profileNotice.value = "授权暂未保存，请稍后重试。";
+  }
   finally { consentBusy.value = null; }
+}
+async function saveProfile(): Promise<void> {
+  profileBusy.value = true; profileNotice.value = "";
+  try {
+    await auth.saveDeclaredProfile({
+      major: major.value.trim() || null,
+      grade: grade.value.trim() || null,
+      research_direction: researchDirection.value.trim() || null,
+      preferred_language: preferredLanguage.value.trim() || null,
+    });
+    profileNotice.value = "声明画像已保存，后续推荐可按授权使用。";
+  } catch {
+    profileNotice.value = "声明画像暂未保存，请确认已开启“声明画像”授权。";
+  } finally { profileBusy.value = false; }
 }
 </script>
 
@@ -96,6 +129,18 @@ async function toggleConsent(scope: ConsentScope): Promise<void> {
               </button>
             </article>
           </div>
+          <form v-if="auth.consents?.DECLARED_PROFILE" class="declared-profile-form" @submit.prevent="saveProfile">
+            <div class="section-title-row"><h3>声明你的阅读画像</h3><span>可随时修改</span></div>
+            <div class="profile-form-grid">
+              <label><span>专业</span><input v-model.trim="major" maxlength="128" placeholder="例如：图书情报" /></label>
+              <label><span>年级 / 身份</span><input v-model.trim="grade" maxlength="32" placeholder="例如：研究生" /></label>
+              <label class="profile-form-wide"><span>研究方向</span><input v-model.trim="researchDirection" maxlength="255" placeholder="例如：知识图谱与推荐系统" /></label>
+              <label><span>偏好语言</span><input v-model.trim="preferredLanguage" maxlength="32" placeholder="例如：中文" /></label>
+            </div>
+            <button class="secondary-action profile-save" type="submit" :disabled="profileBusy">{{ profileBusy ? '正在保存…' : '保存声明画像' }}</button>
+            <p v-if="profileNotice" class="auth-message" role="status">{{ profileNotice }}</p>
+          </form>
+          <p v-else class="profile-consent-hint">开启“声明画像”后，可以填写专业、年级、研究方向和语言偏好；未授权时不会读取或保存这些信息。</p>
           <button class="primary-action auth-finish" type="button" @click="auth.onboardingOpen = false">完成并继续</button>
         </template>
 

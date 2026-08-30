@@ -233,6 +233,7 @@ class AgentWorkspaceBroker:
 
     def snapshot(self, workspace_id: UUID, *, user_id: int) -> dict[str, object]:
         workspace = self._visible(workspace_id, user_id)
+        self._expire_directives(workspace)
         return {
             "schema_version": "agent-workspace-v2",
             "workspace_id": str(workspace.workspace_id),
@@ -262,6 +263,7 @@ class AgentWorkspaceBroker:
         event_type: str,
         idempotency_key: str,
         payload: Mapping[str, object] | None = None,
+        personalization_enabled: bool | None = None,
     ) -> tuple[dict[str, object], bool]:
         workspace = self._visible(workspace_id, user_id)
         if event_type not in OBSERVATION_TYPES:
@@ -271,6 +273,17 @@ class AgentWorkspaceBroker:
         if idempotency_key in workspace.observation_key_set:
             return self.snapshot(workspace_id, user_id=user_id), True
         clean = self._sanitize_payload(payload or {})
+        if personalization_enabled is not None:
+            # The HTTP adapter derives this flag from the verified principal.
+            # Formal accounts require the consent-derived permission; an
+            # explicitly enabled research-demo workspace may use its synthetic
+            # profile, while guests can never opt into profile reads through a
+            # payload.
+            workspace.personalization_enabled = (
+                bool(personalization_enabled)
+                if workspace.mode in {"authenticated", "demo"}
+                else False
+            )
         coalesced_fingerprint: str | None = None
         if event_type in {"ROUTE_CHANGED", "READINESS_CHANGED", "RESOURCE_OPENED"}:
             coalesced_fingerprint = sha256(
@@ -302,6 +315,12 @@ class AgentWorkspaceBroker:
             context_version=workspace.context_version,
             event_type=event_type,
             payload=clean,
+            context_route=workspace.current_route,
+            context_query=workspace.current_query,
+            context_top_topics=workspace.topic_graph.top_topics(),
+            context_external_context=tuple(dict(item) for item in workspace.external_context),
+            context_source_statuses=dict(workspace.source_statuses),
+            context_personalization_enabled=workspace.personalization_enabled,
         )
         self._publish(workspace, "OBSERVATION_ACCEPTED", {
             "observation_type": event_type,
@@ -324,12 +343,23 @@ class AgentWorkspaceBroker:
 
     def directive_action(self, workspace_id: UUID, *, user_id: int, directive_id: UUID, action: str) -> dict[str, object]:
         workspace = self._visible(workspace_id, user_id)
+        self._expire_directives(workspace)
         if action not in DIRECTIVE_ACTIONS:
             raise ValueError("directive action is not allowed")
         directive = workspace.directives.get(str(directive_id))
         if directive is None:
             raise WorkspaceNotFoundError("directive not found")
-        directive["status"] = {"ACCEPT": "ACCEPTED", "DISMISS": "DISMISSED", "UNDO": "UNDONE"}[action]
+        next_status = {"ACCEPT": "ACCEPTED", "DISMISS": "DISMISSED", "UNDO": "UNDONE"}[action]
+        current_status = str(directive.get("status", ""))
+        if current_status == next_status:
+            # A repeated button click is a safe idempotent replay.  Do not
+            # generate another event or another audit fact.
+            return dict(directive)
+        if current_status not in {"PROPOSED", "AUTO_APPLIED", "ACCEPTED"}:
+            raise WorkspaceConflictError("directive is no longer actionable")
+        if action == "UNDO" and not bool(directive.get("reversible", False)):
+            raise WorkspaceConflictError("directive is not reversible")
+        directive["status"] = next_status
         directive["updated_at"] = _iso()
         if action in {"DISMISS", "UNDO"}:
             workspace.suppressed_until[str(directive["type"])] = time.monotonic() + 600.0
@@ -467,6 +497,12 @@ class AgentWorkspaceBroker:
             context_version=workspace.context_version,
             event_type=event_type,
             payload=clean,
+            context_route=workspace.current_route,
+            context_query=workspace.current_query,
+            context_top_topics=workspace.topic_graph.top_topics(),
+            context_external_context=tuple(dict(item) for item in workspace.external_context),
+            context_source_statuses=dict(workspace.source_statuses),
+            context_personalization_enabled=workspace.personalization_enabled,
         )
         dispatcher = self._runtime_dispatcher()
         self._publish(workspace, "OBSERVATION_ACCEPTED", {
@@ -544,9 +580,15 @@ class AgentWorkspaceBroker:
             if observation.event_type in handler.observation_types
             and not (
                 handler.agent_name == "UserProfileAgent"
-                and not workspace.personalization_enabled
+                and not (
+                    observation.context_personalization_enabled
+                    and workspace.personalization_enabled
+                )
             )
         ]
+        had_failure = False
+        had_degraded = False
+        successful_handlers = 0
         for handler in handlers:
             decision_id = uuid4()
             started = time.perf_counter()
@@ -569,8 +611,9 @@ class AgentWorkspaceBroker:
                 "replayed": False,
             })
             try:
-                result = await handler.handle(observation, self._handler_context(workspace))
+                result = await handler.handle(observation, self._handler_context(workspace, observation))
             except Exception as exc:
+                had_failure = True
                 duration_ms = max(0, int((time.perf_counter() - started) * 1000))
                 self._set_agent(
                     workspace, handler.agent_name, "FAILED",
@@ -590,34 +633,60 @@ class AgentWorkspaceBroker:
                     "observation_context_version": observation.context_version,
                 })
                 continue
-            self._apply_handler_result(
+            handler_state = self._apply_handler_result(
                 workspace,
                 result,
                 decision_id=decision_id,
                 context_version=observation.context_version,
                 measured_ms=max(0, int((time.perf_counter() - started) * 1000)),
             )
+            had_failure = had_failure or handler_state == "FAILED"
+            had_degraded = had_degraded or handler_state == "DEGRADED"
+            if handler_state not in {"FAILED", "DEGRADED"}:
+                successful_handlers += 1
         workspace.last_processed_context_version = observation.context_version
+        outcome = (
+            "FAILED"
+            if had_failure and not had_degraded and successful_handlers == 0
+            else "DEGRADED"
+            if had_failure or had_degraded
+            else "SUCCESS"
+        )
         workspace.current_observation = {
             "event_type": observation.event_type,
             "context_version": observation.context_version,
-            "status": "COMPLETED",
+            "status": "FAILED" if outcome == "FAILED" else "DEGRADED" if outcome == "DEGRADED" else "COMPLETED",
         }
-        workspace.orchestrator_status = "OBSERVING"
+        workspace.orchestrator_status = "DEGRADED" if outcome != "SUCCESS" else "OBSERVING"
         self._publish(workspace, "OBSERVATION_COMPLETED", {
             "observation_type": observation.event_type,
             "observation_context_version": observation.context_version,
             "handler_count": len(handlers),
+            "outcome": outcome,
         })
 
-    def _handler_context(self, workspace: _Workspace) -> WorkspaceHandlerContext:
+    def _handler_context(
+        self,
+        workspace: _Workspace,
+        observation: WorkspaceObservation | None = None,
+    ) -> WorkspaceHandlerContext:
+        route = observation.context_route if observation is not None else workspace.current_route
+        query = observation.context_query if observation is not None else workspace.current_query
+        top_topics = observation.context_top_topics if observation is not None else workspace.topic_graph.top_topics()
+        external_context = observation.context_external_context if observation is not None else tuple(workspace.external_context)
+        source_statuses = observation.context_source_statuses if observation is not None else dict(workspace.source_statuses)
+        personalization_enabled = (
+            observation.context_personalization_enabled
+            if observation is not None
+            else workspace.personalization_enabled
+        )
         return WorkspaceHandlerContext(
-            route=workspace.current_route,
-            query=workspace.current_query,
-            top_topics=workspace.topic_graph.top_topics(),
-            external_context=tuple(workspace.external_context),
-            source_statuses=dict(workspace.source_statuses),
-            personalization_enabled=workspace.personalization_enabled,
+            route=route,
+            query=query,
+            top_topics=top_topics,
+            external_context=external_context,
+            source_statuses=source_statuses,
+            personalization_enabled=personalization_enabled,
         )
 
     def _apply_handler_result(
@@ -628,7 +697,7 @@ class AgentWorkspaceBroker:
         decision_id: UUID,
         context_version: int,
         measured_ms: int,
-    ) -> None:
+    ) -> str:
         state = {
             "SUCCESS": "COMPLETED",
             "DEGRADED": "DEGRADED",
@@ -678,6 +747,7 @@ class AgentWorkspaceBroker:
                 proposal.evidence_refs,
                 reversible=proposal.reversible,
             )
+        return state
 
     def _coordinate(self, workspace: _Workspace, event_type: str, payload: Mapping[str, object]) -> None:
         """Explicit no-event-loop fallback retained for offline dry-runs only."""
@@ -692,7 +762,7 @@ class AgentWorkspaceBroker:
             self._dispatch(workspace, "FeedbackLearningAgent", action="PROPOSE_PROFILE_DELTA", target="UserProfileAgent", reason="SESSION_FEEDBACK_OBSERVED", confidence=0.88, evidence_refs=("session:feedback",))
             self._dispatch_policy(workspace, event_type, payload)
             return
-        if event_type == "SESSION_STARTED" and workspace.mode == "demo":
+        if event_type == "SESSION_STARTED" and workspace.mode == "demo" and workspace.personalization_enabled:
             self._dispatch(workspace, "UserProfileAgent", action="READ_PROFILE", target="RecommendationOrchestrator", reason="DEMO_PROFILE_CONTEXT", confidence=0.80, evidence_refs=("profile:demo-1001",))
         if event_type in {"SESSION_STARTED", "ROUTE_CHANGED", "READINESS_CHANGED", "EXTERNAL_CONTEXT_UPDATED", "RECOMMENDATION_COMPLETED"}:
             self._dispatch_policy(workspace, event_type, payload)
@@ -737,6 +807,7 @@ class AgentWorkspaceBroker:
     def _propose(self, workspace: _Workspace, directive_type: str, scope: str, behavior: str, payload: Mapping[str, object], reason: str, confidence: float, evidence_refs: tuple[str, ...], *, reversible: bool) -> None:
         if directive_type not in DIRECTIVE_TYPES or behavior not in {"AUTO_APPLY", "SUGGESTION", "NOTICE"}:
             raise ValueError("interaction directive is outside the allowlist")
+        self._expire_directives(workspace)
         now = time.monotonic()
         if workspace.suppressed_until.get(directive_type, 0) > now:
             return
@@ -756,6 +827,7 @@ class AgentWorkspaceBroker:
             "created_at": _iso(), "expires_at": _iso(_utc_now() + timedelta(minutes=10)),
             "reversible": reversible, "status": status,
         }
+        directive["updated_at"] = directive["created_at"]
         workspace.directives[str(directive_id)] = directive
         self._publish(workspace, "DIRECTIVE_PROPOSED", {"directive": directive})
         self._capture_directive(workspace, directive)
@@ -810,6 +882,39 @@ class AgentWorkspaceBroker:
             user_id=workspace.user_id,
             directive=directive,
         )
+
+    def _expire_directives(self, workspace: _Workspace) -> None:
+        """Move elapsed directives to an explicit terminal state.
+
+        Expiry is evaluated on reads and actions, so a stale suggestion cannot
+        remain actionable merely because no new observation arrived.  The
+        transition is append-only from the audit buffer's perspective and is
+        emitted once per directive.
+        """
+
+        now = _utc_now()
+        for directive in tuple(workspace.directives.values()):
+            if str(directive.get("status")) not in {"PROPOSED", "AUTO_APPLIED", "ACCEPTED"}:
+                continue
+            expires_at = directive.get("expires_at")
+            if not isinstance(expires_at, str):
+                continue
+            try:
+                expires = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            if expires.tzinfo is None:
+                expires = expires.replace(tzinfo=UTC)
+            if expires > now:
+                continue
+            directive["status"] = "EXPIRED"
+            directive["updated_at"] = _iso(now)
+            self._publish(workspace, "DIRECTIVE_EXPIRED", {
+                "directive_id": directive.get("directive_id"),
+                "directive_type": directive.get("type"),
+                "reason_code": "DIRECTIVE_TTL_EXPIRED",
+            })
+            self._capture_directive(workspace, directive)
 
     @staticmethod
     def _sanitize_payload(payload: Mapping[str, object]) -> dict[str, object]:

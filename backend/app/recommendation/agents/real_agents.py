@@ -164,10 +164,28 @@ class MySQLProfileAgent:
                     confidence=0.1,
                 ),
             )
-        signals = [
-            {"tag_id": signal.tag_id, "weight": signal.weight, "negative": False}
+        # Merge behavior-derived and explicitly declared profile interests by
+        # stable tag ID.  The raw declared fields never leave the profile
+        # adapter; Agents only receive bounded numeric evidence.
+        positive_by_tag: dict[int, dict[str, object]] = {
+            signal.tag_id: {
+                "tag_id": signal.tag_id,
+                "weight": signal.weight,
+                "negative": False,
+                "source": "BEHAVIOR",
+            }
             for signal in snapshot.interests
-        ]
+        }
+        for signal in snapshot.declared_signals:
+            prior = positive_by_tag.get(signal.tag_id)
+            if prior is None or signal.weight > float(prior["weight"]):
+                positive_by_tag[signal.tag_id] = {
+                    "tag_id": signal.tag_id,
+                    "weight": signal.weight,
+                    "negative": False,
+                    "source": "DECLARED_PROFILE",
+                }
+        signals = [positive_by_tag[tag_id] for tag_id in sorted(positive_by_tag)]
         negative_signals = [
             {
                 "tag_id": signal.tag_id,
@@ -177,21 +195,32 @@ class MySQLProfileAgent:
             }
             for signal in snapshot.negatives
         ]
+        effective_confidence = max(
+            snapshot.profile_confidence,
+            0.68 if snapshot.declared_signals else 0.0,
+        )
+        effective_focus = max(
+            snapshot.topic_focus_strength,
+            max((signal.weight for signal in snapshot.declared_signals), default=0.0),
+        )
         return _result(
             message,
             agent_name=self.name,
             agent_version=self.version,
             payload={
                 "profile_version": f"{snapshot.formula_version}:{snapshot.event_count}",
-                "confidence": snapshot.profile_confidence,
+                "confidence": effective_confidence,
                 "event_count": snapshot.event_count,
                 "signals": signals,
                 "negative_signals": negative_signals,
                 "recent_focus_tag_id": snapshot.recent_focus_tag_id,
-                "topic_focus_strength": snapshot.topic_focus_strength,
+                "topic_focus_strength": effective_focus,
                 "input_hash": snapshot.input_hash,
+                "declared_profile_version": snapshot.declared_profile_version,
+                "declared_profile_hash": snapshot.declared_profile_hash,
+                "declared_signal_count": len(snapshot.declared_signals),
             },
-            confidence=snapshot.profile_confidence,
+            confidence=effective_confidence,
             warnings=("PROFILE_PROJECTION_CURRENT_AS_OF",) if snapshot.as_of != as_of else (),
             fallback_used=False,
             tool_calls=({"operation": "profile.get_snapshot", "attempts": attempts, "outcome": "SUCCESS"},),

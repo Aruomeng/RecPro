@@ -1,5 +1,5 @@
-import { decodeIdentityAccount, decodeLoginResult, decodeMeResult } from "../domain/identity";
-import type { ConsentScope, IdentityAccount, LoginResult, MeResult } from "../domain/identity";
+import { decodeDeclaredProfileResult, decodeIdentityAccount, decodeLoginResult, decodeMeResult } from "../domain/identity";
+import type { ConsentScope, DeclaredProfileResult, IdentityAccount, LoginResult, MeResult } from "../domain/identity";
 
 const baseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
@@ -36,6 +36,14 @@ export const identityClient = {
   },
   async me(accessToken: string): Promise<MeResult> {
     return decodeMeResult(await request("/api/v1/auth/me", { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` } }));
+  },
+  async declaredProfile(accessToken: string): Promise<DeclaredProfileResult> {
+    return decodeDeclaredProfileResult(await request("/api/v1/me/profile", { headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` } }));
+  },
+  async updateDeclaredProfile(accessToken: string, profile: { major: string | null; grade: string | null; research_direction: string | null; preferred_language: string | null }): Promise<DeclaredProfileResult> {
+    return decodeDeclaredProfileResult(await request("/api/v1/me/declared-profile", {
+      method: "PUT", headers: { ...content, Authorization: `Bearer ${accessToken}` }, body: JSON.stringify(profile),
+    }));
   },
   async logout(accessToken: string): Promise<void> {
     const response = await fetch(`${baseUrl}/api/v1/auth/logout`, { method: "POST", credentials: "include", headers: { Authorization: `Bearer ${accessToken}` } });

@@ -43,11 +43,20 @@ export const agentWorkspaceClient = {
     return result.directive;
   },
 
-  async stream(eventsUrl: string, workspaceId: string, getIdentity: () => RequestIdentity, onEvent: (event: WorkspaceEvent) => void, signal: AbortSignal): Promise<void> {
-    let last = 0; let retryDelayMs = 600;
+  async stream(
+    eventsUrl: string,
+    workspaceId: string,
+    getIdentity: () => RequestIdentity,
+    onEvent: (event: WorkspaceEvent) => void,
+    signal: AbortSignal,
+    refreshIdentity?: () => Promise<boolean>,
+  ): Promise<void> {
+    let last = 0; let retryDelayMs = 600; let refreshAttempted = false;
     while (!signal.aborted) {
+      let unauthorized = false;
       try {
         const response = await fetch(`${baseUrl}${eventsUrl}`, { headers: { Accept: "text/event-stream", ...identityHeaders(getIdentity()), ...(last ? { "Last-Event-ID": String(last) } : {}) }, cache: "no-store", signal });
+        unauthorized = response.status === 401;
         if (!response.ok || !response.body) throw new Error(`WORKSPACE_STREAM_HTTP_${response.status}`);
         const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
         while (!signal.aborted) {
@@ -66,6 +75,13 @@ export const agentWorkspaceClient = {
         retryDelayMs = 600;
       } catch (error) {
         if (signal.aborted || (error instanceof Error && error.message.startsWith("INVALID_"))) throw error;
+        if (unauthorized && refreshIdentity && !refreshAttempted) {
+          refreshAttempted = true;
+          if (await refreshIdentity()) {
+            retryDelayMs = 600;
+            continue;
+          }
+        }
         await new Promise((resolve) => globalThis.setTimeout(resolve, retryDelayMs));
         retryDelayMs = Math.min(retryDelayMs * 2, 5_000);
       }

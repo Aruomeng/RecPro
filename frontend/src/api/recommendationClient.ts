@@ -1,4 +1,4 @@
-import { isRecommendationExecution } from "../domain/recommendation";
+import { decodeRecommendationExecution, RecommendationDecodeError } from "../domain/recommendation";
 import type { RecommendationClient, RecommendationExecution, RecommendationRequest } from "../domain/recommendation";
 import { identityHeaders } from "./authHeaders";
 import type { RequestIdentity } from "./authHeaders";
@@ -131,12 +131,24 @@ async function post<T>(params: {
     });
     const payload = await readJson(response);
     if (!response.ok) throw toApiError(response.status, payload);
-    if (!params.validate(payload)) {
-      throw new RecommendationApiError({
-        status: response.status,
-        code: "INVALID_RECOMMENDATION_RESPONSE",
-        message: "推荐接口响应不符合冻结契约。",
-      });
+    try {
+      if (!params.validate(payload)) {
+        throw new RecommendationApiError({
+          status: response.status,
+          code: "INVALID_RECOMMENDATION_RESPONSE",
+          message: "推荐接口响应不符合冻结契约。",
+        });
+      }
+    } catch (error) {
+      if (error instanceof RecommendationDecodeError) {
+        throw new RecommendationApiError({
+          status: response.status,
+          code: "INVALID_RUN_RESULT",
+          message: error.message,
+          details: { path: error.path, expected: error.expected, actual_type: error.actualType },
+        });
+      }
+      throw error;
     }
     return payload;
   } catch (error) {
@@ -180,7 +192,12 @@ export function createRecommendationClient(params: {
         identity,
         signal: options.signal,
         timeoutMs,
-        validate: isRecommendationExecution,
+        validate: (value): value is RecommendationExecution => {
+          // Keep the compatibility client strict while preserving the exact
+          // failing public path for the reader-facing error state.
+          decodeRecommendationExecution(value);
+          return true;
+        },
       });
     },
     submitClarification(taskId, contextVersion, answers, idempotencyKey, options = {}) {
@@ -194,7 +211,10 @@ export function createRecommendationClient(params: {
         identity,
         signal: options.signal,
         timeoutMs,
-        validate: isRecommendationExecution,
+        validate: (value): value is RecommendationExecution => {
+          decodeRecommendationExecution(value);
+          return true;
+        },
       });
     },
   };

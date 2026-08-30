@@ -17,7 +17,7 @@ export interface RunAccepted {
 export interface AgentProgressEvent {
   schema_version: "agent-progress-v1";
   sequence: number;
-  event_type: "TASK_ACCEPTED" | "STATE_CHANGED" | "AGENT_STARTED" | "AGENT_COMPLETED" | "TASK_COMPLETED" | "TASK_FAILED";
+  event_type: "TASK_ACCEPTED" | "STATE_CHANGED" | "AGENT_STARTED" | "AGENT_COMPLETED" | "AGENT_FAILED" | "AGENT_TOOL_CALL" | "TASK_COMPLETED" | "TASK_FAILED";
   task_id: string;
   trace_id: string;
   occurred_at: string;
@@ -84,13 +84,22 @@ export const recommendationRunClient = {
     return payload as unknown as { terminal: boolean; status: string; result?: RecommendationExecution; error_code?: string };
   },
 
-  async stream(run: RunAccepted, getIdentity: () => RequestIdentity, onEvent: (event: AgentProgressEvent) => void, signal?: AbortSignal): Promise<void> {
+  async stream(
+    run: RunAccepted,
+    getIdentity: () => RequestIdentity,
+    onEvent: (event: AgentProgressEvent) => void,
+    signal?: AbortSignal,
+    refreshIdentity?: () => Promise<boolean>,
+  ): Promise<void> {
     let lastSequence = 0;
+    let refreshAttempted = false;
     for (let attempt = 0; attempt < 3; attempt += 1) {
+      let unauthorized = false;
       try {
         const response = await fetch(`${baseUrl}${run.events_url}`, {
           headers: { Accept: "text/event-stream", ...identityHeaders(getIdentity()), ...(lastSequence ? { "Last-Event-ID": String(lastSequence) } : {}) }, cache: "no-store", signal,
         });
+        unauthorized = response.status === 401;
         if (!response.ok || !response.body) throw new Error(`RUN_STREAM_HTTP_${response.status}`);
         const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
         while (true) {
@@ -107,7 +116,15 @@ export const recommendationRunClient = {
           }
         }
       } catch (error) {
-        if (signal?.aborted || attempt === 2 || (error instanceof Error && error.message.startsWith("INVALID_"))) throw error;
+        if (signal?.aborted || (error instanceof Error && error.message.startsWith("INVALID_"))) throw error;
+        if (unauthorized && refreshIdentity && !refreshAttempted) {
+          refreshAttempted = true;
+          if (await refreshIdentity()) {
+            attempt = -1;
+            continue;
+          }
+        }
+        if (attempt === 2) throw error;
         await new Promise((resolve) => globalThis.setTimeout(resolve, 350 * (attempt + 1)));
       }
     }
@@ -117,7 +134,7 @@ export const recommendationRunClient = {
 function validAgentEvent(value: unknown): value is AgentProgressEvent {
   if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
   const event = value as Record<string, unknown>;
-  const types = ["TASK_ACCEPTED", "STATE_CHANGED", "AGENT_STARTED", "AGENT_COMPLETED", "TASK_COMPLETED", "TASK_FAILED"];
+  const types = ["TASK_ACCEPTED", "STATE_CHANGED", "AGENT_STARTED", "AGENT_COMPLETED", "AGENT_FAILED", "AGENT_TOOL_CALL", "TASK_COMPLETED", "TASK_FAILED"];
   return event.schema_version === "agent-progress-v1" && typeof event.sequence === "number" && Number.isInteger(event.sequence) && event.sequence >= 1 &&
     typeof event.event_type === "string" && types.includes(event.event_type) && typeof event.task_id === "string" && typeof event.trace_id === "string" && typeof event.occurred_at === "string" &&
     (event.confidence === undefined || (typeof event.confidence === "number" && event.confidence >= 0 && event.confidence <= 1)) &&

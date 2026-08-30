@@ -25,6 +25,22 @@ export interface MeResult {
   session_uuid: string;
 }
 
+export interface DeclaredProfile {
+  user_id: number;
+  declared_version: number;
+  major: string | null;
+  grade: string | null;
+  research_direction: string | null;
+  preferred_language: string | null;
+  personalization_enabled: boolean;
+  updated_at: string;
+}
+
+export interface DeclaredProfileResult {
+  profile: DeclaredProfile | null;
+  consent_granted: boolean;
+}
+
 const roles = new Set<AccountRole>(["user", "librarian", "research_admin", "service_worker"]);
 const scopes: ConsentScope[] = ["DECLARED_PROFILE", "BEHAVIOR_LEARNING", "PERSONALIZED_RECOMMENDATION", "RESEARCH_ANALYTICS"];
 const record = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
@@ -40,6 +56,24 @@ export function decodeIdentityAccount(value: unknown): IdentityAccount {
 function consents(value: unknown): Record<ConsentScope, boolean> {
   if (!record(value) || !scopes.every((scope) => typeof value[scope] === "boolean")) throw new Error("INVALID_IDENTITY_CONSENTS");
   return Object.fromEntries(scopes.map((scope) => [scope, Boolean(value[scope])])) as Record<ConsentScope, boolean>;
+}
+
+function declaredProfile(value: unknown): DeclaredProfile {
+  if (!record(value) || typeof value.user_id !== "number" || !Number.isInteger(value.user_id) || value.user_id < 1 ||
+      typeof value.declared_version !== "number" || !Number.isInteger(value.declared_version) || value.declared_version < 1 ||
+      !["major", "grade", "research_direction", "preferred_language"].every((key) => value[key] === null || typeof value[key] === "string") ||
+      typeof value.personalization_enabled !== "boolean" || typeof value.updated_at !== "string" || !value.updated_at) {
+    throw new Error("INVALID_DECLARED_PROFILE");
+  }
+  return value as unknown as DeclaredProfile;
+}
+
+export function decodeDeclaredProfileResult(value: unknown): DeclaredProfileResult {
+  if (!record(value) || typeof value.consent_granted !== "boolean") throw new Error("INVALID_DECLARED_PROFILE_RESPONSE");
+  return {
+    profile: value.profile === null ? null : declaredProfile(value.profile),
+    consent_granted: value.consent_granted,
+  };
 }
 
 export function decodeLoginResult(value: unknown): LoginResult {

@@ -16,6 +16,7 @@ from backend.app.identity.domain import (
     ConsentAction,
     ConsentFact,
     ConsentScope,
+    DeclaredProfile,
     IdentifierType,
     LoginIdentifier,
     PasswordCredential,
@@ -78,6 +79,12 @@ class IdentityRepository(Protocol):
     async def append_consent(self, fact: ConsentFact) -> None: ...
     async def next_consent_version(self, user_id: int, scope: ConsentScope) -> int: ...
     async def effective_consents(self, user_id: int) -> dict[ConsentScope, bool]: ...
+    async def get_declared_profile(self, user_id: int) -> DeclaredProfile | None: ...
+    async def save_declared_profile(
+        self, *, user_id: int, major: str | None, grade: str | None,
+        research_direction: str | None, preferred_language: str | None,
+        personalization_enabled: bool, now: datetime,
+    ) -> DeclaredProfile: ...
     async def append_security_event(self, event: SecurityEvent) -> None: ...
 
 

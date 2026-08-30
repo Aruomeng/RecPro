@@ -57,8 +57,8 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
         <div class="top-actions">
           <span class="session-label">会话 {{ session.sessionId.slice(0, 8).toUpperCase() }}</span>
           <div v-if="auth.authenticated && auth.account" class="account-chip">
-            <span><b>{{ auth.account.display_name }}</b><small>{{ auth.account.roles.join(' · ') }}</small></span>
-            <button type="button" @click="auth.onboardingOpen = true">画像授权</button>
+            <span><b>{{ auth.account.display_name }}</b><small>{{ auth.account.roles.join(' · ') }}</small><small>{{ auth.canUsePersonalization ? '个性化已授权' : '个性化未授权' }}</small></span>
+            <button type="button" @click="auth.onboardingOpen = true">画像与授权</button>
             <button type="button" @click="auth.logout">安全退出</button>
           </div>
           <button v-else class="login-entry" type="button" @click="auth.dialogOpen = true"><span>访客探索</span><b>登录</b></button>

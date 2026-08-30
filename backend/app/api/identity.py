@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Header, Response
 from pydantic import Field
 
-from backend.app.api.auth import PrincipalResolver, require_bearer_principal
+from backend.app.api.auth import PrincipalResolver, require_bearer_principal, require_permission
 from backend.app.api.errors import PublicAPIError
 from backend.app.api.models import StrictModel
 from backend.app.identity.application import IdentityService, consent_evidence_hash
@@ -16,6 +17,7 @@ from backend.app.identity.domain import (
     AccountStatusAction,
     ConsentAction,
     ConsentScope,
+    DeclaredProfile,
     IdentifierType,
     IdentityError,
     LoginResult,
@@ -120,6 +122,29 @@ class OneTimeCodeResponse(StrictModel):
 
 class ConsentResponse(StrictModel):
     personalization_consents: dict[ConsentScope, bool]
+
+
+class DeclaredProfileRequest(StrictModel):
+    major: str | None = Field(default=None, max_length=128)
+    grade: str | None = Field(default=None, max_length=32)
+    research_direction: str | None = Field(default=None, max_length=255)
+    preferred_language: str | None = Field(default=None, max_length=32)
+
+
+class DeclaredProfileView(StrictModel):
+    user_id: int = Field(ge=1)
+    declared_version: int = Field(ge=1)
+    major: str | None = None
+    grade: str | None = None
+    research_direction: str | None = None
+    preferred_language: str | None = None
+    personalization_enabled: bool
+    updated_at: datetime
+
+
+class DeclaredProfileResponse(StrictModel):
+    profile: DeclaredProfileView | None = None
+    consent_granted: bool
 
 
 def create_identity_router(
@@ -337,6 +362,7 @@ def create_identity_router(
         authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     ) -> ConsentResponse:
         actor = await _verified_actor(service, principal_resolver, authorization)
+        require_permission(actor, "profile.self.read")
         _, _, consents = await service.account_summary(target_user_id=actor.user_id, actor=actor)
         return ConsentResponse(personalization_consents=consents)
 
@@ -346,6 +372,7 @@ def create_identity_router(
         authorization: Annotated[str | None, Header(alias="Authorization")] = None,
     ) -> ConsentResponse:
         actor = await _verified_actor(service, principal_resolver, authorization)
+        require_permission(actor, "profile.self.update")
         try:
             consents = await service.consent_action(
                 scope=payload.scope, action=payload.action,
@@ -359,6 +386,40 @@ def create_identity_router(
         except IdentityError as exc:
             raise _public_identity_error(exc) from exc
         return ConsentResponse(personalization_consents=consents)
+
+    @router.get("/me/profile", response_model=DeclaredProfileResponse)
+    async def read_declared_profile(
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> DeclaredProfileResponse:
+        actor = await _verified_actor(service, principal_resolver, authorization)
+        try:
+            profile, consent_granted = await service.read_declared_profile(actor=actor)
+        except (IdentityError, ValueError) as exc:
+            raise _public_identity_error(exc) from exc
+        return DeclaredProfileResponse(
+            profile=_declared_profile_view(profile) if profile is not None else None,
+            consent_granted=consent_granted,
+        )
+
+    @router.put("/me/declared-profile", response_model=DeclaredProfileResponse)
+    async def update_declared_profile(
+        payload: DeclaredProfileRequest,
+        authorization: Annotated[str | None, Header(alias="Authorization")] = None,
+    ) -> DeclaredProfileResponse:
+        actor = await _verified_actor(service, principal_resolver, authorization)
+        try:
+            profile = await service.update_declared_profile(
+                actor=actor,
+                major=payload.major,
+                grade=payload.grade,
+                research_direction=payload.research_direction,
+                preferred_language=payload.preferred_language,
+            )
+        except (IdentityError, ValueError) as exc:
+            raise _public_identity_error(exc) from exc
+        return DeclaredProfileResponse(
+            profile=_declared_profile_view(profile), consent_granted=True,
+        )
 
     return router
 
@@ -388,6 +449,19 @@ def _account_response(account: UserAccount, roles: frozenset[RoleCode]) -> Accou
         display_name=account.display_name, status=account.status.value,
         roles=sorted(roles, key=lambda role: role.value),
         must_change_password=account.must_change_password,
+    )
+
+
+def _declared_profile_view(profile: DeclaredProfile) -> DeclaredProfileView:
+    return DeclaredProfileView(
+        user_id=profile.user_id,
+        declared_version=profile.declared_version,
+        major=profile.major,
+        grade=profile.grade,
+        research_direction=profile.research_direction,
+        preferred_language=profile.preferred_language,
+        personalization_enabled=profile.personalization_enabled,
+        updated_at=profile.updated_at,
     )
 
 
@@ -432,11 +506,18 @@ def _public_identity_error(exc: Exception, *, login: bool = False) -> PublicAPIE
     code = exc.code if isinstance(exc, IdentityError) else "INVALID_INPUT"
     if login or code in {"INVALID_CREDENTIALS", "AUTHENTICATION_INVALID"}:
         return _auth_error()
-    if code in {"ROLE_REQUIRED", "TARGET_ROLE_FORBIDDEN", "SELF_STATUS_CHANGE_FORBIDDEN", "SERVICE_ROLE_BROWSER_ASSIGNMENT_FORBIDDEN"}:
+    if code in {"ROLE_REQUIRED", "TARGET_ROLE_FORBIDDEN", "SELF_STATUS_CHANGE_FORBIDDEN", "SERVICE_ROLE_BROWSER_ASSIGNMENT_FORBIDDEN", "PERSONALIZATION_CONSENT_REQUIRED"}:
         return PublicAPIError(
             status_code=403, code=ErrorCode.RESOURCE_ACCESS_FORBIDDEN,
             message="The authenticated role cannot perform this action.",
             retryable=False, details={},
+        )
+    if code == "USER_SESSION_REQUIRED":
+        return _auth_error()
+    if code == "PROFILE_NOT_FOUND":
+        return PublicAPIError(
+            status_code=404, code=ErrorCode.NOT_FOUND,
+            message="The declared profile was not found.", retryable=False, details={},
         )
     if code == "ACCOUNT_NOT_FOUND":
         return PublicAPIError(

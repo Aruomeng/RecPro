@@ -140,6 +140,8 @@ def create_app(
     if identity_service is not None and identity_api_enabled:
         if "POST" not in cors_methods:
             cors_methods.append("POST")
+        if "PUT" not in cors_methods:
+            cors_methods.append("PUT")
         cors_headers.extend(["Idempotency-Key", "X-CSRF-Token"])
     if knowledge_review_service is not None and knowledge_review_api_enabled:
         if "POST" not in cors_methods:

@@ -3,7 +3,7 @@ import { defineStore } from "pinia";
 
 import { identityClient, IdentityApiError } from "../api/identityClient";
 import type { RequestIdentity } from "../api/authHeaders";
-import type { ConsentScope, IdentityAccount } from "../domain/identity";
+import type { ConsentScope, DeclaredProfile, IdentityAccount } from "../domain/identity";
 import { useSessionStore } from "./session";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -12,6 +12,7 @@ export const useAuthStore = defineStore("auth", () => {
   const account = ref<IdentityAccount | null>(null);
   const permissions = ref<string[]>([]);
   const consents = ref<Record<ConsentScope, boolean> | null>(null);
+  const declaredProfile = ref<DeclaredProfile | null>(null);
   const phase = ref<"guest" | "restoring" | "authenticating" | "authenticated">("guest");
   const ready = ref(false);
   const dialogOpen = ref(false);
@@ -72,7 +73,7 @@ export const useAuthStore = defineStore("auth", () => {
   function clearLocal(): void {
     const identityChanged = session.mode === "authenticated";
     if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
-    refreshTimer = undefined; accessToken.value = ""; account.value = null; permissions.value = []; consents.value = null;
+    refreshTimer = undefined; accessToken.value = ""; account.value = null; permissions.value = []; consents.value = null; declaredProfile.value = null;
     phase.value = "guest"; onboardingOpen.value = false;
     if (identityChanged) session.reset(); else session.setGuest();
   }
@@ -84,6 +85,17 @@ export const useAuthStore = defineStore("auth", () => {
     if (!accessToken.value) return;
     const result = await identityClient.me(accessToken.value);
     account.value = result.user; permissions.value = result.permissions; consents.value = result.personalization_consents;
+    // Profile reads are deliberately best-effort so an unavailable optional
+    // projection never turns a valid login into a failed login.  The API
+    // itself returns profile=null without querying the projection when consent
+    // is absent.
+    try { declaredProfile.value = (await identityClient.declaredProfile(accessToken.value)).profile; }
+    catch { declaredProfile.value = null; }
+  }
+  async function saveDeclaredProfile(profile: { major: string | null; grade: string | null; research_direction: string | null; preferred_language: string | null }): Promise<void> {
+    if (!accessToken.value) throw new Error("AUTH_REQUIRED");
+    const result = await identityClient.updateDeclaredProfile(accessToken.value, profile);
+    declaredProfile.value = result.profile;
   }
   async function setConsent(scope: ConsentScope, granted: boolean, source: "LOGIN_ONBOARDING" | "SETTINGS" = "SETTINGS"): Promise<void> {
     if (!accessToken.value) throw new Error("AUTH_REQUIRED");
@@ -105,5 +117,5 @@ export const useAuthStore = defineStore("auth", () => {
   }
   function useResearchDemo(): void { if (researchDemoEnabled) { clearLocal(); session.setMode("demo"); } }
 
-  return { accessToken, account, permissions, consents, phase, ready, dialogOpen, onboardingOpen, requestedFeature, error, researchDemoEnabled, authenticated, requestIdentity, canUsePersonalization, canPersistBehavior, restore, login, refresh, logout, clearLocal, requireLogin, loadMe, setConsent, changePassword, activateAccount, completePasswordReset, useResearchDemo };
+  return { accessToken, account, permissions, consents, declaredProfile, phase, ready, dialogOpen, onboardingOpen, requestedFeature, error, researchDemoEnabled, authenticated, requestIdentity, canUsePersonalization, canPersistBehavior, restore, login, refresh, logout, clearLocal, requireLogin, loadMe, setConsent, saveDeclaredProfile, changePassword, activateAccount, completePasswordReset, useResearchDemo };
 });

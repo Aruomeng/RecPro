@@ -195,6 +195,25 @@ class ConsentFact:
 
 
 @dataclass(frozen=True, slots=True)
+class DeclaredProfile:
+    """User-supplied profile projection with an append-only history behind it.
+
+    ``personalization_enabled`` is retained only as a compatibility projection
+    for the existing profile tables.  Consent facts remain authoritative for
+    deciding whether the profile may be read or used by recommendation.
+    """
+
+    user_id: int
+    declared_version: int
+    major: str | None
+    grade: str | None
+    research_direction: str | None
+    preferred_language: str | None
+    personalization_enabled: bool
+    updated_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class LoginResult:
     access_token: str
     expires_in: int

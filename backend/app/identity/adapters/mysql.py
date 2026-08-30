@@ -25,6 +25,7 @@ from backend.app.identity.domain import (
     ConsentAction,
     ConsentFact,
     ConsentScope,
+    DeclaredProfile,
     IdentifierType,
     IdentityError,
     LoginIdentifier,
@@ -666,6 +667,92 @@ class MySQLIdentityRepository:
         finally:
             connection.close()
 
+    async def get_declared_profile(self, user_id: int) -> DeclaredProfile | None:
+        connection = await self._connection_factory()
+        try:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT user_id, declared_version, major, grade, research_direction, "
+                    "preferred_language, personalization_enabled, updated_at "
+                    "FROM user_declared_profile WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = await cursor.fetchone()
+            return _declared_profile(row) if row is not None else None
+        finally:
+            connection.close()
+
+    async def save_declared_profile(
+        self, *, user_id: int, major: str | None, grade: str | None,
+        research_direction: str | None, preferred_language: str | None,
+        personalization_enabled: bool, now: datetime,
+    ) -> DeclaredProfile:
+        """Append profile history and update only the compatibility projection.
+
+        The history row is immutable.  The one-row current projection is the
+        existing, explicitly allowlisted compatibility cache used by the
+        recommendation reader; no prior history is updated or deleted.
+        """
+
+        connection = await self._connection_factory()
+        timestamp = _db_time(now)
+        try:
+            async with connection.cursor() as cursor:
+                await cursor.execute(
+                    "SELECT user_id, declared_version, major, grade, research_direction, "
+                    "preferred_language, personalization_enabled, updated_at "
+                    "FROM user_declared_profile WHERE user_id = %s FOR UPDATE",
+                    (user_id,),
+                )
+                prior = await cursor.fetchone()
+                if prior is not None:
+                    current = _declared_profile(prior)
+                    if (
+                        current.major, current.grade, current.research_direction,
+                        current.preferred_language, current.personalization_enabled,
+                    ) == (major, grade, research_direction, preferred_language, personalization_enabled):
+                        await connection.rollback()
+                        return current
+                    version = current.declared_version + 1
+                else:
+                    version = 1
+                await cursor.execute(
+                    "INSERT INTO user_declared_profile_history "
+                    "(user_id, declared_version, major, grade, research_direction, "
+                    "preferred_language, personalization_enabled, valid_from, created_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)",
+                    (user_id, version, major, grade, research_direction,
+                     preferred_language, personalization_enabled, timestamp, timestamp),
+                )
+                await cursor.execute(
+                    "INSERT INTO user_declared_profile "
+                    "(user_id, declared_version, major, grade, research_direction, "
+                    "preferred_language, personalization_enabled, updated_at) "
+                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+                    "ON DUPLICATE KEY UPDATE declared_version = VALUES(declared_version), "
+                    "major = VALUES(major), grade = VALUES(grade), "
+                    "research_direction = VALUES(research_direction), "
+                    "preferred_language = VALUES(preferred_language), "
+                    "personalization_enabled = VALUES(personalization_enabled), "
+                    "updated_at = VALUES(updated_at)",
+                    (user_id, version, major, grade, research_direction,
+                     preferred_language, personalization_enabled, timestamp),
+                )
+                await cursor.execute(
+                    "SELECT user_id, declared_version, major, grade, research_direction, "
+                    "preferred_language, personalization_enabled, updated_at "
+                    "FROM user_declared_profile WHERE user_id = %s",
+                    (user_id,),
+                )
+                row = await cursor.fetchone()
+            await connection.commit()
+            return _required_declared_profile(row)
+        except Exception:
+            await connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     async def append_security_event(self, event: SecurityEvent) -> None:
         metadata = json.dumps(event.metadata, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
         if len(metadata.encode()) > 2048:
@@ -773,6 +860,23 @@ def _credential(row: Any) -> PasswordCredential:
         changed_at=_utc(row[5]), expires_at=_utc(row[6]) if row[6] else None,
         updated_at=_utc(row[7]),
     )
+
+
+def _declared_profile(row: Any) -> DeclaredProfile:
+    return DeclaredProfile(
+        user_id=int(row[0]), declared_version=int(row[1]),
+        major=str(row[2]) if row[2] is not None else None,
+        grade=str(row[3]) if row[3] is not None else None,
+        research_direction=str(row[4]) if row[4] is not None else None,
+        preferred_language=str(row[5]) if row[5] is not None else None,
+        personalization_enabled=bool(row[6]), updated_at=_utc(row[7]),
+    )
+
+
+def _required_declared_profile(row: Any) -> DeclaredProfile:
+    if row is None:
+        raise IdentityError("PROFILE_NOT_FOUND")
+    return _declared_profile(row)
 
 
 def _session(row: Any) -> AuthSession:

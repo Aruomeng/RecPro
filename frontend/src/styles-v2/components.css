@@ -138,6 +138,17 @@
   background: #fff; color: var(--v2-primary); font-weight: 700; cursor: pointer;
 }
 .consent-card button.granted { border-color: #a7f3d0; background: #ecfdf5; color: #047857; }
+.declared-profile-form { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--v2-border); }
+.declared-profile-form .section-title-row { align-items: baseline; margin-bottom: 12px; }
+.declared-profile-form h3 { margin: 0; font-size: 18px; }
+.declared-profile-form .section-title-row span { color: var(--v2-muted); font-size: 12px; }
+.profile-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.profile-form-grid label { display: grid; gap: 6px; color: var(--v2-text-2); font-size: 14px; font-weight: 700; }
+.profile-form-grid input { width: 100%; min-height: 50px; padding: 0 12px; border: 1px solid var(--v2-border-strong); border-radius: 10px; outline: none; background: #fff; color: var(--v2-text); font: inherit; }
+.profile-form-grid input:focus { border-color: var(--v2-primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, .13); }
+.profile-form-wide { grid-column: 1 / -1; }
+.profile-save { width: 100%; margin-top: 12px; }
+.profile-consent-hint { margin: 16px 0 0; padding: 12px 14px; border-radius: 10px; background: var(--v2-surface-soft); color: var(--v2-muted); font-size: 14px; line-height: 1.6; }
 .auth-finish { width: 100%; margin-top: 18px; }
 
 @media (max-width: 960px) {
@@ -150,6 +161,8 @@
   .auth-dialog h2 { font-size: 28px; }
   .consent-card { grid-template-columns: 1fr; }
   .consent-card button { width: 100%; }
+  .profile-form-grid { grid-template-columns: 1fr; }
+  .profile-form-wide { grid-column: auto; }
   .account-chip button:first-of-type { display: none; }
   .login-entry span { display: none; }
 }

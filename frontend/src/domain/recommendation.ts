@@ -50,6 +50,7 @@ export interface RecommendationFailure {
   readonly status: number;
   readonly code: string;
   readonly retryable: boolean;
+  readonly details?: Record<string, unknown>;
 }
 
 export interface ResourceSummary {
@@ -157,7 +158,8 @@ export function isRecommendationFailure(value: unknown): value is Recommendation
     candidate.kind === "recommendation_api_error" &&
     typeof candidate.status === "number" &&
     typeof candidate.code === "string" &&
-    typeof candidate.retryable === "boolean"
+    typeof candidate.retryable === "boolean" &&
+    (candidate.details === undefined || (typeof candidate.details === "object" && candidate.details !== null && !Array.isArray(candidate.details)))
   );
 }
 
