@@ -42,7 +42,7 @@ watch(() => [auth.authenticated, auth.permissions.includes("research.audit.read"
   else void system.refreshRuntime();
 });
 watch(() => session.inactivityEpoch, () => { if (auth.authenticated) void auth.logout(); });
-onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
+onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); system.clearRuntimeDiagnostics(); });
 </script>
 
 <template>

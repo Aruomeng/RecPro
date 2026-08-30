@@ -112,5 +112,7 @@ describe("system runtime diagnostics lifecycle", () => {
     expect(system.runtimeDiagnostics.phase).toBe("loading");
     resolvePending(diagnostics);
     await pending;
+    system.drawerOpen = false;
+    await nextTick();
   });
 });
