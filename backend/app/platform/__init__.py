@@ -12,6 +12,13 @@ from backend.app.platform.oidc import (
     OIDCIdentityBinding,
     OIDCIdentityMapper,
 )
+from backend.app.platform.production import (
+    ProductionGateContext,
+    ProductionGateError,
+    ProductionGateReport,
+    evaluate_production_gate,
+    require_production_gate,
+)
 
 __all__ = [
     "MySQLConnectionPool",
@@ -23,4 +30,9 @@ __all__ = [
     "OIDCBearerTokenResolver",
     "OIDCIdentityBinding",
     "OIDCIdentityMapper",
+    "ProductionGateContext",
+    "ProductionGateError",
+    "ProductionGateReport",
+    "evaluate_production_gate",
+    "require_production_gate",
 ]

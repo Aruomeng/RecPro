@@ -44,6 +44,11 @@ from backend.app.platform.oidc import (
     OIDCIdentityMapper,
     JWKSFetcher,
 )
+from backend.app.platform.production import (
+    ProductionGateContext,
+    ProductionGateReport,
+    require_production_gate,
+)
 from backend.app.identity import IdentityService
 from backend.app.identity.adapters import MySQLIdentityRepository
 from backend.app.identity.security import (
@@ -308,6 +313,75 @@ def build_production_http_app(
         debug_api_enabled=False,
         managed_resources=(*managed_resources, recommendation_service, feedback_service, behavior_service),
     )
+
+
+def build_production_deployment_app(
+    settings: AppSettings,
+    *,
+    recommendation_service: object | None,
+    feedback_service: object | None,
+    behavior_service: object | None,
+    readiness_probe: object | None = None,
+    config_bundle_probe: object | None = None,
+    managed_resources: tuple[object, ...] = (),
+    oidc_jwks_fetcher: JWKSFetcher | None = None,
+    oidc_identity_mapper: OIDCIdentityMapper | None = None,
+    tls_termination_enabled: bool = False,
+    runtime_database_user: str | None = None,
+    graph_readonly_user: str | None = None,
+    readiness_confirmed: bool = False,
+    backup_restore_target_configured: bool = False,
+    model_policy: str = "DETERMINISTIC_FALLBACK",
+) -> FastAPI:
+    """Compose the strict single-host deployment profile.
+
+    ``build_production_http_app`` remains the backwards-compatible HTTP
+    composition used by local production-shaped tests.  This wrapper is the
+    deployment entrypoint for the plan's stronger policy: OIDC-only browser
+    authentication, TLS termination, least-privilege data identities,
+    confirmed readiness, a recovery target and an explicit model policy.
+    Gate evaluation is pure; callers still inject all clients and no network,
+    database, container or model request is made during construction.
+    """
+
+    gate = require_production_gate(
+        ProductionGateContext(
+            app_env=settings.app_env,
+            production_http_enabled=settings.production_http_enabled,
+            auth_enabled=settings.auth_enabled,
+            auth_mode=settings.auth_mode,
+            oidc_issuer=settings.oidc_issuer,
+            oidc_audience=settings.oidc_audience,
+            oidc_jwks_uri=settings.oidc_jwks_uri,
+            jwks_fetcher_configured=callable(oidc_jwks_fetcher),
+            oidc_identity_mapper_configured=oidc_identity_mapper is not None,
+            tls_termination_enabled=tls_termination_enabled,
+            secure_cookies=settings.auth_cookie_secure,
+            runtime_database_user=runtime_database_user,
+            graph_readonly_user=graph_readonly_user,
+            recommendation_api_enabled=recommendation_service is not None,
+            feedback_api_enabled=feedback_service is not None,
+            behavior_api_enabled=behavior_service is not None,
+            readiness_confirmed=readiness_confirmed,
+            backup_restore_target_configured=backup_restore_target_configured,
+            model_policy=model_policy,
+        )
+    )
+    application = build_production_http_app(
+        settings,
+        recommendation_service=recommendation_service,
+        feedback_service=feedback_service,
+        behavior_service=behavior_service,
+        readiness_probe=readiness_probe,
+        config_bundle_probe=config_bundle_probe,
+        managed_resources=managed_resources,
+        oidc_jwks_fetcher=oidc_jwks_fetcher,
+        oidc_identity_mapper=oidc_identity_mapper,
+    )
+    # The report contains only booleans and public policy names.  It is
+    # useful to readiness/diagnostic adapters without exposing credentials.
+    application.state.production_gate = gate
+    return application
 
 
 def build_demo_http_app(
@@ -958,6 +1032,7 @@ __all__ = [
     "build_oidc_auth_resolver",
     "build_configured_auth_resolver",
     "build_production_http_app",
+    "build_production_deployment_app",
     "build_demo_http_app",
     "build_profile_outbox_worker",
     "build_demo_orchestration_service",
