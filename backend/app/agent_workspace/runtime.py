@@ -363,9 +363,25 @@ class AgentWorkspaceBroker:
             "context_version": workspace.context_version,
             "processing": "QUEUED" if dispatcher is not None else "RULE_FALLBACK",
         })
+        workspace.orchestrator_status = "WORKING"
+        self._publish(workspace, "STATE_CHANGED", {
+            "from_status": "OBSERVING",
+            "to_status": "WORKING",
+            "observation_type": event_type,
+            "context_version": workspace.context_version,
+            "reason_code": "OBSERVATION_DISPATCH_STARTED",
+        })
         if dispatcher is None:
             self._coordinate(workspace, event_type, clean)
             workspace.last_processed_context_version = workspace.context_version
+            workspace.orchestrator_status = "OBSERVING"
+            self._publish(workspace, "STATE_CHANGED", {
+                "from_status": "WORKING",
+                "to_status": "OBSERVING",
+                "observation_type": event_type,
+                "context_version": workspace.context_version,
+                "reason_code": "RULE_FALLBACK_COMPLETED",
+            })
         else:
             dispatcher.submit(observation)
         return self.snapshot(workspace_id, user_id=user_id), False
@@ -546,9 +562,25 @@ class AgentWorkspaceBroker:
             "context_version": workspace.context_version,
             "processing": "QUEUED" if dispatcher is not None else "RULE_FALLBACK",
         })
+        workspace.orchestrator_status = "WORKING"
+        self._publish(workspace, "STATE_CHANGED", {
+            "from_status": "OBSERVING",
+            "to_status": "WORKING",
+            "observation_type": event_type,
+            "context_version": workspace.context_version,
+            "reason_code": "OBSERVATION_DISPATCH_STARTED",
+        })
         if dispatcher is None:
             self._coordinate(workspace, event_type, clean)
             workspace.last_processed_context_version = workspace.context_version
+            workspace.orchestrator_status = "OBSERVING"
+            self._publish(workspace, "STATE_CHANGED", {
+                "from_status": "WORKING",
+                "to_status": "OBSERVING",
+                "observation_type": event_type,
+                "context_version": workspace.context_version,
+                "reason_code": "RULE_FALLBACK_COMPLETED",
+            })
         else:
             try:
                 dispatcher.submit(observation)
@@ -559,6 +591,14 @@ class AgentWorkspaceBroker:
                 })
                 self._coordinate(workspace, event_type, clean)
                 workspace.last_processed_context_version = workspace.context_version
+                workspace.orchestrator_status = "OBSERVING"
+                self._publish(workspace, "STATE_CHANGED", {
+                    "from_status": "WORKING",
+                    "to_status": "OBSERVING",
+                    "observation_type": event_type,
+                    "context_version": workspace.context_version,
+                    "reason_code": "QUEUE_CAPACITY_FALLBACK_COMPLETED",
+                })
 
     def _runtime_dispatcher(self) -> WorkspaceObservationDispatcher | None:
         try:
@@ -695,6 +735,14 @@ class AgentWorkspaceBroker:
             "status": "FAILED" if outcome == "FAILED" else "DEGRADED" if outcome == "DEGRADED" else "COMPLETED",
         }
         workspace.orchestrator_status = "DEGRADED" if outcome != "SUCCESS" else "OBSERVING"
+        self._publish(workspace, "STATE_CHANGED", {
+            "from_status": "WORKING",
+            "to_status": workspace.orchestrator_status,
+            "observation_type": observation.event_type,
+            "context_version": observation.context_version,
+            "reason_code": "OBSERVATION_PROCESSING_COMPLETED",
+            "outcome": outcome,
+        })
         self._publish(workspace, "OBSERVATION_COMPLETED", {
             "observation_type": observation.event_type,
             "observation_context_version": observation.context_version,
