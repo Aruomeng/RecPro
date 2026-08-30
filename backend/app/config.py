@@ -184,6 +184,10 @@ class AppSettings(BaseSettings):
     # runtime has no bearer secret and therefore cannot accidentally expose a
     # credential-backed route.
     auth_enabled: bool = False
+    # ``local`` is the research default. ``oidc`` and ``hybrid`` stay inert
+    # until the composition root supplies an injected JWKS fetcher and an
+    # external-subject mapper.
+    auth_mode: Literal["local", "oidc", "hybrid"] = "local"
     local_identity_api_enabled: bool = False
     auth_jwt_secret: SecretStr | None = None
     auth_identifier_pepper: SecretStr | None = None
@@ -204,6 +208,10 @@ class AppSettings(BaseSettings):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$",
     )
     auth_clock_skew_seconds: int = Field(default=30, ge=0, le=300)
+    oidc_issuer: str | None = Field(default=None, min_length=1, max_length=512)
+    oidc_audience: str | None = Field(default=None, min_length=1, max_length=256)
+    oidc_jwks_uri: str | None = Field(default=None, min_length=1, max_length=1024)
+    oidc_jwks_cache_seconds: int = Field(default=15 * 60, ge=60, le=24 * 60 * 60)
     # Workspace audit is a separately approved append-only capability.  Merely
     # enabling the research application is insufficient: a successor plan,
     # its canonical hash, and a bounded run identity must all be supplied.
@@ -299,9 +307,9 @@ class AppSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_auth_configuration(self) -> "AppSettings":
-        if self.auth_enabled and self.auth_jwt_secret is None:
+        if self.auth_enabled and self.auth_mode in {"local", "hybrid"} and self.auth_jwt_secret is None:
             raise ValueError(
-                "auth JWT secret is required when formal authentication is enabled"
+                "local JWT secret is required for local or hybrid authentication"
             )
         if self.local_identity_api_enabled and not self.auth_enabled:
             raise ValueError("local identity API requires formal authentication")
@@ -313,8 +321,15 @@ class AppSettings(BaseSettings):
             self.identity_mysql_user is None or self.identity_mysql_password is None
         ):
             raise ValueError("local identity API requires its least-privilege MySQL account")
+        if self.local_identity_api_enabled and self.auth_mode == "oidc":
+            raise ValueError("local identity API cannot be enabled in OIDC-only mode")
         if self.app_env == "production" and not self.auth_cookie_secure:
             raise ValueError("production identity cookies must be secure")
+        if self.auth_mode in {"oidc", "hybrid"}:
+            if not self.auth_enabled:
+                raise ValueError("OIDC authentication mode requires formal authentication")
+            if not self.oidc_issuer or not self.oidc_audience or not self.oidc_jwks_uri:
+                raise ValueError("OIDC authentication mode requires issuer, audience, and JWKS URI")
         return self
 
     @field_validator("llm_base_url")
@@ -326,6 +341,35 @@ class AppSettings(BaseSettings):
         if parsed.query or parsed.fragment or parsed.path not in ("", "/"):
             raise ValueError("llm base URL must not include a path, query, or fragment")
         return value.rstrip("/")
+
+    @field_validator("oidc_issuer", "oidc_jwks_uri")
+    @classmethod
+    def validate_oidc_https_url(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        parsed = urlsplit(value.strip())
+        if (
+            parsed.scheme != "https"
+            or not parsed.netloc
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+        ):
+            raise ValueError(
+                "OIDC issuer and JWKS URI must be HTTPS URLs without credentials or query strings"
+            )
+        return value.rstrip("/") if parsed.path in ("", "/") else value
+
+    @field_validator("oidc_audience")
+    @classmethod
+    def validate_oidc_audience(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value or any(character.isspace() for character in value):
+            raise ValueError("OIDC audience must be a non-blank value without whitespace")
+        return value
 
     @field_validator("llm_api_key")
     @classmethod

@@ -12,6 +12,10 @@ export const useSessionStore = defineStore("session", () => {
   const mode = ref<"guest" | "demo" | "authenticated">("guest");
   const authenticatedUserId = ref<number | null>(null);
   const sessionId = ref(uuid());
+  // A process-local identifier lets the backend enforce its per-device daily
+  // planning budget without creating a long-lived guest identity or storage
+  // record. It survives session resets while the page remains open.
+  const deviceId = uuid();
   const secondsRemaining = ref(120);
   const resetEpoch = ref(0);
   const inactivityEpoch = ref(0);
@@ -56,5 +60,5 @@ export const useSessionStore = defineStore("session", () => {
     started = false;
   }
 
-  return { mode, sessionId, userId, secondsRemaining, showCountdown, resetEpoch, inactivityEpoch, busy, touch, setMode, setAuthenticated, setGuest, setBusy, reset, start, stop };
+  return { mode, sessionId, deviceId, userId, secondsRemaining, showCountdown, resetEpoch, inactivityEpoch, busy, touch, setMode, setAuthenticated, setGuest, setBusy, reset, start, stop };
 });

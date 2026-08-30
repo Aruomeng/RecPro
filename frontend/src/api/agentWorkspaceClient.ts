@@ -17,8 +17,8 @@ async function payload(response: Response): Promise<Record<string, unknown>> {
 }
 
 export const agentWorkspaceClient = {
-  async create(sessionId: string, mode: "guest" | "demo" | "authenticated", identity: RequestIdentity): Promise<{ workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean }> {
-    const response = await fetch(`${baseUrl}/api/v1/agent-workspaces`, { method: "POST", headers: headers(identity), body: JSON.stringify({ session_id: sessionId, mode }) });
+  async create(sessionId: string, mode: "guest" | "demo" | "authenticated", identity: RequestIdentity, deviceId?: string): Promise<{ workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean }> {
+    const response = await fetch(`${baseUrl}/api/v1/agent-workspaces`, { method: "POST", headers: headers(identity), body: JSON.stringify({ session_id: sessionId, mode, ...(deviceId ? { device_id: deviceId } : {}) }) });
     const value = await payload(response);
     if (!isAgentWorkspaceSnapshot(value.workspace) || typeof value.events_url !== "string" || typeof value.replayed !== "boolean") throw new Error("INVALID_WORKSPACE_CREATED");
     return value as unknown as { workspace: AgentWorkspaceSnapshot; events_url: string; replayed: boolean };

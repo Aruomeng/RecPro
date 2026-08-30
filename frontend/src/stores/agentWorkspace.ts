@@ -34,6 +34,7 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
   const latestEvent = computed(() => events.value.at(-1));
   const contextVersion = computed(() => snapshot.value?.context_version ?? latestEvent.value?.context_version ?? 0);
   const currentObservation = computed(() => snapshot.value?.orchestrator.current_observation ?? null);
+  const backgroundPlanning = computed(() => snapshot.value?.context_summary.background_planning ?? null);
   const guidanceMessage = computed(() => {
     const value = [...directives.value].reverse().find((item) => item.type === "SHOW_GUIDANCE" && ["AUTO_APPLIED", "ACCEPTED"].includes(item.status));
     return typeof value?.payload.message === "string" ? value.payload.message : "Agent 会在不打断操作的前提下提供下一步建议。";
@@ -151,7 +152,7 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
     state.value = "connecting";
     error.value = "";
     try {
-      const created = await agentWorkspaceClient.create(session.sessionId, session.mode, auth.requestIdentity);
+      const created = await agentWorkspaceClient.create(session.sessionId, session.mode, auth.requestIdentity, session.deviceId);
       if (token !== generation || controller.signal.aborted) return;
       applySnapshot(created.workspace);
       state.value = "online";
@@ -225,7 +226,7 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
 
   return {
     workspaceId, state, expanded, snapshot, agents, events, directives, sources, selectedAgentName, selectedAgent, error,
-    activeCount, degradedCount, suggestions, notices, suggestedTopics, latestEvent, contextVersion, currentObservation, guidanceMessage, explanationDensity, primaryEntry, preferredOutputType,
+    activeCount, degradedCount, suggestions, notices, suggestedTopics, latestEvent, contextVersion, currentObservation, backgroundPlanning, guidanceMessage, explanationDensity, primaryEntry, preferredOutputType,
     initialize, observe, action, selectAgent, stop,
   };
 });

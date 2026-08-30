@@ -38,6 +38,12 @@ from backend.app.platform.auth import (
     HMACBearerTokenResolver,
     build_formal_principal_resolver,
 )
+from backend.app.platform.oidc import (
+    JWKSCache,
+    OIDCBearerTokenResolver,
+    OIDCIdentityMapper,
+    JWKSFetcher,
+)
 from backend.app.identity import IdentityService
 from backend.app.identity.adapters import MySQLIdentityRepository
 from backend.app.identity.security import (
@@ -133,6 +139,76 @@ def build_formal_auth_resolver(
     return build_formal_principal_resolver(settings)
 
 
+class _HybridPrincipalResolver:
+    """Try the configured OIDC issuer, then the local research JWT path."""
+
+    def __init__(self, oidc: OIDCBearerTokenResolver, local: object) -> None:
+        self._oidc = oidc
+        self._local = local
+
+    async def __call__(self, token: str):
+        candidate = await self._oidc(token)
+        if candidate is not None:
+            return candidate
+        result = self._local(token)  # type: ignore[operator]
+        if hasattr(result, "__await__"):
+            return await result
+        return result
+
+
+def build_oidc_auth_resolver(
+    settings: AppSettings,
+    *,
+    jwks_fetcher: JWKSFetcher,
+    identity_mapper: OIDCIdentityMapper,
+) -> OIDCBearerTokenResolver:
+    """Build the production OIDC adapter without constructing network I/O.
+
+    The fetcher and external-subject mapper are injected by the deployment
+    composition.  This function only validates the reviewed configuration and
+    creates bounded policy objects; it never contacts the provider.
+    """
+
+    if settings.auth_mode not in {"oidc", "hybrid"}:
+        raise ValueError("OIDC resolver requires RECPRO_AUTH_MODE=oidc or hybrid")
+    if not settings.auth_enabled:
+        raise ValueError("OIDC resolver requires formal authentication")
+    if not settings.oidc_issuer or not settings.oidc_audience or not settings.oidc_jwks_uri:
+        raise ValueError("OIDC resolver requires issuer, audience, and JWKS URI")
+    return OIDCBearerTokenResolver(
+        issuer=settings.oidc_issuer,
+        audience=settings.oidc_audience,
+        jwks=JWKSCache(jwks_fetcher, ttl_seconds=settings.oidc_jwks_cache_seconds),
+        identity_mapper=identity_mapper,
+        clock_skew_seconds=settings.auth_clock_skew_seconds,
+    )
+
+
+def build_configured_auth_resolver(
+    settings: AppSettings,
+    *,
+    oidc_jwks_fetcher: JWKSFetcher | None = None,
+    oidc_identity_mapper: OIDCIdentityMapper | None = None,
+):
+    """Select local, OIDC, or hybrid auth at the explicit composition root."""
+
+    if settings.auth_mode == "local":
+        return build_formal_auth_resolver(settings)
+    if oidc_jwks_fetcher is None or oidc_identity_mapper is None:
+        raise ValueError("OIDC mode requires injected JWKS fetcher and identity mapper")
+    oidc = build_oidc_auth_resolver(
+        settings,
+        jwks_fetcher=oidc_jwks_fetcher,
+        identity_mapper=oidc_identity_mapper,
+    )
+    if settings.auth_mode == "oidc":
+        return oidc
+    local = build_formal_auth_resolver(settings)
+    if local is None:
+        raise ValueError("hybrid authentication requires a local JWT secret")
+    return _HybridPrincipalResolver(oidc, local)
+
+
 def build_local_identity_service(
     settings: AppSettings, *, connection_factory: ConnectionFactory | None = None,
 ) -> IdentityService:
@@ -182,6 +258,8 @@ def build_production_http_app(
     readiness_probe: object | None = None,
     config_bundle_probe: object | None = None,
     managed_resources: tuple[object, ...] = (),
+    oidc_jwks_fetcher: JWKSFetcher | None = None,
+    oidc_identity_mapper: OIDCIdentityMapper | None = None,
 ) -> FastAPI:
     """Build the complete production HTTP graph behind explicit fail-closed gates.
 
@@ -196,13 +274,19 @@ def build_production_http_app(
         raise ValueError("production HTTP composition requires RECPRO_APP_ENV=production")
     if not settings.production_http_enabled:
         raise ValueError("production HTTP composition is disabled by configuration")
-    if not settings.auth_enabled or settings.auth_jwt_secret is None:
+    if not settings.auth_enabled:
         raise ValueError("production HTTP composition requires formal bearer authentication")
+    if settings.auth_mode == "local" and settings.auth_jwt_secret is None:
+        raise ValueError("production HTTP composition requires local JWT configuration")
     if recommendation_service is None:
         raise ValueError("production HTTP composition requires recommendation service")
     if feedback_service is None or behavior_service is None:
         raise ValueError("production HTTP composition requires feedback and behavior services")
-    principal_resolver = build_formal_auth_resolver(settings)
+    principal_resolver = build_configured_auth_resolver(
+        settings,
+        oidc_jwks_fetcher=oidc_jwks_fetcher,
+        oidc_identity_mapper=oidc_identity_mapper,
+    )
     if principal_resolver is None:
         raise ValueError("production HTTP composition could not build bearer resolver")
 
@@ -867,6 +951,8 @@ __all__ = [
     "build_agent_workspace_profile_reader",
     "build_local_knowledge_review_service",
     "build_formal_auth_resolver",
+    "build_oidc_auth_resolver",
+    "build_configured_auth_resolver",
     "build_production_http_app",
     "build_demo_http_app",
     "build_profile_outbox_worker",

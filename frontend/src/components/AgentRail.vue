@@ -20,6 +20,7 @@ const eventText: Record<string, string> = {
   RECOMMENDATION_HISTORY_REPLAY: "历史真实动作回放", OBSERVATION_COMPLETED: "情境处理完成",
   OBSERVATION_FAILED: "情境处理失败", OBSERVATION_SUPERSEDED: "情境已由新版本接替",
   DIRECTIVE_PROPOSED: "提出交互建议", DIRECTIVE_ACTIONED: "用户处理建议", DIRECTIVE_EXPIRED: "交互建议已过期",
+  BACKGROUND_PLAN_SKIPPED: "后台规划按预算跳过",
 };
 const selected = computed(() => workspace.selectedAgent);
 const stateDistribution = computed(() => Object.entries(workspace.agents.reduce<Record<string, number>>((acc, agent) => { acc[agent.state] = (acc[agent.state] ?? 0) + 1; return acc; }, {})).sort((a,b) => b[1]-a[1]));
@@ -78,6 +79,13 @@ async function accept(directive: InteractionDirective): Promise<void> {
         </section>
         <section v-if="currentDirective" class="current-policy-card">
           <span>当前策略 · {{ currentDirective.status }}</span><h3>{{ currentDirective.type }}</h3><p>{{ currentDirective.reason_codes.join(' · ') }}</p><small>置信度 {{ Math.round(currentDirective.confidence * 100) }}% · 证据 {{ currentDirective.evidence_refs.join(' / ') || '公开会话上下文' }}</small>
+        </section>
+
+        <section v-if="workspace.backgroundPlanning" class="agent-panel-section background-planning-card">
+          <div class="section-caption"><b>低频后台规划</b><span>{{ workspace.backgroundPlanning.status }}</span></div>
+          <p>{{ workspace.backgroundPlanning.reason_code }} · v{{ workspace.backgroundPlanning.context_version }}</p>
+          <small>Provider {{ workspace.backgroundPlanning.provider }} · 请求 {{ workspace.backgroundPlanning.model_requests }} 次 · 指令 {{ workspace.backgroundPlanning.directive_count }} 条</small>
+          <small v-if="workspace.backgroundPlanning.budget">会话 {{ workspace.backgroundPlanning.budget.session_calls }}/{{ workspace.backgroundPlanning.budget.session_limit }} · 设备今日 {{ workspace.backgroundPlanning.budget.device_calls_today }}/{{ workspace.backgroundPlanning.budget.device_limit_today }}</small>
         </section>
 
         <section class="agent-panel-section agent-roster">

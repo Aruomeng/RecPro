@@ -20,7 +20,7 @@ from backend.app.api.knowledge_reviews import create_knowledge_review_router
 from backend.app.api.middleware import RequestContextMiddleware
 from backend.app.api.recommendation import create_recommendation_router
 from backend.app.api.recommendation_runs import create_recommendation_run_router
-from backend.app.composition import build_formal_auth_resolver
+from backend.app.composition import build_configured_auth_resolver
 from backend.app.config import (
     CONFIG_BUNDLE_SCHEMA_PATH,
     CONFIG_BUNDLE_SCHEMA_SHA256,
@@ -49,12 +49,17 @@ def create_app(
     recommendation_api_enabled: bool = False,
     recommendation_readiness_enabled: bool = False,
     recommendation_version: str = "recommendation-g3-mysql-v1",
+    background_planning_enabled: bool = False,
+    background_planning_version: str = "background-planning-v1",
+    background_planning_provider: str = "FixtureBackgroundPlanner",
     component_readiness_probes: Mapping[str, ReadinessProbe] | None = None,
     component_readiness_overrides: Mapping[str, ComponentReadiness] | None = None,
     feedback_service: object | None = None,
     behavior_service: object | None = None,
     feedback_api_enabled: bool = False,
     principal_resolver: PrincipalResolver | None = None,
+    oidc_jwks_fetcher: object | None = None,
+    oidc_identity_mapper: object | None = None,
     debug_api_enabled: bool | None = None,
     exploration_service: object | None = None,
     exploration_api_enabled: bool = False,
@@ -85,7 +90,11 @@ def create_app(
     formal_auth_enabled = bool(getattr(runtime, "auth_enabled", False))
     effective_principal_resolver = principal_resolver
     if effective_principal_resolver is None and formal_auth_enabled:
-        effective_principal_resolver = build_formal_auth_resolver(runtime)
+        effective_principal_resolver = build_configured_auth_resolver(
+            runtime,
+            oidc_jwks_fetcher=oidc_jwks_fetcher,  # type: ignore[arg-type]
+            oidc_identity_mapper=oidc_identity_mapper,  # type: ignore[arg-type]
+        )
     effective_debug_api_enabled = (
         runtime.debug_api_enabled
         if debug_api_enabled is None
@@ -117,6 +126,9 @@ def create_app(
         configuration_error_code=state.error_code,
         recommendation_enabled=recommendation_readiness_enabled,
         recommendation_version=recommendation_version,
+        background_planning_enabled=background_planning_enabled,
+        background_planning_version=background_planning_version,
+        background_planning_provider=background_planning_provider,
         component_probes=component_readiness_probes,
         component_overrides=component_readiness_overrides,
     )

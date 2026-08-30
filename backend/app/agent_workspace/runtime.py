@@ -35,6 +35,13 @@ from backend.app.agent_workspace.ports.handlers import (
     WorkspaceProfileReadPort,
     WorkspaceReadToolPort,
 )
+from backend.app.agent_workspace.application.background_planning import BackgroundPlanningCoordinator
+from backend.app.agent_workspace.ports.planning import (
+    BACKGROUND_PLANNING_TRIGGERS,
+    BackgroundPlanningOutcome,
+    PlanningContext,
+    SanitizedPlanningContext,
+)
 from backend.app.agent_workspace.topic_graph import SessionTopicGraph
 from backend.app.shared_kernel.contracts.autonomy import ROLE_PROFILES
 
@@ -103,6 +110,8 @@ class _Workspace:
     observation_fingerprints: dict[str, str] = field(default_factory=dict)
     last_processed_context_version: int = 0
     current_observation: dict[str, object] | None = None
+    device_id: str = ""
+    background_planning: dict[str, object] | None = None
 
 
 def _utc_now() -> datetime:
@@ -175,6 +184,7 @@ class AgentWorkspaceBroker:
         handlers: tuple[WorkspaceAgentHandler, ...] | None = None,
         read_tools: WorkspaceReadToolPort | None = None,
         profile_reader: WorkspaceProfileReadPort | None = None,
+        background_planner: BackgroundPlanningCoordinator | None = None,
         max_concurrent_observations: int = 16,
         max_pending_observations: int = 64,
         workspace_id_factory: Callable[[], UUID] = uuid4,
@@ -189,6 +199,7 @@ class AgentWorkspaceBroker:
             profile_reader=profile_reader,
         )
         self._profile_reader = profile_reader
+        self._background_planner = background_planner
         self._max_concurrent_observations = max_concurrent_observations
         self._max_pending_observations = max_pending_observations
         self._dispatcher: WorkspaceObservationDispatcher | None = None
@@ -219,6 +230,7 @@ class AgentWorkspaceBroker:
         user_id: int,
         mode: str,
         personalization_enabled: bool = False,
+        device_id: str | None = None,
     ) -> tuple[dict[str, object], bool]:
         if mode not in {"guest", "demo", "authenticated"}:
             raise ValueError("workspace mode must be guest, demo, or authenticated")
@@ -233,6 +245,7 @@ class AgentWorkspaceBroker:
         workspace = _Workspace(
             self._workspace_id_factory(), session_id, user_id, mode, now, now,
             personalization_enabled=personalization_enabled,
+            device_id=(device_id or f"session:{session_id}")[:128],
         )
         workspace.agents = {name: _public_agent(name) for name in AGENT_NAMES}
         workspace.external_context = self._read_external_context()
@@ -268,7 +281,12 @@ class AgentWorkspaceBroker:
             "directives": [value for value in workspace.directives.values() if value.get("status") in {"PROPOSED", "AUTO_APPLIED", "ACCEPTED"}],
             "recent_events": list(workspace.events)[-40:],
             "sources": self._sources(workspace),
-            "context_summary": {"route": workspace.current_route, "query": workspace.current_query, "external": workspace.external_context},
+            "context_summary": {
+                "route": workspace.current_route,
+                "query": workspace.current_query,
+                "external": workspace.external_context,
+                "background_planning": workspace.background_planning,
+            },
             "session_topic_graph": workspace.topic_graph.snapshot(),
         }
 
@@ -661,6 +679,8 @@ class AgentWorkspaceBroker:
             had_degraded = had_degraded or handler_state == "DEGRADED"
             if handler_state not in {"FAILED", "DEGRADED"}:
                 successful_handlers += 1
+        if self._background_planner is not None and observation.event_type in BACKGROUND_PLANNING_TRIGGERS:
+            await self._run_background_planning(workspace, observation)
         workspace.last_processed_context_version = observation.context_version
         outcome = (
             "FAILED"
@@ -681,6 +701,130 @@ class AgentWorkspaceBroker:
             "handler_count": len(handlers),
             "outcome": outcome,
         })
+
+    async def _run_background_planning(
+        self,
+        workspace: _Workspace,
+        observation: WorkspaceObservation,
+    ) -> None:
+        """Run an explicitly injected planner; the default broker has none."""
+
+        async def announce(decision_id: UUID, context: SanitizedPlanningContext) -> None:
+            self._set_agent(
+                workspace,
+                "RecommendationPolicyAgent",
+                "PLANNING",
+                action="BACKGROUND_PLAN",
+                target="InteractionDirectiveEngine",
+                reason="BACKGROUND_PLAN_TRIGGERED",
+            )
+            self._publish(workspace, "AGENT_STARTED", {
+                "decision_id": str(decision_id),
+                "agent_name": "RecommendationPolicyAgent",
+                "action": "BACKGROUND_PLAN",
+                "target": "InteractionDirectiveEngine",
+                "reason_code": "BACKGROUND_PLAN_TRIGGERED",
+                "observation_type": observation.event_type,
+                "observation_context_version": context.context_version,
+                "replayed": False,
+                "llm_requests": 0,
+            })
+
+        context = PlanningContext(
+            workspace_id=workspace.workspace_id,
+            session_id=workspace.session_id,
+            device_id=workspace.device_id,
+            mode=workspace.mode,  # type: ignore[arg-type]
+            context_version=observation.context_version,
+            trigger=observation.event_type,
+            route=observation.context_route,
+            query=observation.context_query,
+            top_topics=observation.context_top_topics,
+            source_statuses=observation.context_source_statuses,
+            external_context=observation.context_external_context,
+            personalization_enabled=observation.context_personalization_enabled,
+        )
+        outcome = await self._background_planner.plan(
+            context,
+            idempotency_key=f"workspace:{workspace.workspace_id}:context:{observation.context_version}",
+            on_dispatch=announce,
+        )
+        workspace.background_planning = self._public_background_outcome(outcome)
+        if outcome.status == "SKIPPED":
+            self._publish(workspace, "BACKGROUND_PLAN_SKIPPED", {
+                "reason_code": outcome.reason_code,
+                "observation_context_version": observation.context_version,
+                "budget": self._public_budget(outcome),
+            })
+            return
+        state = "COMPLETED" if outcome.status == "PLANNED" else outcome.status
+        self._set_agent(
+            workspace,
+            "RecommendationPolicyAgent",
+            state,
+            action="BACKGROUND_PLAN",
+            target="InteractionDirectiveEngine",
+            reason=outcome.reason_code,
+            confidence=outcome.confidence,
+            duration_ms=0,
+            evidence_refs=outcome.evidence_refs,
+        )
+        terminal = "AGENT_COMPLETED" if outcome.status in {"PLANNED", "DEGRADED"} else "AGENT_FAILED"
+        self._publish(workspace, terminal, {
+            "decision_id": str(outcome.decision_id) if outcome.decision_id else None,
+            "agent_name": "RecommendationPolicyAgent",
+            "action": "BACKGROUND_PLAN",
+            "target": "InteractionDirectiveEngine",
+            "reason_code": outcome.reason_code,
+            "confidence": outcome.confidence,
+            "duration_ms": 0,
+            "evidence_refs": list(outcome.evidence_refs),
+            "outcome": outcome.status,
+            "observation_context_version": observation.context_version,
+            "provider": outcome.provider,
+            "model": outcome.model,
+            "llm_requests": outcome.model_requests,
+            "budget": self._public_budget(outcome),
+        })
+        for proposal in outcome.directives:
+            self._propose(
+                workspace,
+                proposal.directive_type,
+                proposal.scope,
+                proposal.behavior,
+                proposal.payload,
+                proposal.reason_code,
+                proposal.confidence,
+                proposal.evidence_refs,
+                reversible=proposal.reversible,
+            )
+
+    @staticmethod
+    def _public_budget(outcome: BackgroundPlanningOutcome) -> dict[str, object] | None:
+        budget = outcome.budget
+        if budget is None:
+            return None
+        return {
+            "session_calls": budget.session_calls,
+            "session_limit": budget.session_limit,
+            "device_calls_today": budget.device_calls_today,
+            "device_limit_today": budget.device_limit_today,
+            "next_allowed_at": _iso(budget.next_allowed_at) if budget.next_allowed_at else None,
+        }
+
+    @classmethod
+    def _public_background_outcome(cls, outcome: BackgroundPlanningOutcome) -> dict[str, object]:
+        return {
+            "status": outcome.status,
+            "reason_code": outcome.reason_code,
+            "decision_id": str(outcome.decision_id) if outcome.decision_id else None,
+            "context_version": outcome.context_version,
+            "provider": outcome.provider,
+            "model": outcome.model,
+            "model_requests": outcome.model_requests,
+            "directive_count": len(outcome.directives),
+            "budget": cls._public_budget(outcome),
+        }
 
     def _handler_context(
         self,

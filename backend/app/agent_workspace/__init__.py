@@ -3,6 +3,15 @@
 from .context import ContextObservation, ContextProvider, LocalDemoExternalContextProvider
 from .audit import AgentWorkspaceAuditBuffer, AuditCapacityError
 from .dispatcher import WorkspaceObservationCapacityError
+from .application.background_planning import (
+    BackgroundPlanningCoordinator,
+    DirectiveValidationError,
+    DirectiveValidator,
+    FixtureBackgroundPlanner,
+    InMemoryPlanningBudget,
+    PlanningBudgetPolicy,
+    PlanningContextSanitizer,
+)
 from .handlers import ExplorationWorkspaceReadTools
 from .topic_graph import SessionTopicGraph
 from .runtime import (
@@ -27,4 +36,11 @@ __all__ = [
     "ExplorationWorkspaceReadTools",
     "SessionTopicGraph",
     "WorkspaceObservationCapacityError",
+    "BackgroundPlanningCoordinator",
+    "DirectiveValidationError",
+    "DirectiveValidator",
+    "FixtureBackgroundPlanner",
+    "InMemoryPlanningBudget",
+    "PlanningBudgetPolicy",
+    "PlanningContextSanitizer",
 ]

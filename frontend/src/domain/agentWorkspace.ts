@@ -56,6 +56,23 @@ export interface WorkspaceEvent {
 export interface WorkspaceContextSummary {
   route: string;
   query: string;
+  background_planning?: {
+    status: "PLANNED" | "SKIPPED" | "DEGRADED" | "FAILED";
+    reason_code: string;
+    decision_id: string | null;
+    context_version: number;
+    provider: string;
+    model: string;
+    model_requests: number;
+    directive_count: number;
+    budget: {
+      session_calls: number;
+      session_limit: number;
+      device_calls_today: number;
+      device_limit_today: number;
+      next_allowed_at: string | null;
+    } | null;
+  } | null;
   external: Array<{
     source_id: string;
     kind: "EXTERNAL_DEMO";

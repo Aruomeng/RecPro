@@ -35,6 +35,9 @@ class ReadinessService:
         configuration_error_code: str | None = None,
         recommendation_enabled: bool = False,
         recommendation_version: str = "recommendation-g3-mysql-v1",
+        background_planning_enabled: bool = False,
+        background_planning_version: str = "background-planning-v1",
+        background_planning_provider: str = "FixtureBackgroundPlanner",
         component_probes: Mapping[str, ReadinessProbe] | None = None,
         component_overrides: Mapping[str, ComponentReadiness] | None = None,
     ) -> None:
@@ -49,12 +52,22 @@ class ReadinessService:
             raise ValueError("recommendation_version must not be blank")
         self._recommendation_enabled = recommendation_enabled
         self._recommendation_version = recommendation_version
+        if not isinstance(background_planning_enabled, bool):
+            raise ValueError("background_planning_enabled must be boolean")
+        if not background_planning_version.strip():
+            raise ValueError("background_planning_version must not be blank")
+        if not background_planning_provider.strip():
+            raise ValueError("background_planning_provider must not be blank")
+        self._background_planning_enabled = background_planning_enabled
+        self._background_planning_version = background_planning_version
+        self._background_planning_provider = background_planning_provider
         allowed_components = {
             "chroma",
             "neo4j",
             "llm",
             "interaction_pipeline",
             "knowledge_review",
+            "background_planning",
         }
         probes = dict(component_probes or {})
         overrides = dict(component_overrides or {})
@@ -234,6 +247,29 @@ class ReadinessService:
                     None
                     if self._recommendation_enabled
                     else "G1_NOT_IMPLEMENTED"
+                ),
+            ),
+            "background_planning": ComponentReadiness(
+                status=(
+                    ComponentStatus.UP
+                    if self._background_planning_enabled
+                    else ComponentStatus.DISABLED
+                ),
+                required=False,
+                active_version=(
+                    self._background_planning_version
+                    if self._background_planning_enabled
+                    else None
+                ),
+                provider=(
+                    self._background_planning_provider
+                    if self._background_planning_enabled
+                    else None
+                ),
+                error_code=(
+                    None
+                    if self._background_planning_enabled
+                    else "BACKGROUND_PLANNING_DISABLED"
                 ),
             ),
         }

@@ -35,6 +35,9 @@ ObservationType = Literal[
 class WorkspaceCreateRequest(StrictModel):
     session_id: UUID
     mode: Literal["guest", "demo", "authenticated"]
+    # Ephemeral browser/device bucket used only for the bounded background
+    # planning budget. It is never persisted and carries no account identity.
+    device_id: str | None = Field(default=None, min_length=8, max_length=128, pattern=r"^[A-Za-z0-9._:-]+$")
 
 
 class WorkspaceSnapshotResponse(StrictModel):
@@ -148,6 +151,7 @@ def create_agent_workspace_router(
                     actor.has_permission("personalization.profile.use")
                     or request.mode == "demo"
                 ),
+                device_id=request.device_id,
             )
         except WorkspaceCapacityError as exc:
             raise PublicAPIError(429, ErrorCode.REQUEST_DEADLINE_EXCEEDED, "The bounded Agent workspace capacity has been reached.", True, {"max_workspaces": 32}) from exc
