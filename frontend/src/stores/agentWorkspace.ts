@@ -52,6 +52,14 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
   });
 
   function applySnapshot(next: AgentWorkspaceSnapshot): void {
+    // Observation responses can resolve out of order. A snapshot may advance
+    // the workspace, never rewind the public context or event timeline.
+    if (snapshot.value && snapshot.value.workspace_id === next.workspace_id) {
+      const currentSequence = snapshot.value.recent_events.reduce((highest, event) => Math.max(highest, event.sequence), 0);
+      const nextSequence = next.recent_events.reduce((highest, event) => Math.max(highest, event.sequence), 0);
+      if (next.context_version < snapshot.value.context_version ||
+          (next.context_version === snapshot.value.context_version && nextSequence < currentSequence)) return;
+    }
     snapshot.value = next;
     workspaceId.value = next.workspace_id;
     agents.value = next.agents;
@@ -136,18 +144,23 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
 
   async function initialize(): Promise<void> {
     const token = ++generation;
-    streamController?.abort();
-    streamController = new AbortController();
+    streamController?.abort("workspace-replaced");
+    const controller = new AbortController();
+    streamController = controller;
     clearRuntimeState();
     state.value = "connecting";
     error.value = "";
     try {
       const created = await agentWorkspaceClient.create(session.sessionId, session.mode, auth.requestIdentity);
-      if (token !== generation) return;
+      if (token !== generation || controller.signal.aborted) return;
       applySnapshot(created.workspace);
       state.value = "online";
-      void agentWorkspaceClient.stream(created.events_url, created.workspace.workspace_id, () => auth.requestIdentity, applyEvent, streamController.signal, auth.refresh).catch((caught) => {
-        if (!streamController?.signal.aborted) { state.value = "degraded"; error.value = caught instanceof Error ? caught.message : "Agent 事件流已断开"; }
+      const applyCurrentEvent = (event: WorkspaceEvent): void => {
+        if (token !== generation || controller.signal.aborted) return;
+        applyEvent(event);
+      };
+      void agentWorkspaceClient.stream(created.events_url, created.workspace.workspace_id, () => auth.requestIdentity, applyCurrentEvent, controller.signal, auth.refresh).catch((caught) => {
+        if (token === generation && !controller.signal.aborted) { state.value = "degraded"; error.value = caught instanceof Error ? caught.message : "Agent 事件流已断开"; }
       });
     } catch (caught) {
       if (token !== generation) return;
@@ -157,29 +170,45 @@ export const useAgentWorkspaceStore = defineStore("agentWorkspace", () => {
   }
 
   async function observe(type: WorkspaceObservationType, payload: Record<string, unknown> = {}): Promise<void> {
-    if (!workspaceId.value) return;
+    const token = generation;
+    const observedWorkspaceId = workspaceId.value;
+    if (!observedWorkspaceId) return;
     try {
-      applySnapshot(await agentWorkspaceClient.observe(workspaceId.value, type, payload, auth.requestIdentity));
+      const next = await agentWorkspaceClient.observe(observedWorkspaceId, type, payload, auth.requestIdentity);
+      if (token !== generation || observedWorkspaceId !== workspaceId.value) return;
+      applySnapshot(next);
       state.value = "online";
     } catch (caught) {
+      if (token !== generation || observedWorkspaceId !== workspaceId.value) return;
       error.value = caught instanceof Error ? caught.message : "情境观察未送达";
       state.value = "degraded";
     }
   }
 
   async function action(directive: InteractionDirective, value: "ACCEPT" | "DISMISS" | "UNDO"): Promise<void> {
-    if (!workspaceId.value) return;
+    const token = generation;
+    const actionWorkspaceId = workspaceId.value;
+    if (!actionWorkspaceId) return;
     try {
-      const updated = await agentWorkspaceClient.action(workspaceId.value, directive.directive_id, value, auth.requestIdentity);
+      const updated = await agentWorkspaceClient.action(actionWorkspaceId, directive.directive_id, value, auth.requestIdentity);
+      if (token !== generation || actionWorkspaceId !== workspaceId.value) return;
       directives.value = directives.value.map((item) => item.directive_id === updated.directive_id ? updated : item);
     } catch (caught) {
+      if (token !== generation || actionWorkspaceId !== workspaceId.value) return;
       error.value = caught instanceof Error ? caught.message : "交互策略处理失败";
       throw caught;
     }
   }
 
   function selectAgent(name: string): void { selectedAgentName.value = name; expanded.value = true; }
-  function stop(): void { generation += 1; streamController?.abort(); streamController = undefined; state.value = "idle"; }
+  function stop(): void {
+    generation += 1;
+    streamController?.abort("workspace-stopped");
+    streamController = undefined;
+    state.value = "idle";
+    clearRuntimeState();
+    error.value = "";
+  }
 
   watch(() => [session.sessionId, session.mode, session.userId, auth.accessToken] as const, () => {
     // The application shell owns initial startup. Once started, identity and
