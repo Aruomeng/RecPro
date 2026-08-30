@@ -13,6 +13,9 @@ htmlcov/
 node_modules/
 dist/
 artifacts/
+# Local test runs may invoke pnpm, but npm remains the declared frontend
+# package manager; keep its generated lockfile out of the source tree.
+frontend/pnpm-lock.yaml
 # Experiment runs are immutable local artifacts.  Configurations remain tracked,
 # while predictions/reports never enter source-control or overwrite prior runs.
 experiments/runs/

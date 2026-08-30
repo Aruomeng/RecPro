@@ -37,6 +37,10 @@ watch(() => system.readiness, (readiness) => {
   const degraded = Object.entries(readiness.value.components).filter(([, component]) => component.status !== "UP").map(([name]) => name);
   void agentWorkspace.observe("READINESS_CHANGED", { degraded, can_recommend: readiness.value.can_recommend });
 });
+watch(() => [auth.authenticated, auth.permissions.includes("research.audit.read")] as const, ([authenticated, canRead]) => {
+  if (!authenticated || !canRead) system.clearRuntimeDiagnostics();
+  else void system.refreshRuntime();
+});
 watch(() => session.inactivityEpoch, () => { if (auth.authenticated) void auth.logout(); });
 onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
 </script>
@@ -76,7 +80,13 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); });
           <button class="icon-button drawer-close" type="button" aria-label="关闭" @click="system.drawerOpen = false">×</button>
           <span class="eyebrow">SYSTEM READINESS</span><h2>系统状态</h2>
           <p>技术信息仅在此处展示，不占用读者主界面。</p>
-          <SystemStatus :liveness="system.liveness" :readiness="system.readiness" />
+          <SystemStatus
+            :liveness="system.liveness"
+            :readiness="system.readiness"
+            :runtime="system.runtimeDiagnostics"
+            :runtime-access="system.canReadRuntimeDiagnostics"
+            @refresh-runtime="system.refreshRuntime"
+          />
           <button v-if="auth.researchDemoEnabled" class="secondary-action" type="button" @click="auth.useResearchDemo(); system.drawerOpen = false">进入研究演示画像（1001）</button>
           <RouterLink class="secondary-action" to="/system" @click="system.drawerOpen = false">打开完整兼容页</RouterLink>
         </aside>

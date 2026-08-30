@@ -99,6 +99,9 @@ describe("recommendationClient", () => {
       requested_resource_types: ["BOOK"],
       requested_output_type: "TOPIC_RESOURCES",
       limit: 6,
-    })).rejects.toMatchObject({ code: "INVALID_RECOMMENDATION_RESPONSE" });
+    })).rejects.toMatchObject({
+      code: "INVALID_RUN_RESULT",
+      details: { path: "$.task_id" },
+    });
   });
 });

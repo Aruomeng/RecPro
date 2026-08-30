@@ -2,6 +2,7 @@
 import { computed } from "vue";
 
 import type { LivenessResponse, Loadable, ReadinessResponse } from "../domain/health";
+import type { RuntimeDiagnosticsLoadable } from "../domain/runtimeDiagnostics";
 import { isHealthFailure } from "../domain/health";
 import {
   componentNames,
@@ -11,10 +12,17 @@ import {
   presentReadinessError,
 } from "../presentation/healthPresentation";
 import StatusBadge from "./StatusBadge.vue";
+import RuntimeDiagnostics from "./RuntimeDiagnostics.vue";
 
 const props = defineProps<{
   liveness: Loadable<LivenessResponse>;
   readiness: Loadable<ReadinessResponse>;
+  runtime?: RuntimeDiagnosticsLoadable;
+  runtimeAccess?: boolean;
+}>();
+
+const emit = defineEmits<{
+  refreshRuntime: [];
 }>();
 
 const readinessCopy = computed(() => {
@@ -116,5 +124,11 @@ function formatTime(value: string): string {
         </ul>
       </template>
     </section>
+
+    <RuntimeDiagnostics
+      v-if="runtimeAccess && runtime"
+      :runtime="runtime"
+      @refresh="emit('refreshRuntime')"
+    />
   </div>
 </template>
