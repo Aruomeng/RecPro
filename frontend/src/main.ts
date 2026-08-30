@@ -13,6 +13,10 @@ router.beforeEach(async (to) => {
   if (!["recommend", "path"].includes(String(to.name))) return true;
   const auth = useAuthStore(pinia);
   await auth.restore();
-  return auth.requireLogin(to.name === "path" ? "生成阅读路径" : "智能推荐") || false;
+  if (auth.requireLogin(to.name === "path" ? "生成阅读路径" : "智能推荐")) return true;
+  // Keep the login explanation visible on a real page instead of leaving the
+  // protected route with an empty main region.  The requested feature remains
+  // in AuthStore and is rendered by LoginDialog on the home surface.
+  return { name: "home" };
 });
 createApp(App).use(pinia).use(router).mount("#app");

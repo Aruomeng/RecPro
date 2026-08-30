@@ -27,7 +27,13 @@ const option = computed<EChartsOption>(() => ({
     emphasis: { focus: "adjacency", label: { show: true, fontWeight: "bold", overflow: "break", width: 180 }, lineStyle: { opacity: 0.9, width: 2 } },
     select: { itemStyle: { borderColor: "#0f172a", borderWidth: 3 } }, selectedMode: "single",
     data: visibleNodes.value.map((node) => ({
-      id: node.id, name: node.label, value: node.label, category: Math.max(0, types.indexOf(node.type)),
+      id: node.id,
+      name: node.label,
+      // Keep the graph metric numeric.  Using the display label as ECharts'
+      // value makes its aria summary attempt to calculate `NaN` for labels
+      // that are not numbers, even though the graph itself renders correctly.
+      value: 1,
+      category: Math.max(0, types.indexOf(node.type)),
       symbolSize: node.type === "Book" ? (props.compact ? 20 : 34) : (props.compact ? 13 : 23),
       selected: node.id === props.selectedId,
     })),
