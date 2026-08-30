@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import inspect
 from typing import Callable
 from uuid import UUID, uuid4
 
@@ -27,6 +28,23 @@ class KnowledgeReviewService:
     ) -> None:
         self._repository = repository
         self._clock = clock
+
+    async def close(self) -> None:
+        """Close an explicitly composed repository resource, if applicable."""
+
+        close = getattr(self._repository, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._repository, "runtime_metrics", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        return dict(value) if isinstance(value, dict) else None
 
     @staticmethod
     def authorize(actor: AuthenticatedPrincipal) -> None:

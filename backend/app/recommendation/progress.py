@@ -50,8 +50,28 @@ class RecommendationProgressBroker:
         self._max_concurrent = max_concurrent
         self._retention_seconds = retention_seconds
         self._runs: dict[UUID, _Run] = {}
+        self._closed = False
+
+    @property
+    def closed(self) -> bool:
+        return self._closed
+
+    async def close(self) -> None:
+        """Wait for accepted runs before the owning HTTP app shuts down."""
+
+        if self._closed:
+            return
+        self._closed = True
+        tasks = tuple(
+            run.task for run in self._runs.values()
+            if run.task is not None and not run.task.done()
+        )
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     def reserve(self, *, task_id: UUID, trace_id: UUID, context_version: int, user_id: int, request_fingerprint: str) -> tuple[ScopedProgressSink, bool]:
+        if self._closed:
+            raise RuntimeError("recommendation progress broker is closed")
         if not request_fingerprint.strip():
             raise ValueError("request fingerprint must not be blank")
         self._prune()

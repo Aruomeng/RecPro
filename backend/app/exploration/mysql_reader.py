@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import inspect
 from typing import Any, Awaitable, Callable
 
 
@@ -14,6 +15,26 @@ class MySQLCatalogReader:
 
     def __init__(self, *, connection_factory: ConnectionFactory) -> None:
         self._connection_factory = connection_factory
+
+    async def close(self) -> None:
+        """Close the injected pool; this reader never deletes catalog data."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
 
     async def overview(self) -> dict[str, object]:
         connection = await self._connection_factory()

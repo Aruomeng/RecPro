@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+import inspect
 import time
 from backend.app.exploration.ports import LibraryCatalogReadPort, PublicGraphReadPort
 
@@ -17,6 +18,26 @@ class ExplorationService:
         self._cache_seconds = cache_seconds
         self._overview_cache: tuple[float, dict[str, object]] | None = None
         self._cache_lock = asyncio.Lock()
+
+    async def close(self) -> None:
+        """Close explicitly composed readers without changing cached facts."""
+
+        for component in (self._catalog, self._graph):
+            close = getattr(component, "close", None)
+            if not callable(close):
+                continue
+            result = close()
+            if inspect.isawaitable(result):
+                await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        """Expose the catalog reader's non-sensitive pool metrics."""
+
+        snapshot = getattr(self._catalog, "runtime_metrics", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        return dict(value) if isinstance(value, dict) else None
 
     async def overview(self) -> dict[str, object]:
         now = time.monotonic()

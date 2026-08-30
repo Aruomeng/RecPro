@@ -181,6 +181,7 @@ def build_production_http_app(
     behavior_service: object | None,
     readiness_probe: object | None = None,
     config_bundle_probe: object | None = None,
+    managed_resources: tuple[object, ...] = (),
 ) -> FastAPI:
     """Build the complete production HTTP graph behind explicit fail-closed gates.
 
@@ -221,6 +222,7 @@ def build_production_http_app(
         feedback_api_enabled=True,
         principal_resolver=principal_resolver,
         debug_api_enabled=False,
+        managed_resources=(*managed_resources, recommendation_service, feedback_service, behavior_service),
     )
 
 
@@ -233,6 +235,7 @@ def build_demo_http_app(
     readiness_probe: object | None = None,
     config_bundle_probe: object | None = None,
     feedback_api_enabled: bool = False,
+    managed_resources: tuple[object, ...] = (),
 ) -> FastAPI:
     """Build an explicitly enabled local demo HTTP graph.
 
@@ -265,6 +268,7 @@ def build_demo_http_app(
         behavior_service=behavior_service,
         feedback_api_enabled=feedback_api_enabled,
         debug_api_enabled=False,
+        managed_resources=(*managed_resources, recommendation_service, feedback_service, behavior_service),
     )
 
 
@@ -495,6 +499,7 @@ def build_research_g4_http_app(
     agent_workspace_broker: object | None = None,
     identity_service: IdentityService | None = None,
     knowledge_review_service: KnowledgeReviewService | None = None,
+    managed_resources: tuple[object, ...] = (),
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -547,6 +552,17 @@ def build_research_g4_http_app(
         principal_resolver=principal_resolver,
         knowledge_review_service=knowledge_review_service,
         knowledge_review_api_enabled=knowledge_review_service is not None,
+        managed_resources=(
+            *managed_resources,
+            recommendation_service,
+            feedback_service,
+            behavior_service,
+            exploration_service,
+            recommendation_progress_broker,
+            agent_workspace_broker,
+            identity_service,
+            knowledge_review_service,
+        ),
     )
 
 

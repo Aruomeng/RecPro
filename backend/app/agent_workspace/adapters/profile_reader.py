@@ -3,16 +3,46 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Mapping
+import inspect
+from collections.abc import Awaitable, Callable
+from typing import Any, Mapping
 
+from backend.app.profile.public import profile_snapshot_reader_from_connection_factory
 from backend.app.profile.ports.public import ProfileSnapshotReader
 
 
 class MySQLWorkspaceProfileReader:
     """Expose only a bounded profile summary through the profile public port."""
 
-    def __init__(self, reader: ProfileSnapshotReader) -> None:
-        self._reader = reader
+    def __init__(
+        self,
+        reader: ProfileSnapshotReader | Callable[[], Awaitable[Any]],
+    ) -> None:
+        # Keep the pre-v2 connection-factory call shape as a compatibility
+        # seam while the normal composition path injects the public reader
+        # port directly.  Both forms retain rollback-only, read-only behavior.
+        self._reader = (
+            reader
+            if hasattr(reader, "get_snapshot")
+            else profile_snapshot_reader_from_connection_factory(reader)
+        )
+
+    async def close(self) -> None:
+        """Close the explicitly composed profile reader, if it owns a pool."""
+
+        close = getattr(self._reader, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._reader, "runtime_metrics", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        return dict(value) if isinstance(value, dict) else None
 
     async def summary(self, user_id: int) -> Mapping[str, object]:
         if user_id < 10_000:

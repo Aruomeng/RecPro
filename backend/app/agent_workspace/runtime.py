@@ -14,6 +14,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
+import inspect
 import json
 import time
 from typing import AsyncIterator, Callable, Mapping
@@ -187,6 +188,7 @@ class AgentWorkspaceBroker:
             read_tools=read_tools,
             profile_reader=profile_reader,
         )
+        self._profile_reader = profile_reader
         self._max_concurrent_observations = max_concurrent_observations
         self._max_pending_observations = max_pending_observations
         self._dispatcher: WorkspaceObservationDispatcher | None = None
@@ -194,6 +196,21 @@ class AgentWorkspaceBroker:
         self._directive_id_factory = directive_id_factory
         self._workspaces: dict[UUID, _Workspace] = {}
         self._by_session: dict[tuple[UUID, int, str], UUID] = {}
+        self._closed = False
+
+    async def close(self) -> None:
+        """Drain accepted observations and release an injected profile reader."""
+
+        if self._closed:
+            return
+        self._closed = True
+        await self.wait_for_idle()
+        close = getattr(self._profile_reader, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
 
     def create(
         self,

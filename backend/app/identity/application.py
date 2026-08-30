@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 import hashlib
 import hmac
+import inspect
 from typing import Callable
 from uuid import UUID, uuid4, uuid5
 
@@ -63,6 +64,23 @@ class IdentityService:
         self._refresh_ttl = refresh_ttl_seconds
         self._lock_threshold = lock_threshold
         self._lock_seconds = lock_seconds
+
+    async def close(self) -> None:
+        """Close the repository's explicit storage resource, if it has one."""
+
+        close = getattr(self._repo, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._repo, "runtime_metrics", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        return dict(value) if isinstance(value, dict) else None
 
     async def provision_reader(
         self, *, display_name: str, identifier_type: IdentifierType,

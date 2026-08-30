@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 import hashlib
+import inspect
 import json
 from typing import Any
 from uuid import UUID, uuid5
@@ -58,6 +59,26 @@ _ACCOUNT_COLUMNS = (
 class MySQLIdentityRepository:
     def __init__(self, connection_factory: ConnectionFactory) -> None:
         self._connection_factory = connection_factory
+
+    async def close(self) -> None:
+        """Close an explicitly composed pool without touching identity data."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
 
     async def provision_reader(
         self, *, display_name: str, identifier_type: IdentifierType,

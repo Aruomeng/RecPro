@@ -84,6 +84,26 @@ class BehaviorApplicationService:
         self._append_port = append_port
         self._ownership_reader = ownership_reader
 
+    async def close(self) -> None:
+        """Close an explicitly composed connection factory, if applicable."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
+
     async def append(self, command: BehaviorAppendCommand) -> BehaviorReceipt:
         connection = await self._connection_factory()
         try:
@@ -127,6 +147,26 @@ class FeedbackApplicationService:
         self._connection_factory = connection_factory
         self._feedback_store = feedback_store
         self._behavior_port = behavior_port
+
+    async def close(self) -> None:
+        """Close an explicitly composed connection factory, if applicable."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
 
     async def record_impression(self, command: ImpressionCommand) -> ImpressionReceipt:
         connection = await self._connection_factory()

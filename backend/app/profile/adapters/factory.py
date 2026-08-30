@@ -25,6 +25,26 @@ class MySQLProfileSnapshotReaderFactory(ProfileSnapshotReader):
         self._connection_factory = connection_factory
         self._formula_version = formula_version
 
+    async def close(self) -> None:
+        """Close an explicitly composed pool used for profile reads."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
+
     async def get_snapshot(self, *, user_id: int, as_of: datetime):
         connection = await self._connection_factory()
         try:

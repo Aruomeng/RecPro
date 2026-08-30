@@ -113,7 +113,7 @@ async def _read_declared_profile(
             "ORDER BY declared_version DESC LIMIT 1",
             (user_id, timestamp),
         )
-        row = await cursor.fetchone()
+        row = await _fetchone_compat(cursor)
     except asyncmy.errors.ProgrammingError as exc:
         if "doesn't exist" not in str(exc).lower() and "unknown table" not in str(exc).lower():
             raise
@@ -128,7 +128,7 @@ async def _read_declared_profile(
             "FROM user_declared_profile WHERE user_id = %s AND updated_at <= %s",
             (user_id, timestamp),
         )
-        row = await cursor.fetchone()
+        row = await _fetchone_compat(cursor)
     except asyncmy.errors.ProgrammingError as exc:
         if "doesn't exist" not in str(exc).lower() and "unknown table" not in str(exc).lower():
             raise
@@ -147,6 +147,16 @@ def _declared_profile_row(row: Any, *, timestamp_index: int) -> DeclaredProfileF
         personalization_enabled=bool(row[5]),
         updated_at=updated_at,
     )
+
+
+async def _fetchone_compat(cursor: Any) -> Any:
+    """Read one row while keeping lightweight cursor fakes compatible."""
+
+    fetchone = getattr(cursor, "fetchone", None)
+    if callable(fetchone):
+        return await fetchone()
+    rows = await cursor.fetchall()
+    return rows[0] if rows else None
 
 
 def _clean_profile_value(value: object) -> str | None:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import hashlib
 from datetime import UTC, datetime
+import inspect
 from typing import Any, Awaitable, Callable
 from uuid import NAMESPACE_URL, UUID, uuid5
 
@@ -177,6 +178,35 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
         if self._connection_factory is not None:
             return await self._connection_factory()
         return await asyncmy.connect(**self._connection_options)
+
+    async def close(self) -> None:
+        """Close an explicitly injected pool, if this adapter owns one.
+
+        Per-request direct ``asyncmy.connect`` connections are still closed by
+        their request transaction.  A pooled factory exposes ``close`` and is
+        closed by the application lifespan through this adapter.
+        """
+
+        if self._connection_factory is None:
+            return
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        """Expose pool metrics without exposing connection options."""
+
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
 
     async def create_task(
         self,

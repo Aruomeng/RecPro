@@ -54,6 +54,16 @@ class ProfileOutboxWorker:
         self._max_attempts = max_attempts
         self._allowed_outbox_ids = normalized_ids
 
+    async def close(self) -> None:
+        """Close the explicitly supplied pool; pending facts remain queued."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
     async def run_once(self, *, limit: int = 10) -> tuple[ProfileRefreshReceipt, ...]:
         claim_connection = await self._connection_factory()
         try:

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -35,6 +36,7 @@ from backend.app.observability.adapters import (
 from backend.app.observability.application import ReadinessService
 from backend.app.observability.domain import ComponentReadiness
 from backend.app.observability.ports import ReadinessProbe
+from backend.app.platform.lifecycle import RuntimeResourceRegistry
 
 
 def create_app(
@@ -62,6 +64,7 @@ def create_app(
     identity_api_enabled: bool = False,
     knowledge_review_service: object | None = None,
     knowledge_review_api_enabled: bool = False,
+    managed_resources: Sequence[object] | None = None,
 ) -> FastAPI:
     if recommendation_readiness_enabled and (
         recommendation_service is None or not recommendation_api_enabled
@@ -118,6 +121,18 @@ def create_app(
         component_overrides=component_readiness_overrides,
     )
 
+    # Resources are registered only by an explicit composition root.  Keeping
+    # this registry separate from FastAPI dependencies prevents a test double
+    # or a caller-owned client from being closed implicitly at shutdown.
+    resource_registry = RuntimeResourceRegistry(managed_resources or ())
+
+    @asynccontextmanager
+    async def lifespan(_: FastAPI):
+        try:
+            yield
+        finally:
+            await resource_registry.close()
+
     application = FastAPI(
         title="LibraMAS Recommendation API",
         version=runtime.app_version,
@@ -125,8 +140,11 @@ def create_app(
             "Health API plus an explicitly composed recommendation graph. "
             "The module-level default remains health-only."
         ),
+        lifespan=lifespan,
     )
     application.state.configuration = state
+    application.state.runtime_resources = resource_registry
+    application.state.runtime_metrics = resource_registry.snapshots
     application.add_middleware(RequestContextMiddleware)
     cors_methods = ["GET"]
     cors_headers = ["X-Request-Id", "Content-Type"]

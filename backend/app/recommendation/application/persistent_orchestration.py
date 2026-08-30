@@ -85,6 +85,28 @@ class PersistentOrchestrationService:
         self._orchestrator_factory = orchestrator_factory
         self._log_port = log_port
 
+    async def close(self) -> None:
+        """Close a composed connection factory when it exposes a lifecycle."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
+
+    def runtime_metrics(self) -> dict[str, object] | None:
+        """Expose non-sensitive metrics from the composed connection factory."""
+
+        snapshot = getattr(self._connection_factory, "snapshot", None)
+        if not callable(snapshot):
+            return None
+        value = snapshot()
+        as_dict = getattr(value, "as_dict", None)
+        if callable(as_dict):
+            value = as_dict()
+        return dict(value) if isinstance(value, dict) else None
+
     async def run(self, request: OrchestrationRequest) -> OrchestrationResult:
         if request.evaluation_at is None or request.deadline_at is None:
             raise ValueError(

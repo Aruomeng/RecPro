@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import inspect
 from typing import Any, Awaitable, Callable
 from uuid import UUID
 
@@ -36,6 +37,16 @@ class AgentWorkspaceAuditWorker:
         self._adapter = adapter
         self._connection_factory = connection_factory
         self._max_batch = max_batch
+
+    async def close(self) -> None:
+        """Close the explicitly supplied pool without draining or deleting facts."""
+
+        close = getattr(self._connection_factory, "close", None)
+        if not callable(close):
+            return
+        result = close()
+        if inspect.isawaitable(result):
+            await result
 
     async def drain_once(self) -> AuditDrainReport:
         batch = self._buffer.snapshot()[: self._max_batch]
