@@ -55,21 +55,29 @@ class DeepSeekBackgroundPlanner(BackgroundPlanningPort):
         if len(context_json) > 3000:
             raise ValueError("sanitized background context exceeds the model boundary")
         result = await self.provider.plan_workspace_background(context_json)
-        directives = result.payload.get("directives")
-        if not isinstance(directives, list) or len(directives) > 7:
-            raise ValueError("background model response does not contain bounded directives")
-        if any(not isinstance(item, Mapping) for item in directives):
-            raise ValueError("background model response contains a non-object directive")
-        confidence_values = [
-            float(item["confidence"])
-            for item in directives
-            if isinstance(item.get("confidence"), (int, float))
-            and not isinstance(item.get("confidence"), bool)
-        ]
+        topics = result.payload.get("suggested_topics")
+        if not isinstance(topics, list) or len(topics) > 3:
+            raise ValueError("background model response does not contain bounded topics")
+        if any(not isinstance(item, str) or not item.strip() for item in topics):
+            raise ValueError("background model response contains an invalid topic")
+        # The model may only nominate small, public topic strings. All action
+        # semantics are server-owned, so the model cannot forge routes,
+        # policy state, evidence, or an auto-applied directive.
+        clean_topics = list(dict.fromkeys(item.strip()[:80] for item in topics))
+        directives = [] if not clean_topics else [{
+            "directive_type": "SUGGEST_TOPICS",
+            "scope": "home",
+            "behavior": "SUGGESTION",
+            "payload": {"topics": clean_topics},
+            "reason_code": "BACKGROUND_MODEL_TOPICS",
+            "confidence": 0.76,
+            "evidence_refs": ["workspace:context", "prompt:workspace.background_plan"],
+            "reversible": True,
+        }]
         return BackgroundPlanningResult(
             directives=tuple(dict(item) for item in directives),
             evidence_refs=("workspace:context", "prompt:workspace.background_plan"),
-            confidence=max(confidence_values, default=0.0),
+            confidence=0.76 if directives else 0.0,
             provider=result.provider,
             model=result.model,
             model_requests=1,

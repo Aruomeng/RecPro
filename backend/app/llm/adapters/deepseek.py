@@ -198,14 +198,14 @@ class DeepSeekLLMProvider:
             "workspace.background_plan",
             {"context_json": context_json},
         )
-        directives = payload.get("directives")
-        if not isinstance(directives, list) or len(directives) > 7:
-            raise ValueError("DeepSeek returned an invalid background directive list")
-        if any(not isinstance(item, Mapping) for item in directives):
-            raise ValueError("DeepSeek returned a non-object background directive")
+        topics = payload.get("suggested_topics")
+        if not isinstance(topics, list) or len(topics) > 3:
+            raise ValueError("DeepSeek returned an invalid background topic list")
+        if any(not isinstance(item, str) or not item.strip() for item in topics):
+            raise ValueError("DeepSeek returned an invalid background topic")
         return self._result(
             "workspace.background_plan",
-            {"directives": [dict(item) for item in directives]},
+            {"suggested_topics": [item.strip()[:80] for item in topics]},
             request_id,
             attempts,
         )

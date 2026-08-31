@@ -140,7 +140,7 @@ def model_policy(settings: AppSettings) -> dict[str, object]:
         "max_attempts": 1,
         "maximum_external_requests": 1,
         "prompt_bundle": PROMPT_PATH.relative_to(PROJECT_ROOT).as_posix(),
-        "prompt_version": "prompt-v2",
+        "prompt_version": "prompt-v3",
     }
 
 
@@ -153,7 +153,7 @@ def build_plan(*, run_id: str, llm_env_file: Path) -> dict[str, Any]:
     _context, context_json = fixed_context(run_id)
     prompt_bytes = PROMPT_PATH.read_bytes()
     prompt_hash = sha256_bytes(prompt_bytes)
-    bundle = load_prompt_bundle(PROMPT_PATH, expected_sha256=prompt_hash, expected_version="prompt-v2")
+    bundle = load_prompt_bundle(PROMPT_PATH, expected_sha256=prompt_hash, expected_version="prompt-v3")
     bundle.task("workspace.background_plan")
     policy = model_policy(settings)
     request_id = uuid5(NAMESPACE_URL, f"background-planning-request:{run_id}")
@@ -247,7 +247,7 @@ async def apply_plan(*, plan: Mapping[str, Any], run_id: str, llm_env_file: Path
     prompt_hash = sha256_bytes(PROMPT_PATH.read_bytes())
     if prompt_hash != plan["input_hashes"]["prompt_bundle"]:
         raise ValueError("prompt bundle differs from the approved plan")
-    bundle = load_prompt_bundle(PROMPT_PATH, expected_sha256=prompt_hash, expected_version="prompt-v2")
+    bundle = load_prompt_bundle(PROMPT_PATH, expected_sha256=prompt_hash, expected_version="prompt-v3")
     provider = DeepSeekLLMProvider(
         api_key=settings.llm_api_key,
         base_url=settings.llm_base_url,

@@ -10,12 +10,22 @@ from pydantic import SecretStr
 from backend.app.llm.adapters.deepseek import DeepSeekLLMProvider, DeepSeekRequestError
 from backend.app.llm.adapters.mock import MockLLMProvider
 from backend.app.llm.factory import build_llm_provider
+from backend.app.llm.prompts import load_prompt_bundle
 from backend.app.config import AppSettings
 
 
 class DeepSeekLLMProviderTest(unittest.IsolatedAsyncioTestCase):
     def _provider(self) -> DeepSeekLLMProvider:
         return DeepSeekLLMProvider(api_key=SecretStr("local-test-deepseek-key-001"))
+
+    def _background_provider(self) -> DeepSeekLLMProvider:
+        return DeepSeekLLMProvider(
+            api_key=SecretStr("local-test-deepseek-key-001"),
+            prompt_bundle=load_prompt_bundle(
+                "contracts/prompts/background-planning-prompts-v1.json",
+                expected_version="prompt-v3",
+            ),
+        )
 
     def test_construction_fails_closed_without_key_or_https_origin(self) -> None:
         with self.assertRaises(ValueError):
@@ -126,6 +136,17 @@ class DeepSeekLLMProviderTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(2, complete.await_count)
         self.assertEqual(2, result.attempts)
         self.assertEqual(["behavior:1"], result.payload["evidence_refs"])
+
+    async def test_background_planning_accepts_only_bounded_topic_candidates(self) -> None:
+        provider = self._background_provider()
+        with patch.object(
+            DeepSeekLLMProvider,
+            "_complete",
+            new=AsyncMock(return_value={"suggested_topics": ["推荐系统"]}),
+        ):
+            result = await provider.plan_workspace_background("{\"route\":\"/\"}")
+
+        self.assertEqual(["推荐系统"], result.payload["suggested_topics"])
 
     def test_incomplete_chunked_response_is_a_retryable_provider_error(self) -> None:
         provider = self._provider()
