@@ -124,7 +124,7 @@ def build(*, run_id: str, env_file: Path) -> dict[str, Any]:
         "environment": {"environment_id": "demo-research-workspace-runtime", "workspace": str(ROOT), "host_fingerprint": "sha256:" + digest(f"{current}:{run_id}:workspace-runtime".encode()), "database_identity": None, "index_namespace": None},
         "targets": [
             {"kind": "GIT", "identifier": f"commit:{current}", "operation": "READ", "expected_before_count": 1, "expected_after_min_count": 1},
-            {"kind": "MEMORY", "identifier": "anonymous-agent-workspace", "operation": "CREATE", "expected_before_count": 0, "expected_after_min_count": 1},
+            {"kind": "FILE", "identifier": "contracts/prompts/background-planning-prompts-v1.json", "operation": "READ", "expected_before_count": 1, "expected_after_min_count": 1},
         ],
         "input_hashes": {"model_policy": digest(canonical(policy_value)), "identities": digest(canonical(identities_value)), **code_hashes()},
         "idempotency_key": identities_value["observation_id"],
