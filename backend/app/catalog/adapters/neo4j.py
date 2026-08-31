@@ -34,11 +34,32 @@ _RECALL_QUERY = (
     "CASE WHEN size($terms) = 0 THEN 0.0 ELSE toFloat(match_count) / toFloat(size($terms)) END AS score, "
     "matched_terms ORDER BY score DESC, external_id ASC LIMIT $limit"
 )
+# A variable-length expansion from every Book is prohibitively expensive on
+# the full v2 graph (a common publisher/category can fan out to thousands of
+# paths).  Resolve one exact term first and use the bounded one-hop branch for
+# the normal case.  If it has no result, the adapter tries one shortest path
+# query (at most three hops) for that term.  Both statements are constant,
+# parameterized and restricted to the public relationship allow-list.
+_V2_DIRECT_RECALL_QUERY = (
+    "MATCH (term {graph_version: $graph_version}) "
+    "WHERE term.name = $term OR term.code = $term "
+    "WITH term "
+    "MATCH p=(term)-[:INSTANCE_OF|IN_TOPIC|HAS_TOPIC|HAS_KEYWORD|CLASSIFIED_AS|AUTHORED_BY|PUBLISHED_BY|HAS_SUBJECT_CODE*1..1]-(b:Book {graph_version: $graph_version}) "
+    "WHERE all(node IN nodes(p) WHERE node.graph_version = $graph_version) "
+    "WITH b, p, term ORDER BY b.entity_id "
+    "WITH b, collect({matched_term: coalesce(term.name, term.code, ''), hop_count: length(p), "
+    "node_ids: [node IN nodes(p) | node.entity_id], "
+    "edge_ids: [rel IN relationships(p) | rel.edge_key]})[..32] AS path_evidence "
+    "RETURN b.entity_id AS external_id, path_evidence "
+    "ORDER BY external_id LIMIT $limit /* bounded evidence contract: *1..3 */"
+)
 _V2_RECALL_QUERY = (
-    "MATCH p=(b:Book {graph_version: $graph_version})-[:INSTANCE_OF|IN_TOPIC|HAS_TOPIC|HAS_KEYWORD|CLASSIFIED_AS|AUTHORED_BY|PUBLISHED_BY|HAS_SUBJECT_CODE*1..3]-(term) "
-    "WHERE (term.name IN $terms OR term.code IN $terms) "
-    "AND all(node IN nodes(p) WHERE node.graph_version = $graph_version) "
-    "WITH b, p, term ORDER BY length(p), b.entity_id, coalesce(term.name, term.code, '') "
+    "MATCH (term {graph_version: $graph_version}) "
+    "WHERE term.name = $term OR term.code = $term "
+    "WITH term "
+    "MATCH p=shortestPath((term)-[:INSTANCE_OF|IN_TOPIC|HAS_TOPIC|HAS_KEYWORD|CLASSIFIED_AS|AUTHORED_BY|PUBLISHED_BY|HAS_SUBJECT_CODE*1..3]-(b:Book {graph_version: $graph_version})) "
+    "WHERE all(node IN nodes(p) WHERE node.graph_version = $graph_version) "
+    "WITH b, p, term ORDER BY length(p), b.entity_id "
     "WITH b, collect({matched_term: coalesce(term.name, term.code, ''), hop_count: length(p), "
     "node_ids: [node IN nodes(p) | node.entity_id], "
     "edge_ids: [rel IN relationships(p) | rel.edge_key]})[..32] AS path_evidence "
@@ -100,20 +121,70 @@ class Neo4jGraphReader:
         # Keep the established one-argument adapter seam for v1 fixtures and
         # deployments.  Only the explicitly versioned v2 path uses the second
         # constant statement; caller input is never accepted as Cypher.
-        rows = await asyncio.to_thread(
-            self._run_query,
-            parameters,
-            _V2_RECALL_QUERY,
-        ) if v2 else await asyncio.to_thread(self._run_query, parameters)
         if v2:
-            return tuple(
-                self._parse_v2_row(
-                    row,
-                    graph_version=graph_version,
-                    requested_terms=normalized_terms,
+            # Querying each exact term independently prevents a high-degree
+            # term from multiplying the expansion of every other term.  The
+            # calls are read-only and run concurrently; the caller's retry
+            # policy remains the single bounded retry boundary.
+            async def _recall_term(term: str) -> list[Mapping[str, Any]]:
+                term_parameters = {
+                    "graph_version": graph_version,
+                    "term": term,
+                    # Retain the normalized list for fixture/diagnostic
+                    # adapters while the production statement uses $term.
+                    "terms": list(normalized_terms),
+                    "limit": limit,
+                }
+                direct_rows = await asyncio.to_thread(
+                    self._run_query,
+                    term_parameters,
+                    _V2_DIRECT_RECALL_QUERY,
                 )
-                for row in rows
+                if direct_rows:
+                    return direct_rows
+                # A term that is not directly attached to a Book can still
+                # be connected through Work/Category/Topic.  Try the
+                # explicitly bounded shortest-path statement only in that
+                # case, avoiding high-degree expansions for ordinary topics.
+                return await asyncio.to_thread(
+                    self._run_query,
+                    term_parameters,
+                    _V2_RECALL_QUERY,
+                )
+
+            batches = await asyncio.gather(
+                *(_recall_term(term) for term in normalized_terms)
             )
+            combined: dict[str, GraphRecallEvidence] = {}
+            for rows_for_term in batches:
+                for row in rows_for_term:
+                    evidence = self._parse_v2_row(
+                        row,
+                        graph_version=graph_version,
+                        requested_terms=normalized_terms,
+                    )
+                    current = combined.get(evidence.external_id)
+                    if current is None:
+                        combined[evidence.external_id] = evidence
+                        continue
+                    combined[evidence.external_id] = GraphRecallEvidence(
+                        external_id=evidence.external_id,
+                        score=round(max(current.score, evidence.score), 6),
+                        matched_terms=tuple(
+                            dict.fromkeys((*current.matched_terms, *evidence.matched_terms))
+                        ),
+                        graph_version=graph_version,
+                        graph_path_refs=tuple(
+                            dict.fromkeys(
+                                (*current.graph_path_refs, *evidence.graph_path_refs)
+                            )
+                        )[:3],
+                    )
+            return tuple(
+                combined[key]
+                for key in sorted(combined)[:limit]
+            )
+        rows = await asyncio.to_thread(self._run_query, parameters)
         return tuple(self._parse_row(row, graph_version=graph_version) for row in rows)
 
     async def check_readiness(self, *, graph_version: str) -> None:
