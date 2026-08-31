@@ -34,6 +34,7 @@ from backend.app.composition import build_research_g4_http_app_from_runtime
 from backend.app.config import AppSettings
 from scripts.execute_g4_recommendation_projection import (
     TARGET_TABLES,
+    load_approved_graph_runtime,
     load_request_payload,
     read_table_counts,
     resolve_inside_root,
@@ -45,7 +46,10 @@ from scripts.validate_runtime_env import read_env, validate_compose
 
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
-GRAPH_VERSION = "lib-books-v1-20260810"
+# The vector collection is still pinned to the v1 embedding/index build.  The
+# graph reader version is resolved separately from the apply evidence because
+# a v2 graph can safely serve evidence alongside that unchanged vector index.
+VECTOR_GRAPH_VERSION = "lib-books-v1-20260810"
 EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
@@ -156,7 +160,24 @@ async def read_task_facts(
                 )
             task_id, trace_id, status, context_version, persisted_user, session_id, request_json = rows[0]
             expected_request = _expected_request_json(request_payload)
-            if _canonical(_json_object(request_json)) != _canonical(expected_request):
+            persisted_request = _json_object(request_json)
+            persisted_constraints = persisted_request.get("constraints")
+            if (
+                not isinstance(persisted_constraints, dict)
+                or set(persisted_constraints) != {"_personalization_enabled", "profile_empty"}
+                or any(
+                    not isinstance(persisted_constraints[key], bool)
+                    for key in ("_personalization_enabled", "profile_empty")
+                )
+            ):
+                raise RuntimeError(
+                    "persisted request constraints are not the server-owned personalization projection"
+                )
+            # The client submitted no constraints.  The service adds exactly
+            # these two reserved booleans after Principal/consent resolution;
+            # accepting anything else would hide a client-constraint bypass.
+            expected_request["constraints"] = persisted_constraints
+            if _canonical(persisted_request) != _canonical(expected_request):
                 raise RuntimeError("persisted request JSON does not match approved payload")
             if str(status) not in {"COMPLETED", "DEGRADED_COMPLETED"}:
                 raise RuntimeError(f"committed task status is not complete: {status!r}")
@@ -248,6 +269,7 @@ async def read_task_facts(
             "context_version": int(context_version),
             "record_id": record_id,
             "task_local_counts": counts,
+            "personalization_projection": persisted_constraints,
         }
     finally:
         connection.close()
@@ -312,13 +334,19 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "RECPRO_PROMPT_BUNDLE_VERSION",
         "RECPRO_PROMPT_BUNDLE_PATH",
         "RECPRO_PROMPT_BUNDLE_SHA256",
-        "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT",
-        "RECPRO_NEO4J_ADMIN_USER",
-        "RECPRO_NEO4J_ADMIN_PASSWORD",
     )
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required reconciliation keys: {missing}")
+    graph_values = read_env(args.graph_env_file.resolve(strict=True))
+    approved_graph_version = apply_evidence.get("graph_version")
+    if not isinstance(approved_graph_version, str):
+        raise ValueError("apply evidence does not record the graph version")
+    graph_version, graph_port, graph_username, graph_password, graph_source = load_approved_graph_runtime(
+        {"versions": {"graph_version": approved_graph_version}},
+        values,
+        graph_values,
+    )
     if values["COMPOSE_PROJECT_NAME"] != plan["environment"]["environment_id"]:
         raise ValueError("Compose project does not match the approved plan")
 
@@ -357,7 +385,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         collection_name=NAMESPACE_NAME,
         expected_metadata={
             "recpro_namespace_name": NAMESPACE_NAME,
-            "recpro_graph_version": GRAPH_VERSION,
+            "recpro_graph_version": VECTOR_GRAPH_VERSION,
             "recpro_embedding_version": EMBEDDING_VERSION,
             "recpro_index_version": INDEX_VERSION,
             "hnsw:space": "cosine",
@@ -369,16 +397,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     if chroma_count != int(apply_evidence["chroma_count_before"]) or chroma_count != int(apply_evidence["chroma_count_after"]):
         raise RuntimeError("Chroma count differs from the approved apply evidence")
 
-    graph_endpoint = (
-        f"http://127.0.0.1:{values['RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT']}"
-        "/db/neo4j/tx/commit"
-    )
+    graph_endpoint = f"http://127.0.0.1:{graph_port}/db/neo4j/tx/commit"
     runtime = build_g4_readonly_runtime(
         graph_endpoint=graph_endpoint,
-        graph_username=values["RECPRO_NEO4J_ADMIN_USER"],
-        graph_password=values["RECPRO_NEO4J_ADMIN_PASSWORD"],
+        graph_username=graph_username,
+        graph_password=graph_password,
         chroma_collection=loaded.collection,
-        graph_version=GRAPH_VERSION,
+        graph_version=graph_version,
         embedding_version=EMBEDDING_VERSION,
         index_version=INDEX_VERSION,
         namespace_name=NAMESPACE_NAME,
@@ -434,6 +459,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "compose_project": values["COMPOSE_PROJECT_NAME"],
         "request_id": str(request_payload["request_id"]),
         "user_id": int(request_payload["user_id"]),
+        "graph_version": graph_version,
+        "graph_source": graph_source,
         "task_facts": task_facts,
         "http_readback": {
             "live_status_code": live.status_code,
@@ -482,6 +509,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
+    parser.add_argument(
+        "--graph-env-file",
+        type=Path,
+        default=PROJECT_ROOT / ".env.neo4j-readonly-final.local",
+    )
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")
     parser.add_argument(
         "--chroma-site-packages",
