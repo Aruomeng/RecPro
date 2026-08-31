@@ -96,7 +96,10 @@
           "items": {"type": "string", "enum": ["BOOK", "PAPER"]},
           "uniqueItems": true
         },
-        "requested_output_type": {"type": "string", "const": "TOPIC_RESOURCES"},
+        "requested_output_type": {
+          "type": "string",
+          "enum": ["TOPIC_RESOURCES", "READING_PATH"]
+        },
         "limit": {"type": "integer", "minimum": 1, "maximum": 20},
         "g4_channels": {
           "type": "array",
