@@ -29,7 +29,7 @@
     },
     "tasks": {
       "type": "array",
-      "minItems": 4,
+      "minItems": 1,
       "maxItems": 16,
       "items": {
         "$ref": "#/$defs/task"
@@ -103,7 +103,8 @@
           "enum": [
             "IntentUnderstandingAgent",
             "ExplanationAgent",
-            "FeedbackLearningAgent"
+            "FeedbackLearningAgent",
+            "RecommendationPolicyAgent"
           ]
         },
         "capability": {
@@ -112,7 +113,8 @@
             "classify_intent",
             "parse_feedback_text",
             "render_explanation",
-            "render_group_summary"
+            "render_group_summary",
+            "plan_workspace_background"
           ]
         },
         "version": {
@@ -172,7 +174,8 @@
             "RULE_INTENT_FALLBACK",
             "OTHER_FEEDBACK",
             "TEMPLATE_EXPLANATION",
-            "TEMPLATE_GROUP_SUMMARY"
+            "TEMPLATE_GROUP_SUMMARY",
+            "BACKGROUND_RULE_FIXTURE"
           ]
         }
       }

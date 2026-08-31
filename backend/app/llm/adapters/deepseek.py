@@ -181,6 +181,35 @@ class DeepSeekLLMProvider:
             raise ValueError("DeepSeek returned an empty group summary")
         return self._result("group_summary.render", {"text": text.strip()}, request_id, attempts)
 
+    async def plan_workspace_background(self, context_json: str) -> LLMResult:
+        """Return only reviewed workspace-directive candidates.
+
+        This narrow capability is intentionally separate from recommendation
+        generation.  Callers must construct this provider with the dedicated
+        background-planning prompt bundle; the generic recommendation bundle
+        does not expose this prompt ID.
+        """
+
+        if not isinstance(context_json, str) or not context_json.strip():
+            raise ValueError("background planning context must be non-blank text")
+        if len(context_json) > 3000:
+            raise ValueError("background planning context exceeds the bounded input")
+        payload, request_id, attempts = await self._run_task(
+            "workspace.background_plan",
+            {"context_json": context_json},
+        )
+        directives = payload.get("directives")
+        if not isinstance(directives, list) or len(directives) > 7:
+            raise ValueError("DeepSeek returned an invalid background directive list")
+        if any(not isinstance(item, Mapping) for item in directives):
+            raise ValueError("DeepSeek returned a non-object background directive")
+        return self._result(
+            "workspace.background_plan",
+            {"directives": [dict(item) for item in directives]},
+            request_id,
+            attempts,
+        )
+
     async def _run_task(
         self,
         prompt_id: str,
