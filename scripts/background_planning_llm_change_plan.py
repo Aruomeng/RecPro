@@ -305,8 +305,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = artifact_path(args.run_id)
         if output.exists():
             raise FileExistsError("apply artifact already exists")
+        # ``build`` already creates this run directory for ``change-plan.json``.
+        # The receipt itself remains single-write protected by ``output.exists``
+        # above; allowing the existing parent prevents a successful model call
+        # from losing its evidence solely because the reviewed plan is present.
+        output.parent.mkdir(parents=True, exist_ok=True)
         outcome = asyncio.run(apply_plan(plan=plan, run_id=args.run_id, llm_env_file=args.llm_env_file))
-        output.parent.mkdir(parents=True, exist_ok=False)
         evidence = {
             "schema_version": "background-planning-deepseek-apply-v1",
             "status": "PASS",
