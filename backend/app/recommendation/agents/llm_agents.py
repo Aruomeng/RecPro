@@ -20,6 +20,7 @@ from backend.app.shared_kernel.contracts.autonomy import (
     validate_decision,
 )
 from backend.app.recommendation.agents.base import Agent
+from backend.app.recommendation.agents.topic_terms import extract_topic_terms
 from backend.app.shared_kernel.contracts.agent import AgentDecision, AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
 
@@ -80,7 +81,7 @@ def _rule_payload(message: AgentMessage) -> tuple[dict[str, object], float]:
             },
             0.2,
         )
-    tokens = sorted({part for part in text.replace(",", " ").replace("，", " ").split() if part})
+    tokens = list(extract_topic_terms(text))
     return (
         {
             "intent_type": "TOPIC_RECOMMENDATION" if text else "GENERAL_RECOMMENDATION",
@@ -184,9 +185,7 @@ class LLMIntentUnderstandingAgent:
             }:
                 raise ValueError("LLM intent payload is outside the allowlist")
             requested_types = [str(item) for item in message.payload.get("resource_types", [])]
-            tokens = sorted(
-                {part for part in text.replace(",", " ").replace("，", " ").split() if part}
-            )
+            tokens = list(extract_topic_terms(text))
             payload = {
                 "intent_type": "TOPIC_RECOMMENDATION"
                 if intent != "GENERAL_RECOMMENDATION"

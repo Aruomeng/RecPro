@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.recommendation.agents.base import Agent
+from backend.app.recommendation.agents.topic_terms import extract_topic_terms
 from backend.app.shared_kernel.contracts.autonomy import (
     attach_decision,
     default_decision,
@@ -96,7 +97,7 @@ class RuleIntentUnderstandingAgent:
                     confidence=0.2,
                 ),
             )
-        tokens = sorted({part for part in text.replace(",", " ").replace("，", " ").split() if part})
+        tokens = list(extract_topic_terms(text))
         return _result(
             message,
             agent_name=self.name,
