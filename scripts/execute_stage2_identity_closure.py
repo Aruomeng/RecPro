@@ -24,7 +24,7 @@ import subprocess
 from http.cookiejar import CookieJar
 from typing import Any, Sequence
 from urllib.error import HTTPError, URLError
-from urllib.request import HTTPCookieProcessor, Request, build_opener
+from urllib.request import HTTPCookieProcessor, ProxyHandler, Request, build_opener
 
 import asyncmy
 from jsonschema import Draft202012Validator, FormatChecker
@@ -296,7 +296,13 @@ class _HTTPClient:
     def __init__(self, base_url: str = BASE_URL) -> None:
         self._base_url = base_url.rstrip("/")
         self._cookie_jar = CookieJar()
-        self._opener = build_opener(HTTPCookieProcessor(self._cookie_jar))
+        # The identity executor is deliberately pinned to the local workbench.
+        # Never route loopback authentication traffic through a workstation
+        # HTTP proxy: a proxy can turn a healthy local readiness response into
+        # a misleading 502 and leave a forward-only run half-complete.
+        self._opener = build_opener(
+            ProxyHandler({}), HTTPCookieProcessor(self._cookie_jar),
+        )
 
     def cookies(self) -> dict[str, str]:
         return {cookie.name: cookie.value for cookie in self._cookie_jar}
