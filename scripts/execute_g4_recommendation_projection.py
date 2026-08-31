@@ -328,14 +328,16 @@ def load_request_payload(
         raise ValueError("request_payload scene is not SEARCH_AFTER")
     if request_payload["requested_resource_types"] != ["BOOK"]:
         raise ValueError("request_payload resource types are not the approved BOOK set")
-    if request_payload["requested_output_type"] != "TOPIC_RESOURCES":
-        raise ValueError("request_payload output type is not TOPIC_RESOURCES")
+    output_type = request_payload["requested_output_type"]
+    if output_type not in {"TOPIC_RESOURCES", "READING_PATH"}:
+        raise ValueError("request_payload output type is not approved")
     if request_payload["g4_channels"] != ["MYSQL", "GRAPH", "VECTOR"]:
         raise ValueError("request_payload G4 channels are not the approved set")
     if not isinstance(request_payload["input_text"], str) or not request_payload["input_text"].strip():
         raise ValueError("request_payload input_text must be non-blank")
-    if isinstance(request_payload["limit"], bool) or not 1 <= int(request_payload["limit"]) <= 20:
-        raise ValueError("request_payload limit must be between 1 and 20")
+    minimum_limit = 6 if output_type == "READING_PATH" else 1
+    if isinstance(request_payload["limit"], bool) or not minimum_limit <= int(request_payload["limit"]) <= 20:
+        raise ValueError("request_payload limit is outside the approved output-type bounds")
     if sha256_bytes(canonical(request_payload)) != str(
         plan["input_hashes"]["request_payload"]
     ):

@@ -43,12 +43,28 @@ class G4ProjectionPlanTests(unittest.TestCase):
         )
         self.assertEqual(240.0, value["deadline_seconds"])
 
+    def test_query_spec_accepts_bounded_reading_path(self) -> None:
+        query_spec = {
+            "input_text": "推荐系统与智慧图书馆",
+            "resource_types": ["BOOK"],
+            "output_type": "READING_PATH",
+            "limit": 8,
+        }
+        self.assertEqual("READING_PATH", validate_g4_projection_query_spec(query_spec)["output_type"])
+        validate_g4_projection_request_matches_query_spec(
+            query_spec,
+            input_text="推荐系统与智慧图书馆",
+            resource_types=["BOOK"],
+            output_type="READING_PATH",
+            limit=8,
+        )
+
     def test_query_spec_rejects_semantic_or_metadata_drift(self) -> None:
         with self.assertRaises(ValueError):
             validate_g4_projection_query_spec(
                 {
                     "input_text": "其他主题",
-                    "resource_types": ["BOOK"],
+                    "resource_types": ["PAPER"],
                     "output_type": "TOPIC_RESOURCES",
                     "limit": 8,
                 }
@@ -87,6 +103,17 @@ class G4ProjectionPlanTests(unittest.TestCase):
                     "output_type": "TOPIC_RESOURCES",
                     "limit": 8,
                     "deadline_seconds": 301,
+                }
+            )
+
+    def test_reading_path_requires_at_least_six_resources(self) -> None:
+        with self.assertRaises(ValueError):
+            validate_g4_projection_query_spec(
+                {
+                    "input_text": "推荐系统与智慧图书馆",
+                    "resource_types": ["BOOK"],
+                    "output_type": "READING_PATH",
+                    "limit": 5,
                 }
             )
 

@@ -121,6 +121,7 @@ def build_plan(
     g4_baseline_path: Path,
     user_id: int,
     input_text: str = "多智能体系统与智慧图书馆",
+    output_type: str = "TOPIC_RESOURCES",
     limit: int = 8,
     request_id: str | None = None,
     session_id: str | None = None,
@@ -134,8 +135,11 @@ def build_plan(
         raise ValueError("user id must be positive")
     if not isinstance(input_text, str) or not input_text.strip() or len(input_text) > 2000:
         raise ValueError("input text must contain 1-2000 characters")
-    if isinstance(limit, bool) or not 1 <= limit <= 20:
-        raise ValueError("limit must be between 1 and 20")
+    if output_type not in {"TOPIC_RESOURCES", "READING_PATH"}:
+        raise ValueError("output type must be TOPIC_RESOURCES or READING_PATH")
+    minimum_limit = 6 if output_type == "READING_PATH" else 1
+    if isinstance(limit, bool) or not minimum_limit <= limit <= 20:
+        raise ValueError("limit is outside the approved output-type bounds")
     if (request_id is None) != (session_id is None):
         raise ValueError("request_id and session_id must be supplied together")
     if enable_deepseek_explanation and not enable_deepseek_intent:
@@ -185,7 +189,7 @@ def build_plan(
         g4_baseline.get("query_spec"),
         input_text=input_text,
         resource_types=["BOOK"],
-        output_type="TOPIC_RESOURCES",
+        output_type=output_type,
         limit=limit,
     )
     channel_counts = g4_baseline.get("candidate_channel_counts")
@@ -219,7 +223,7 @@ def build_plan(
         "scene": "SEARCH_AFTER",
         "input_text": input_text.strip(),
         "requested_resource_types": ["BOOK"],
-        "requested_output_type": "TOPIC_RESOURCES",
+        "requested_output_type": output_type,
         "limit": limit,
         "g4_channels": ["MYSQL", "GRAPH", "VECTOR"],
     }
@@ -356,6 +360,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--g4-baseline", type=Path, required=True)
     parser.add_argument("--user-id", type=int, default=1001)
     parser.add_argument("--input-text", default="多智能体系统与智慧图书馆")
+    parser.add_argument(
+        "--output-type",
+        default="TOPIC_RESOURCES",
+        choices=("TOPIC_RESOURCES", "READING_PATH"),
+    )
     parser.add_argument("--limit", type=int, default=8)
     parser.add_argument("--request-id")
     parser.add_argument("--session-id")
@@ -370,6 +379,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             g4_baseline_path=args.g4_baseline,
             user_id=args.user_id,
             input_text=args.input_text,
+            output_type=args.output_type,
             limit=args.limit,
             request_id=args.request_id,
             session_id=args.session_id,
