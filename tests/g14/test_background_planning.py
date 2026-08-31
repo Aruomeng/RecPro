@@ -20,6 +20,14 @@ from backend.app.agent_workspace.ports.planning import PlanningContext
 from backend.app.agent_workspace.ports.planning import SanitizedPlanningContext, BackgroundPlanningResult
 
 
+class _FailingPlanner:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def plan(self, context: SanitizedPlanningContext) -> BackgroundPlanningResult:
+        raise self.error
+
+
 class _CapturingPlanner:
     def __init__(self) -> None:
         self.contexts: list[SanitizedPlanningContext] = []
@@ -96,6 +104,14 @@ class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
         exhausted = budget.reserve(session_id=session_id, device_id=device_id, now=first_time + timedelta(minutes=30))
         self.assertFalse(exhausted.allowed)
         self.assertEqual("SESSION_BACKGROUND_BUDGET_EXHAUSTED", exhausted.reason_code)
+
+    async def test_model_payload_failure_is_a_public_degradation_reason(self) -> None:
+        payload_error = type("DeepSeekPayloadError", (ValueError,), {})()
+        outcome = await BackgroundPlanningCoordinator(
+            planner=_FailingPlanner(payload_error),
+        ).plan(self._context())
+        self.assertEqual("DEGRADED", outcome.status)
+        self.assertEqual("BACKGROUND_MODEL_PAYLOAD_INVALID", outcome.reason_code)
 
     def test_sanitizer_only_keeps_consented_profile_summary(self) -> None:
         sanitizer = PlanningContextSanitizer()

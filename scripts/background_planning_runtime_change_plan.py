@@ -14,6 +14,7 @@ import asyncio
 from datetime import UTC, datetime
 import hashlib
 import json
+import logging
 from pathlib import Path
 import re
 import subprocess
@@ -39,6 +40,14 @@ RUN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
 HASH = re.compile(r"^[0-9a-f]{64}$")
 CONFIRMATION = "YES_REAL_BACKGROUND_DEEPSEEK_RUNTIME"
 GUEST_ID = 9_000_001
+
+
+class RuntimeProbeFailure(RuntimeError):
+    """A public, redacted runtime outcome that did not meet acceptance."""
+
+    def __init__(self, outcome: Mapping[str, object]) -> None:
+        super().__init__("runtime background planner did not reach PLANNED")
+        self.outcome = dict(outcome)
 
 
 def canonical(value: object) -> bytes:
@@ -170,7 +179,9 @@ def execute(*, plan: Mapping[str, Any], run_id: str, env_file: Path) -> dict[str
     broker = AgentWorkspaceBroker(background_planner=BackgroundPlanningCoordinator(planner=DeepSeekBackgroundPlanner(provider)))
     probe_settings = AppSettings(app_env="demo", mysql_password="runtime-probe-no-database-password")
     app = create_app(settings=probe_settings, agent_workspace_broker=broker, managed_resources=(broker,))
-    with TestClient(app) as client:
+    logging.disable(logging.INFO)
+    try:
+      with TestClient(app) as client:
         created = client.post("/api/v1/agent-workspaces", json={"session_id": ids["session_id"], "mode": "guest", "device_id": ids["device_id"]})
         if created.status_code != 202:
             raise RuntimeError("in-memory workspace create failed")
@@ -188,17 +199,27 @@ def execute(*, plan: Mapping[str, Any], run_id: str, env_file: Path) -> dict[str
             background = snapshot.get("context_summary", {}).get("background_planning", {})
             if isinstance(background, Mapping) and background.get("status") in {"PLANNED", "DEGRADED", "FAILED"}:
                 break
-            time.sleep(0.05)
+            time.sleep(0.2)
         if snapshot is None:
             raise RuntimeError("runtime planner did not produce a snapshot")
         background = snapshot["context_summary"].get("background_planning", {})
-        if not isinstance(background, Mapping) or background.get("status") != "PLANNED" or background.get("model_requests") != 1:
-            raise RuntimeError("runtime planner did not complete a real bounded plan")
         events = snapshot.get("recent_events", [])
         event_types = [item.get("event_type") for item in events if isinstance(item, Mapping)]
-        if "AGENT_STARTED" not in event_types or "AGENT_COMPLETED" not in event_types:
-            raise RuntimeError("runtime planner events are incomplete")
-        return {"workspace_id": workspace_id, "background_status": background.get("status"), "provider": background.get("provider"), "model": background.get("model"), "directive_count": background.get("directive_count"), "event_types": event_types[-16:]}
+        outcome = {
+            "workspace_id": workspace_id,
+            "background_status": background.get("status") if isinstance(background, Mapping) else "MISSING",
+            "reason_code": background.get("reason_code") if isinstance(background, Mapping) else "BACKGROUND_OUTCOME_MISSING",
+            "provider": background.get("provider") if isinstance(background, Mapping) else "unknown",
+            "model": background.get("model") if isinstance(background, Mapping) else "unknown",
+            "model_requests": background.get("model_requests") if isinstance(background, Mapping) else 0,
+            "directive_count": background.get("directive_count") if isinstance(background, Mapping) else 0,
+            "event_types": event_types[-16:],
+        }
+        if outcome["background_status"] != "PLANNED" or outcome["model_requests"] != 1 or "AGENT_STARTED" not in event_types or "AGENT_COMPLETED" not in event_types:
+            raise RuntimeProbeFailure(outcome)
+        return outcome
+    finally:
+      logging.disable(logging.NOTSET)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -220,6 +241,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         outcome = execute(plan=plan, run_id=args.run_id, env_file=args.llm_env_file)
         evidence = {"schema_version": "background-planning-runtime-apply-v1", "status": "PASS", "plan_id": plan["plan_id"], "plan_hash": plan["plan_hash"], "run_id": args.run_id, "git_commit": plan["git_commit"], "outcome": outcome, "external_llm_requests": 1, "in_memory_workspace_creates": 1, "in_memory_workspace_observations": 1, "database_writes": 0, "neo4j_writes": 0, "chroma_writes": 0, "business_posts": 0, "files_deleted": 0, "database_physical_deletions": 0}
         output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"); print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))
+    except RuntimeProbeFailure as exc:
+        output = artifact(args.run_id, "runtime-apply.json")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        if not output.exists():
+            evidence = {"schema_version": "background-planning-runtime-apply-v1", "status": "FAIL", "plan_id": args.plan_id, "plan_hash": args.approved_plan_hash, "run_id": args.run_id, "failure": exc.outcome, "external_llm_requests": 1, "database_writes": 0, "neo4j_writes": 0, "chroma_writes": 0, "business_posts": 0, "files_deleted": 0, "database_physical_deletions": 0}
+            output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+        print(json.dumps({"status": "FAIL", "error": "RuntimeProbeFailure"}, ensure_ascii=False)); return 1
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError, json.JSONDecodeError) as exc:
         print(json.dumps({"status": "FAIL", "error": type(exc).__name__}, ensure_ascii=False)); return 1
     return 0

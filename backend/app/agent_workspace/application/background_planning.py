@@ -495,11 +495,16 @@ class BackgroundPlanningCoordinator:
                 "DEGRADED", "BACKGROUND_DIRECTIVE_INVALID", decision_id, context.context_version,
                 provider="unknown", model="unknown", model_requests=1, budget=reservation.snapshot,
             )
-        except Exception:
+        except Exception as exc:
             async with self._lock:
                 self._last_versions[context.session_id] = context.context_version
+            reason_code = {
+                "DeepSeekRequestError": "BACKGROUND_MODEL_TRANSPORT_FAILED",
+                "DeepSeekPayloadError": "BACKGROUND_MODEL_PAYLOAD_INVALID",
+                "PromptBundleError": "BACKGROUND_MODEL_CONTRACT_INVALID",
+            }.get(type(exc).__name__, "BACKGROUND_PLANNER_FAILED")
             return BackgroundPlanningOutcome(
-                "FAILED", "BACKGROUND_PLANNER_FAILED", decision_id, context.context_version,
+                "DEGRADED", reason_code, decision_id, context.context_version,
                 provider="unknown", model="unknown", model_requests=1, budget=reservation.snapshot,
             )
         async with self._lock:
