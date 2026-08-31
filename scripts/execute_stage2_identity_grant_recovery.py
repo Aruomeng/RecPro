@@ -16,6 +16,7 @@ import asyncio
 from datetime import UTC, datetime
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -50,7 +51,6 @@ from scripts.execute_stage2_identity_closure import (
     BASE_URL,
     _HTTPClient,
     _read_only_state,
-    _write_evidence,
 )
 from scripts.execute_stage2_identity_recovery import (
     _profile_projection,
@@ -208,7 +208,7 @@ def _container_preflight() -> tuple[str, ...]:
         "exec", "-e", "MYSQL_PWD", MYSQL_CONTAINER, "mysql", "--protocol=socket",
         "-uroot", "-Drecpro", "--batch", "--skip-column-names", "-e",
         "SHOW GRANTS FOR 'recpro_identity'@'%';",
-    ], env={**__import__("os").environ, **env})
+    ], env={**os.environ, **env})
     if "user_declared_profile" in grants or "user_declared_profile_history" in grants:
         raise RuntimeError("one or more profile grants already exist; refusing to reuse this plan")
     return tuple(line for line in grants.splitlines() if line.strip())
@@ -216,7 +216,7 @@ def _container_preflight() -> tuple[str, ...]:
 
 def _apply_grants() -> None:
     root_password = _container_root_password()
-    env = {**__import__("os").environ, "MYSQL_PWD": root_password}
+    env = {**os.environ, "MYSQL_PWD": root_password}
     statement = (
         "GRANT SELECT, INSERT, UPDATE ON recpro.user_declared_profile "
         "TO 'recpro_identity'@'%'; "
@@ -231,7 +231,7 @@ def _apply_grants() -> None:
 
 def _grants_after() -> str:
     root_password = _container_root_password()
-    env = {**__import__("os").environ, "MYSQL_PWD": root_password}
+    env = {**os.environ, "MYSQL_PWD": root_password}
     grants = _docker_output([
         "exec", "-e", "MYSQL_PWD", MYSQL_CONTAINER, "mysql", "--protocol=socket",
         "-uroot", "-Drecpro", "--batch", "--skip-column-names", "-e",
@@ -255,6 +255,25 @@ def _expected_after(before: dict[str, Any]) -> dict[str, int]:
     return expected
 
 
+def _evidence_path(run_id: str) -> Path:
+    return PROJECT_ROOT / "artifacts/verification/stage2-identity-grant-recovery" / run_id / "acceptance.json"
+
+
+def _write_evidence(run_id: str, evidence: dict[str, object]) -> Path:
+    """Create the grant-recovery evidence at its own plan-bound path."""
+
+    path = _evidence_path(run_id).resolve()
+    if path.exists():
+        raise ValueError("Stage 2 grant recovery evidence path exists; refusing overwrite")
+    path.parent.mkdir(parents=True, exist_ok=False)
+    payload = dict(evidence)
+    payload["evidence_path"] = str(path.relative_to(PROJECT_ROOT))
+    with path.open("x", encoding="utf-8") as handle:
+        json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+        handle.write("\n")
+    return path
+
+
 async def apply_plan(
     *, plan_path: Path, plan_id: str, approved_hash: str,
     env_path: Path, admin_path: Path, reader_path: Path,
@@ -270,7 +289,7 @@ async def apply_plan(
         raise ValueError("Stage 2 grant recovery identifier pepper is missing")
 
     before = await _read_only_state(env)
-    evidence_path = PROJECT_ROOT / "artifacts/verification/stage2-identity-grant-recovery" / run_id / "acceptance.json"
+    evidence_path = _evidence_path(run_id)
     if before["complete"]:
         if not reader_path.resolve().exists():
             raise ValueError("Stage 2 grant recovery is complete but protected reader credential is missing")
