@@ -70,7 +70,7 @@ TARGET_TABLES = (
     "recommendation_orchestration_result",
 )
 
-GRAPH_VERSION = "lib-books-v1-20260810"
+GRAPH_VERSION_PATTERN = re.compile(r"^lib-books-v[12]-[0-9]{8}$")
 EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
@@ -349,6 +349,61 @@ def load_request_payload(
     if request_payload["g4_channels"] != ["MYSQL", "GRAPH", "VECTOR"]:
         raise ValueError("request_payload G4 channels are not the approved set")
     return request_payload
+
+
+def load_approved_graph_runtime(
+    g4_baseline: Mapping[str, Any],
+    values: Mapping[str, str],
+    graph_values: Mapping[str, str],
+) -> tuple[str, str, str, str, str]:
+    """Resolve the graph version and isolated read-only endpoint from evidence.
+
+    The G4 evidence is hash-bound by the ChangePlan, so the selected graph
+    version cannot be changed by a runtime environment override.  The final
+    Neo4j replica uses a separate env file and the built-in ``neo4j`` account;
+    administrator credentials are deliberately not accepted for this path.
+    """
+
+    versions = g4_baseline.get("versions")
+    graph_version = versions.get("graph_version") if isinstance(versions, Mapping) else None
+    if (
+        not isinstance(graph_version, str)
+        or GRAPH_VERSION_PATTERN.fullmatch(graph_version) is None
+    ):
+        raise ValueError("approved G4 evidence does not contain a safe graph version")
+
+    final_port = graph_values.get("RECPRO_FINAL_NEO4J_HTTP_HOST_PORT")
+    final_password = graph_values.get("RECPRO_FINAL_NEO4J_PASSWORD")
+    if final_port and final_password:
+        graph_endpoint_port = final_port
+        graph_username = graph_values.get("RECPRO_FINAL_NEO4J_USER", "neo4j")
+        graph_password = final_password
+        graph_source = "final-readonly-replica"
+    else:
+        # A future operator-provided read-only env may use the normalized
+        # names.  Never fall back to RECPRO_NEO4J_ADMIN_* here.
+        graph_endpoint_port = graph_values.get(
+            "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT",
+            values.get("RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT", ""),
+        )
+        graph_username = graph_values.get(
+            "RECPRO_NEO4J_READ_USER", values.get("RECPRO_NEO4J_READ_USER", "")
+        )
+        graph_password = graph_values.get(
+            "RECPRO_NEO4J_READ_PASSWORD", values.get("RECPRO_NEO4J_READ_PASSWORD", "")
+        )
+        graph_source = "configured-readonly-endpoint"
+    if not graph_endpoint_port or not graph_username or not graph_password:
+        raise ValueError(
+            "approved G4 projection requires an explicit Neo4j read-only endpoint and credentials"
+        )
+    try:
+        port = int(graph_endpoint_port)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Neo4j read-only HTTP port is invalid") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError("Neo4j read-only HTTP port is out of range")
+    return graph_version, str(port), graph_username, graph_password, graph_source
 
 
 async def read_table_counts(values: Mapping[str, str]) -> tuple[tuple[str, ...], dict[str, int]]:
@@ -767,10 +822,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         raise ValueError("runtime environment failed safe preflight: " + "; ".join(issues))
     secret_values = read_env(args.secrets_file.resolve())
     values = {**compose_values, **secret_values}
+    graph_values = read_env(args.graph_env_file.resolve())
     required = (
-        "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT",
-        "RECPRO_NEO4J_ADMIN_USER",
-        "RECPRO_NEO4J_ADMIN_PASSWORD",
         "RECPRO_MYSQL_HOST_PORT",
         "RECPRO_MYSQL_DATABASE",
         "RECPRO_MYSQL_USER",
@@ -779,6 +832,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required runtime keys: {missing}")
+    graph_version, graph_port, graph_username, graph_password, graph_source = load_approved_graph_runtime(
+        g4_baseline, values, graph_values
+    )
     configured_llm_provider = llm_settings.llm_provider if enable_deepseek_intent else "mock"
     if values["COMPOSE_PROJECT_NAME"] != plan["environment"]["environment_id"]:
         raise ValueError("Compose project does not match the approved plan")
@@ -830,11 +886,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
 
     graph = Neo4jGraphReader(
         endpoint=(
-            f"http://127.0.0.1:{values['RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT']}"
+            f"http://127.0.0.1:{graph_port}"
             "/db/neo4j/tx/commit"
         ),
-        username=values["RECPRO_NEO4J_ADMIN_USER"],
-        password=values["RECPRO_NEO4J_ADMIN_PASSWORD"],
+        username=graph_username,
+        password=graph_password,
         timeout=8,
     )
     vector = ChromaVectorReader(
@@ -855,7 +911,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         settings,
         dataset_version="lib-books-v1-20260810",
         graph=graph,
-        graph_version=GRAPH_VERSION,
+        graph_version=graph_version,
         vector=vector,
         query_embedder=HashCharNgramQueryEmbedder(),
         embedding_version=EMBEDDING_VERSION,
@@ -1049,6 +1105,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "external_llm_requests": intent_receipt["llm_attempts"]
         + (explanation_receipt["llm_attempts"] if enable_deepseek_explanation else 0),
         "configured_llm_provider": configured_llm_provider,
+        "graph_version": graph_version,
+        "graph_source": graph_source,
+        "graph_writes": 0,
         "neo4j_writes": 0,
         "chroma_writes": 0,
         "actual_delete_count": 0,
@@ -1077,6 +1136,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
+    parser.add_argument(
+        "--graph-env-file",
+        type=Path,
+        default=PROJECT_ROOT / ".env.neo4j-readonly-final.local",
+    )
     parser.add_argument("--enable-deepseek-intent", action="store_true")
     parser.add_argument("--enable-deepseek-explanation", action="store_true")
     parser.add_argument("--confirm-external-llm")
