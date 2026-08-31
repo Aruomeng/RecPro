@@ -143,7 +143,7 @@ def build(*, run_id: str, env_file: Path) -> dict[str, Any]:
             "exact plan id/hash approval is required", "exactly one DeepSeek request and no retries",
             "only fixed anonymous guest context is sent", "only public Agent event metadata is persisted as evidence",
             "MySQL, Neo4j, Chroma, catalog, feedback, behavior, audit and business HTTP write services are not constructed",
-            "in-memory Workspace POSTs are limited to one create and one observation",
+            "the create request is the only in-memory Workspace POST; it emits the single implicit SESSION_STARTED observation",
         ],
         "safety_assertions": {"file_deletions": 0, "database_physical_deletions": 0, "overwrite_existing": False, "destructive_capabilities_required": False, "counts_must_not_decrease": True},
     }
@@ -186,9 +186,9 @@ def execute(*, plan: Mapping[str, Any], run_id: str, env_file: Path) -> dict[str
         if created.status_code != 202:
             raise RuntimeError("in-memory workspace create failed")
         workspace_id = created.json()["workspace"]["workspace_id"]
-        observed = client.post(f"/api/v1/agent-workspaces/{workspace_id}/observations", headers={"Idempotency-Key": ids["observation_id"]}, json={"observation_id": ids["observation_id"], "event_type": "SESSION_STARTED", "payload": {}})
-        if observed.status_code != 202:
-            raise RuntimeError("in-memory workspace observation failed")
+        # ``AgentWorkspaceBroker.create`` deliberately emits the first
+        # SESSION_STARTED observation itself. Do not post a duplicate event:
+        # the production ten-minute budget must reject that duplicate too.
         deadline = time.monotonic() + settings.llm_timeout_seconds + 3
         snapshot: Mapping[str, object] | None = None
         while time.monotonic() < deadline:
@@ -239,7 +239,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if output.exists(): raise FileExistsError("runtime apply receipt already exists")
         output.parent.mkdir(parents=True, exist_ok=True)
         outcome = execute(plan=plan, run_id=args.run_id, env_file=args.llm_env_file)
-        evidence = {"schema_version": "background-planning-runtime-apply-v1", "status": "PASS", "plan_id": plan["plan_id"], "plan_hash": plan["plan_hash"], "run_id": args.run_id, "git_commit": plan["git_commit"], "outcome": outcome, "external_llm_requests": 1, "in_memory_workspace_creates": 1, "in_memory_workspace_observations": 1, "database_writes": 0, "neo4j_writes": 0, "chroma_writes": 0, "business_posts": 0, "files_deleted": 0, "database_physical_deletions": 0}
+        evidence = {"schema_version": "background-planning-runtime-apply-v1", "status": "PASS", "plan_id": plan["plan_id"], "plan_hash": plan["plan_hash"], "run_id": args.run_id, "git_commit": plan["git_commit"], "outcome": outcome, "external_llm_requests": 1, "in_memory_workspace_creates": 1, "implicit_session_started_observations": 1, "in_memory_workspace_observation_posts": 0, "database_writes": 0, "neo4j_writes": 0, "chroma_writes": 0, "business_posts": 0, "files_deleted": 0, "database_physical_deletions": 0}
         output.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n"); print(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True))
     except RuntimeProbeFailure as exc:
         output = artifact(args.run_id, "runtime-apply.json")
