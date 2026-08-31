@@ -628,7 +628,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             "status": "FAIL",
             "error": type(exc).__name__,
             "message": str(exc),
-            "database_writes": 0,
+            # An apply failure may occur after an HTTP transaction has
+            # committed one or more append-only facts.  Never claim zero
+            # writes without a postflight reconciliation; the caller must
+            # inspect the database and create a forward-only successor plan.
+            "database_writes": "UNKNOWN_AFTER_PARTIAL_FAILURE" if args.apply else 0,
+            "partial_failure_requires_new_plan": bool(args.apply),
             "deepseek_requests": 0,
             "file_deletions": 0,
             "database_physical_deletions": 0,
