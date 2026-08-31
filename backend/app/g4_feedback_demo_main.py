@@ -40,6 +40,9 @@ from backend.app.agent_workspace import (
     ExplorationWorkspaceReadTools,
     FixtureBackgroundPlanner,
 )
+from backend.app.agent_workspace.adapters.deepseek_planner import DeepSeekBackgroundPlanner
+from backend.app.llm.adapters.deepseek import DeepSeekLLMProvider
+from backend.app.llm.prompts import load_prompt_bundle
 
 
 EMBEDDING_VERSION = "hash-char-ngram-v1"
@@ -50,6 +53,13 @@ DEFAULT_CHROMA_PATH = Path("data/chroma")
 DEFAULT_CHROMA_SITE_PACKAGES = Path(
     ".venv-chroma-g6-20260811/lib/python3.11/site-packages"
 )
+BACKGROUND_PROMPT_PATH = (
+    Path(__file__).resolve().parents[2]
+    / "contracts"
+    / "prompts"
+    / "background-planning-prompts-v1.json"
+)
+BACKGROUND_PROMPT_VERSION = "prompt-v3"
 
 
 def _required(name: str) -> str:
@@ -68,6 +78,45 @@ def _bounded_deadline() -> float:
     if not 30.0 <= value <= 300.0:
         raise RuntimeError("RECPRO_G4_DEADLINE_SECONDS must be between 30 and 300")
     return value
+
+
+def _build_background_planner(settings):
+    """Construct ambient planning without issuing a model request.
+
+    The settings validator permits the DeepSeek branch only with a reviewed
+    plan identity. The coordinator keeps the existing three-per-session and
+    ten-minute dispatch budget; this composition step is connection-free.
+    """
+
+    if not settings.background_planning_enabled:
+        return None, "background-planning-v1", "disabled"
+    if settings.background_planning_provider == "fixture":
+        return (
+            BackgroundPlanningCoordinator(planner=FixtureBackgroundPlanner()),
+            "background-planning-fixture-v1",
+            "FixtureBackgroundPlanner",
+        )
+    if settings.background_planning_provider != "deepseek":
+        raise RuntimeError("unsupported background planning provider")
+    bundle = load_prompt_bundle(
+        BACKGROUND_PROMPT_PATH,
+        expected_version=BACKGROUND_PROMPT_VERSION,
+    )
+    provider = DeepSeekLLMProvider(
+        api_key=settings.llm_api_key,
+        base_url=settings.llm_base_url,
+        model=settings.llm_model,
+        timeout_seconds=settings.llm_timeout_seconds,
+        max_output_tokens=min(settings.llm_max_output_tokens, 256),
+        max_attempts=1,
+        prompt_version=bundle.bundle_version,
+        prompt_bundle=bundle,
+    )
+    return (
+        BackgroundPlanningCoordinator(planner=DeepSeekBackgroundPlanner(provider)),
+        "background-planning-deepseek-topics-v1",
+        "DeepSeekBackgroundPlanner",
+    )
 
 
 def create_g4_feedback_app():
@@ -164,16 +213,7 @@ def create_g4_feedback_app():
         enabled=settings.agent_workspace_audit_enabled,
         max_facts=settings.agent_workspace_audit_max_facts,
     )
-    # Ambient planning is an explicit, deterministic fixture capability in
-    # the local research runtime.  It is disabled by default and cannot be
-    # enabled by the production composition.  A future DeepSeek adapter must
-    # be introduced behind its own request-budget ChangePlan rather than
-    # silently replacing this provider.
-    background_planner = (
-        BackgroundPlanningCoordinator(planner=FixtureBackgroundPlanner())
-        if settings.background_planning_enabled
-        else None
-    )
+    background_planner, background_version, background_provider = _build_background_planner(settings)
     workspace_broker = AgentWorkspaceBroker(
         max_workspaces=32,
         retention_seconds=600.0,
@@ -188,6 +228,8 @@ def create_g4_feedback_app():
     )
     application_kwargs = {
         "background_planning_enabled": True,
+        "background_planning_version": background_version,
+        "background_planning_provider": background_provider,
     } if settings.background_planning_enabled else {}
     application = build_research_g4_http_app_from_runtime(
         settings,

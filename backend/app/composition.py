@@ -659,6 +659,8 @@ def build_research_g4_http_app(
     knowledge_review_service: KnowledgeReviewService | None = None,
     managed_resources: tuple[object, ...] = (),
     background_planning_enabled: bool = False,
+    background_planning_version: str = "background-planning-v1",
+    background_planning_provider: str = "FixtureBackgroundPlanner",
 ) -> FastAPI:
     """Compose the explicit G4 HTTP graph around injected application ports.
 
@@ -712,6 +714,8 @@ def build_research_g4_http_app(
         knowledge_review_service=knowledge_review_service,
         knowledge_review_api_enabled=knowledge_review_service is not None,
         background_planning_enabled=background_planning_enabled,
+        background_planning_version=background_planning_version,
+        background_planning_provider=background_planning_provider,
         managed_resources=(
             *managed_resources,
             recommendation_service,
@@ -778,6 +782,8 @@ def build_research_g4_http_app_from_runtime(
     knowledge_review_service: KnowledgeReviewService | None = None,
     knowledge_review_provider: str | None = None,
     background_planning_enabled: bool = False,
+    background_planning_version: str = "background-planning-v1",
+    background_planning_provider: str = "FixtureBackgroundPlanner",
 ) -> FastAPI:
     """Compose G4 HTTP from explicit Graph/Vector ports and one service."""
 
@@ -866,6 +872,8 @@ def build_research_g4_http_app_from_runtime(
         identity_service=identity_service,
         knowledge_review_service=knowledge_review_service,
         background_planning_enabled=background_planning_enabled,
+        background_planning_version=background_planning_version,
+        background_planning_provider=background_planning_provider,
     )
 
 

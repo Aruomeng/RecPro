@@ -231,11 +231,24 @@ class AppSettings(BaseSettings):
     )
     agent_workspace_audit_max_facts: int = Field(default=512, ge=1, le=512)
     agent_workspace_audit_batch_limit: int = Field(default=32, ge=1, le=64)
-    # Low-frequency ambient planning is disabled by default.  The first
-    # runnable implementation is deterministic Fixture-only; a real DeepSeek
-    # adapter will require a separate approved request-budget plan.
+    # Low-frequency ambient planning is disabled by default. A real provider
+    # is permitted only in the demo research composition and must carry the
+    # exact approval identity for its separately reviewed request budget.
     background_planning_enabled: bool = False
-    background_planning_provider: Literal["disabled", "fixture"] = "disabled"
+    background_planning_provider: Literal["disabled", "fixture", "deepseek"] = "disabled"
+    background_planning_plan_id: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+    )
+    background_planning_plan_hash: str | None = Field(
+        default=None, pattern=r"^[0-9a-f]{64}$"
+    )
+    background_planning_run_identity: str | None = Field(
+        default=None,
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{7,127}$",
+    )
     cors_origins: tuple[str, ...] = ("http://localhost:5173",)
 
     @field_validator("config_bundle_path", mode="before")
@@ -442,12 +455,34 @@ class AppSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_background_planning_configuration(self) -> "AppSettings":
-        if self.background_planning_enabled and self.background_planning_provider != "fixture":
-            raise ValueError("background planning requires the explicit fixture provider")
+        approval_fields = (
+            self.background_planning_plan_id,
+            self.background_planning_plan_hash,
+            self.background_planning_run_identity,
+        )
         if not self.background_planning_enabled and self.background_planning_provider != "disabled":
             raise ValueError("a disabled background planner cannot select a provider")
+        if not self.background_planning_enabled and any(value is not None for value in approval_fields):
+            raise ValueError("background planning approval fields require the explicit planner switch")
+        if self.background_planning_enabled and self.background_planning_provider == "disabled":
+            raise ValueError("an enabled background planner requires a provider")
         if self.background_planning_enabled and self.app_env == "production":
-            raise ValueError("fixture background planning is not a production provider")
+            raise ValueError("background planning is not enabled in the production composition")
+        if self.background_planning_provider == "fixture" and any(value is not None for value in approval_fields):
+            raise ValueError("fixture background planning must not carry a model approval identity")
+        if self.background_planning_provider == "deepseek":
+            if self.app_env != "demo":
+                raise ValueError("DeepSeek background planning is restricted to the demo environment")
+            if self.llm_provider != "deepseek" or self.llm_api_key is None:
+                raise ValueError("DeepSeek background planning requires configured DeepSeek credentials")
+            if self.llm_model != "deepseek-v4-flash":
+                raise ValueError("DeepSeek background planning requires deepseek-v4-flash")
+            if self.llm_timeout_seconds > 20:
+                raise ValueError("DeepSeek background planning timeout must not exceed 20 seconds")
+            if any(value is None for value in approval_fields):
+                raise ValueError(
+                    "DeepSeek background planning requires approved plan id, plan hash, and run identity"
+                )
         return self
 
 
