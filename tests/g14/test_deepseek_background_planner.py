@@ -46,6 +46,7 @@ class DeepSeekBackgroundPlannerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual({"workspace.background_plan"}, set(bundle.tasks))
         self.assertEqual("RecommendationPolicyAgent", task.agent_name)
         self.assertEqual(("context_json",), task.variables)
+        self.assertEqual(1, task.output_schema["properties"]["directives"]["maxItems"])
 
     async def test_adapter_passes_only_serialized_sanitized_context(self) -> None:
         model = _FakeModel({

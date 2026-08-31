@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from http.client import IncompleteRead
+import json
 from unittest.mock import AsyncMock, patch
 import unittest
 
@@ -136,6 +137,21 @@ class DeepSeekLLMProviderTest(unittest.IsolatedAsyncioTestCase):
 
         self.assertTrue(raised.exception.retryable)
         self.assertIn("IncompleteRead", str(raised.exception))
+
+    def test_requests_provider_json_output_without_thinking_tokens(self) -> None:
+        provider = self._provider()
+        response = unittest.mock.MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"choices": [{"message": {"content": '{"intent":"BOOK_RECOMMENDATION"}'}}]}
+        ).encode("utf-8")
+        with patch("backend.app.llm.adapters.deepseek.urlopen", return_value=response) as open_call:
+            payload = provider._complete_sync(system="Return JSON", user="topic")
+
+        self.assertEqual({"intent": "BOOK_RECOMMENDATION"}, payload)
+        request = open_call.call_args.args[0]
+        body = json.loads(request.data.decode("utf-8"))
+        self.assertEqual({"type": "json_object"}, body["response_format"])
+        self.assertEqual({"type": "disabled"}, body["thinking"])
 
     def test_factory_keeps_mock_default_and_does_not_call_network(self) -> None:
         settings = AppSettings(mysql_password="isolated-test-password")

@@ -267,6 +267,13 @@ class DeepSeekLLMProvider:
                 {"role": "system", "content": system},
                 {"role": "user", "content": user[:12000]},
             ],
+            # Every capability in this adapter has a JSON Schema contract.  Ask
+            # the provider to enforce JSON at generation time rather than
+            # relying only on the post-response parser.  The explicit
+            # non-thinking mode prevents a small bounded output budget from
+            # being spent on reasoning content before the public JSON object.
+            "response_format": {"type": "json_object"},
+            "thinking": {"type": "disabled"},
             "temperature": 0,
             "max_tokens": max_output_tokens or self.max_output_tokens,
         }
