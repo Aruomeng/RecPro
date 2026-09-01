@@ -82,12 +82,15 @@ def build_benchmark(
         for offset, resource in enumerate(selected):
             affinity = _fraction(seed, research_id, resource["external_id"])
             positive = affinity >= 0.28
-            event_type = "FAVORITE" if positive and affinity >= 0.62 else "BORROW" if positive else "NOT_INTERESTED"
+            event_type = (
+                "FAVORITE_RESOURCE" if positive and affinity >= 0.62
+                else "BORROW_BOOK" if positive else "NOT_INTERESTED"
+            )
             events.append({
                 "event_id": f"synthetic-event-{index + 1:04d}-{offset + 1:03d}-exposure",
                 "user_research_id": research_id,
                 "resource_id": int(resource["resource_id"]),
-                "event_type": "EXPOSURE",
+                "event_type": "VIEW_RESOURCE",
                 "occurred_at": _timestamp(event_index),
                 "origin": "SYNTHETIC_SIMULATOR",
             })
