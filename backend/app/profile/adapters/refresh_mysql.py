@@ -279,11 +279,20 @@ class MySQLProfileRefreshAdapter(ProfileRefreshPort):
                             "tag_ids": [tag.tag_id for tag in replay_event.tags],
                             "as_of": as_of.isoformat(),
                         }
+                        # The unique source/formula key is the idempotency boundary.
+                        # A guarded INSERT avoids emitting duplicate-key diagnostics for
+                        # historical events already represented in an earlier replay.
                         await cursor.execute(
-                            "INSERT IGNORE INTO profile_change_log "
+                            "INSERT INTO profile_change_log "
                             "(user_id, source_event_id, source_type, profile_version_before, profile_version_after, "
-                            "delta_json, formula_version, created_at) VALUES (%s, %s, 'REPLAY', %s, %s, %s, %s, %s)",
-                            (user_id, replay_event.event_id, max(0, target_version - 1), target_version, _canonical(delta), formula_version, now),
+                            "delta_json, formula_version, created_at) "
+                            "SELECT %s, %s, 'REPLAY', %s, %s, %s, %s, %s "
+                            "WHERE NOT EXISTS (SELECT 1 FROM profile_change_log "
+                            "WHERE source_event_id = %s AND source_type = 'REPLAY' AND formula_version = %s)",
+                            (
+                                user_id, replay_event.event_id, max(0, target_version - 1), target_version,
+                                _canonical(delta), formula_version, now, replay_event.event_id, formula_version,
+                            ),
                         )
                 if self._transition_sink is not None:
                     version_before = (
