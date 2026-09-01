@@ -69,10 +69,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--benchmark-dir", type=Path, required=True)
     parser.add_argument("--synthetic-user-id", default="synthetic-u-0001")
     parser.add_argument("--target-user-id", type=int, default=1001)
+    parser.add_argument("--output", type=Path, help="new JSON path; existing files are never overwritten")
     args = parser.parse_args(argv)
     import asyncio
     try:
-        print(json.dumps(asyncio.run(build(args)), ensure_ascii=False, indent=2, sort_keys=True))
+        result = asyncio.run(build(args))
+        if args.output is not None:
+            output = args.output.resolve()
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with output.open("x", encoding="utf-8") as handle:
+                json.dump(result, handle, ensure_ascii=False, indent=2, sort_keys=True)
+                handle.write("\n")
+        print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     except (OSError, ValueError, KeyError, TypeError) as exc:
         print(f"[FAIL] synthetic demo ChangePlan: {type(exc).__name__}: {exc}")
         return 1
