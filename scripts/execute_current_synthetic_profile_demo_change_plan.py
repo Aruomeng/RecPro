@@ -127,7 +127,9 @@ async def apply(args: argparse.Namespace) -> dict[str, Any]:
     finally:
         connection.close()
 
-    settings = build_settings(dict(values))
+    worker_values = dict(values)
+    worker_values.setdefault("RECPRO_MYSQL_HOST_PORT", str(_port(values)))
+    settings = build_settings(worker_values)
 
     async def connection_factory() -> Any:
         return await _migration_connection(values)
