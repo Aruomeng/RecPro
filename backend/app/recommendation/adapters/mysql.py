@@ -259,6 +259,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                     versions=versions,
                     status="WAITING_CLARIFICATION",
                     now=now,
+                    profile_version=None,
                 )
                 await self._insert_transitions(
                     connection,
@@ -285,7 +286,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                 await connection.commit()
                 return RecommendationTaskResult(201, False, payload)
 
-            resources, tags, profile_signals, behavior_events = await self._read_inputs(
+            resources, tags, profile_signals, behavior_events, profile_version = await self._read_inputs(
                 connection,
                 user_id=command.user_id,
                 evaluation_at=evaluation_at,
@@ -324,6 +325,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                 versions=versions,
                 status=status,
                 now=now,
+                profile_version=profile_version,
             )
             await self._insert_transitions(
                 connection,
@@ -561,7 +563,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
             evaluation_at = task["evaluation_at"]
             if not isinstance(evaluation_at, datetime):
                 raise RuntimeError("task evaluation_at is invalid")
-            resources, tags, profile_signals, behavior_events = await self._read_inputs(
+            resources, tags, profile_signals, behavior_events, _profile_version = await self._read_inputs(
                 connection,
                 user_id=user_id,
                 evaluation_at=evaluation_at,
@@ -781,13 +783,18 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
         *,
         user_id: int,
         evaluation_at: datetime,
-    ) -> tuple[Any, tuple[Any, ...], tuple[ProfileSignal, ...], tuple[tuple[int, str], ...]]:
+    ) -> tuple[Any, tuple[Any, ...], tuple[ProfileSignal, ...], tuple[tuple[int, str], ...], int | None]:
         repository = self._catalog_repository_factory(connection)
         resources = await repository.list_resources(available_at=evaluation_at)
         tags = await repository.list_resource_tags(
             resource_ids=tuple(resource.id for resource in resources)
         )
         async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT profile_version FROM user_profile WHERE user_id = %s",
+                (user_id,),
+            )
+            profile_row = await cursor.fetchone()
             await cursor.execute(
                 "SELECT tag_id, positive_weight FROM user_interest_tag "
                 "WHERE user_id = %s ORDER BY tag_id",
@@ -807,7 +814,13 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                 (user_id, evaluation_at),
             )
             events = tuple((int(row[0]), str(row[1])) for row in await cursor.fetchall())
-        return resources, tags, tuple(positive + negative), events
+        return (
+            resources,
+            tags,
+            tuple(positive + negative),
+            events,
+            int(profile_row[0]) if profile_row is not None else None,
+        )
 
     async def _find_task(self, connection: Any, *, user_id: int, request_id: UUID) -> dict[str, Any] | None:
         async with connection.cursor() as cursor:
@@ -1083,6 +1096,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
         now: datetime,
         intent_type: str | None = None,
         intent_confidence: float | None = None,
+        profile_version: int | None = None,
     ) -> None:
         finished_at = now if status in {"COMPLETED", "DEGRADED_COMPLETED", "FAILED"} else None
         async with connection.cursor() as cursor:
@@ -1092,7 +1106,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                 "intent_type, intent_confidence, status, context_version, profile_version, "
                 "config_bundle_version, policy_version, ranking_version, behavior_formula_version, "
                 "dataset_version, replan_count, evaluation_at, started_at, finished_at, created_at) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, NULL, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s)",
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 1, %s, %s, %s, %s, %s, %s, 0, %s, %s, %s, %s)",
                 (
                     str(task_id),
                     str(command.request_id),
@@ -1109,6 +1123,7 @@ class MySQLRecommendationTaskService(RecommendationTaskService):
                         else execution.intent.confidence
                     ),
                     status,
+                    profile_version,
                     versions["config_bundle"],
                     versions["policy"],
                     versions["ranking"],

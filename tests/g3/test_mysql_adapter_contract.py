@@ -57,6 +57,12 @@ class G3MySQLAdapterContractTests(unittest.TestCase):
 
         self.assertIsNone(re.search(forbidden, source))
 
+    def test_task_persists_the_profile_version_used_for_personalized_ranking(self) -> None:
+        source = ADAPTER.read_text(encoding="utf-8")
+        self.assertIn("SELECT profile_version FROM user_profile", source)
+        self.assertIn("status, context_version, profile_version,", source)
+        self.assertIn("status,\n                    profile_version,", source)
+
 
 if __name__ == "__main__":
     unittest.main()
