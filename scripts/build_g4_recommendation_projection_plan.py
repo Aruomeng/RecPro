@@ -28,6 +28,7 @@ from scripts.g4_llm_plan_policy import (
     load_deepseek_intent_policy,
     policy_hash,
 )
+from scripts.validate_runtime_env import read_env, validate_compose
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -89,6 +90,27 @@ def git_commit() -> str:
     return value
 
 
+def load_compose_identity(compose_env_file: Path) -> tuple[str, str]:
+    """Read the exact MySQL Compose identity to bind into an append plan.
+
+    A read-only HTTP baseline may not include the Compose project name.  It is
+    therefore unsafe to invent a fallback such as ``recpro-isolated``: the
+    apply executor rightfully rejects that mismatch before touching storage.
+    Bind the reviewed plan to the validated Compose environment instead.
+    """
+
+    resolved = resolve_inside_root(compose_env_file, label="Compose environment file")
+    values = read_env(resolved)
+    issues = validate_compose(values)
+    if issues:
+        raise ValueError("Compose environment failed safe preflight: " + "; ".join(issues))
+    project = values.get("COMPOSE_PROJECT_NAME", "").strip()
+    database = values.get("RECPRO_MYSQL_DATABASE", "").strip()
+    if not project or not database:
+        raise ValueError("Compose environment lacks project or MySQL database identity")
+    return project, database
+
+
 def load_pass_evidence(path: Path, *, label: str) -> tuple[dict[str, Any], bytes]:
     resolved = resolve_inside_root(path, label=label)
     raw = resolved.read_bytes()
@@ -128,6 +150,7 @@ def build_plan(
     enable_deepseek_intent: bool = False,
     enable_deepseek_explanation: bool = False,
     llm_env_file: Path = PROJECT_ROOT / ".env.host",
+    compose_env_file: Path = PROJECT_ROOT / ".env.compose",
 ) -> dict[str, Any]:
     if RUN_ID_PATTERN.fullmatch(run_id) is None:
         raise ValueError("run id must use 3-64 safe characters")
@@ -199,8 +222,7 @@ def build_plan(
     ):
         raise ValueError("G4 baseline candidate channel counts are inconsistent")
     commit = git_commit()
-    project = str(mysql_baseline.get("compose_project") or "recpro-isolated")
-    database = "recpro"
+    project, database = load_compose_identity(compose_env_file)
     if request_id is None:
         request_uuid = uuid5(
             NAMESPACE_URL, f"g4-recommendation-projection-request:{run_id}"
@@ -371,6 +393,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--enable-deepseek-intent", action="store_true")
     parser.add_argument("--enable-deepseek-explanation", action="store_true")
     parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
+    parser.add_argument("--compose-env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     args = parser.parse_args(argv)
     try:
         plan = build_plan(
@@ -386,6 +409,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             enable_deepseek_intent=args.enable_deepseek_intent,
             enable_deepseek_explanation=args.enable_deepseek_explanation,
             llm_env_file=args.llm_env_file,
+            compose_env_file=args.compose_env_file,
         )
         output_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / args.run_id
         if output_dir.exists():

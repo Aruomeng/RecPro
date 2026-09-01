@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
-from scripts.build_g4_recommendation_projection_plan import count_targets
+from scripts.build_g4_recommendation_projection_plan import (
+    PROJECT_ROOT,
+    count_targets,
+    load_compose_identity,
+)
 from scripts.g4_projection_contract import (
     validate_g4_projection_query_spec,
     validate_g4_projection_request_matches_query_spec,
@@ -10,6 +15,21 @@ from scripts.g4_projection_contract import (
 
 
 class G4ProjectionPlanTests(unittest.TestCase):
+    @patch("scripts.build_g4_recommendation_projection_plan.validate_compose", return_value=())
+    @patch("scripts.build_g4_recommendation_projection_plan.read_env")
+    def test_plan_identity_is_bound_to_validated_compose_values(
+        self, read_env, validate_compose
+    ) -> None:
+        read_env.return_value = {
+            "COMPOSE_PROJECT_NAME": "isolated-project",
+            "RECPRO_MYSQL_DATABASE": "recpro",
+        }
+        project, database = load_compose_identity(
+            PROJECT_ROOT / "contracts" / "config" / "examples" / "rec-1.0.0.json"
+        )
+        self.assertEqual(("isolated-project", "recpro"), (project, database))
+        validate_compose.assert_called_once()
+
     def test_candidate_persistence_rows_drive_bounded_delta(self) -> None:
         targets = count_targets(candidate_rows=13)
 
