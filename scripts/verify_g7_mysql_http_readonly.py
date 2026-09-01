@@ -44,6 +44,7 @@ def validate_run_id(value: str) -> str:
 
 
 def build_settings(values: dict[str, str]) -> AppSettings:
+    host_port = values.get("RECPRO_MYSQL_HOST_PORT") or values["RECPRO_MYSQL_PORT"]
     return AppSettings(
         app_env="demo",
         app_version="0.1.0",
@@ -51,7 +52,7 @@ def build_settings(values: dict[str, str]) -> AppSettings:
         config_bundle_sha256=values["RECPRO_CONFIG_BUNDLE_SHA256"],
         config_bundle_version=values["RECPRO_CONFIG_BUNDLE_VERSION"],
         mysql_host="127.0.0.1",
-        mysql_port=int(values["RECPRO_MYSQL_HOST_PORT"]),
+        mysql_port=int(host_port),
         mysql_database=values["RECPRO_MYSQL_DATABASE"],
         mysql_user=values["RECPRO_MYSQL_USER"],
         mysql_password=values["RECPRO_MYSQL_PASSWORD"],
@@ -142,7 +143,7 @@ async def execute(args: argparse.Namespace) -> dict[str, object]:
         "run_id": run_id,
         "compose_project": values["COMPOSE_PROJECT_NAME"],
         "mysql_host": "127.0.0.1",
-        "mysql_port": int(values["RECPRO_MYSQL_HOST_PORT"]),
+        "mysql_port": int(values.get("RECPRO_MYSQL_HOST_PORT") or values["RECPRO_MYSQL_PORT"]),
         "default_llm_provider": "mock",
         "recommendation_route": True,
         "liveness_status": live_response.json().get("status"),
