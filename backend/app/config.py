@@ -212,6 +212,10 @@ class AppSettings(BaseSettings):
     oidc_audience: str | None = Field(default=None, min_length=1, max_length=256)
     oidc_jwks_uri: str | None = Field(default=None, min_length=1, max_length=1024)
     oidc_jwks_cache_seconds: int = Field(default=15 * 60, ge=60, le=24 * 60 * 60)
+    # Never persist an external OIDC subject verbatim.  The production mapper
+    # uses this independently managed pepper to bind the subject to a local
+    # account through a one-way HMAC digest.
+    oidc_subject_pepper: SecretStr | None = None
     # Workspace audit is a separately approved append-only capability.  Merely
     # enabling the research application is insufficient: a successor plan,
     # its canonical hash, and a bounded run identity must all be supplied.
@@ -303,7 +307,9 @@ class AppSettings(BaseSettings):
             )
         return value
 
-    @field_validator("auth_jwt_secret", "auth_identifier_pepper", "auth_token_pepper")
+    @field_validator(
+        "auth_jwt_secret", "auth_identifier_pepper", "auth_token_pepper", "oidc_subject_pepper",
+    )
     @classmethod
     def validate_auth_jwt_secret(cls, value: SecretStr | None) -> SecretStr | None:
         if value is None:
@@ -348,6 +354,8 @@ class AppSettings(BaseSettings):
                 raise ValueError("OIDC authentication mode requires formal authentication")
             if not self.oidc_issuer or not self.oidc_audience or not self.oidc_jwks_uri:
                 raise ValueError("OIDC authentication mode requires issuer, audience, and JWKS URI")
+            if self.oidc_subject_pepper is None:
+                raise ValueError("OIDC authentication mode requires an external-subject pepper")
         return self
 
     @field_validator("llm_base_url")

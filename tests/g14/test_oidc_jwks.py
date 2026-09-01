@@ -14,6 +14,7 @@ from backend.app.platform.oidc import (
     OIDCIdentityBinding,
 )
 from backend.app.config import AppSettings
+from backend.app.identity.adapters.oidc import MySQLOIDCIdentityMapper, OIDCSubjectHasher
 
 
 def _b64(value: bytes) -> str:
@@ -32,6 +33,37 @@ class _Mapper:
     async def resolve(self, *, issuer: str, subject: str) -> OIDCIdentityBinding | None:
         self.calls.append((issuer, subject))
         return self.binding
+
+
+class _Cursor:
+    def __init__(self, rows: list[tuple[object, ...]]) -> None:
+        self.rows = rows
+        self.query = ""
+        self.params: tuple[object, ...] = ()
+
+    async def __aenter__(self) -> "_Cursor":
+        return self
+
+    async def __aexit__(self, *_: object) -> None:
+        return None
+
+    async def execute(self, query: str, params: tuple[object, ...]) -> None:
+        self.query, self.params = query, params
+
+    async def fetchall(self) -> list[tuple[object, ...]]:
+        return self.rows
+
+
+class _Connection:
+    def __init__(self, cursor: _Cursor) -> None:
+        self._cursor = cursor
+        self.closed = False
+
+    def cursor(self) -> _Cursor:
+        return self._cursor
+
+    def close(self) -> None:
+        self.closed = True
 
 
 class OIDCJWKSTests(unittest.IsolatedAsyncioTestCase):
@@ -143,6 +175,16 @@ class OIDCJWKSTests(unittest.IsolatedAsyncioTestCase):
                 auth_enabled=True,
                 auth_mode="oidc",
             )
+        with self.assertRaises(ValueError):
+            AppSettings(
+                app_env="production",
+                mysql_password="isolated-test-password",
+                auth_enabled=True,
+                auth_mode="oidc",
+                oidc_issuer="https://id.example.edu/",
+                oidc_audience="libramas-api",
+                oidc_jwks_uri="https://id.example.edu/.well-known/jwks.json",
+            )
         settings = AppSettings(
             app_env="production",
             mysql_password="isolated-test-password",
@@ -151,9 +193,46 @@ class OIDCJWKSTests(unittest.IsolatedAsyncioTestCase):
             oidc_issuer="https://id.example.edu/",
             oidc_audience="libramas-api",
             oidc_jwks_uri="https://id.example.edu/.well-known/jwks.json",
+            oidc_subject_pepper="p" * 32,
         )
         self.assertIsNone(settings.auth_jwt_secret)
         self.assertEqual("https://id.example.edu", settings.oidc_issuer)
+
+    async def test_mysql_mapper_uses_only_hashed_external_identity_and_select(self) -> None:
+        hasher = OIDCSubjectHasher(b"p" * 32)
+        cursor = _Cursor([(10001, 3, 4, "user"), (10001, 3, 4, "librarian")])
+        connection = _Connection(cursor)
+
+        async def factory() -> _Connection:
+            return connection
+
+        mapper = MySQLOIDCIdentityMapper(factory, hasher=hasher)
+        binding = await mapper.resolve(
+            issuer="https://id.example.edu", subject="external-subject-42",
+        )
+        self.assertIsNotNone(binding)
+        assert binding is not None
+        self.assertEqual(10001, binding.user_id)
+        self.assertEqual(frozenset({"user", "librarian"}), binding.roles)
+        self.assertEqual(3, binding.auth_version)
+        self.assertEqual(4, binding.role_version)
+        self.assertTrue(cursor.query.lstrip().upper().startswith("SELECT"))
+        self.assertNotIn("external-subject-42", cursor.query)
+        self.assertNotIn("external-subject-42", str(cursor.params))
+        self.assertEqual(2, len(cursor.params))
+        self.assertTrue(connection.closed)
+
+    async def test_mysql_mapper_rejects_non_browser_role_or_inconsistent_rows(self) -> None:
+        hasher = OIDCSubjectHasher(b"p" * 32)
+        cursor = _Cursor([(10001, 1, 1, "service_worker")])
+        connection = _Connection(cursor)
+
+        async def factory() -> _Connection:
+            return connection
+
+        mapper = MySQLOIDCIdentityMapper(factory, hasher=hasher)
+        self.assertIsNone(await mapper.resolve(issuer="https://id.example.edu", subject="subject"))
+        self.assertTrue(connection.closed)
 
 
 if __name__ == "__main__":
