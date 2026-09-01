@@ -15,7 +15,7 @@ class SyntheticDemoBehaviorIntentTests(unittest.TestCase):
             "classification": "SYNTHETIC_DEVELOPMENT_ONLY", "confirmation_eligible": False,
             "frozen": True, "dataset_version": "synthetic-v1",
         }), encoding="utf-8")
-        (root / "resources.jsonl").write_text(json.dumps({"resource_id": 1, "external_id": "book:one"}) + "\n", encoding="utf-8")
+        (root / "resources.jsonl").write_text(json.dumps({"resource_id": 1, "external_id": "book:one", "title": "测试书", "authors": ["作者"]}) + "\n", encoding="utf-8")
         events = [
             {"event_id": "one", "user_research_id": "synthetic-u-0001", "resource_id": 1, "event_type": "VIEW_RESOURCE", "occurred_at": "2026-01-01T00:00:00.000Z"},
             {"event_id": "two", "user_research_id": "synthetic-u-0001", "resource_id": 1, "event_type": "FAVORITE_RESOURCE", "occurred_at": "2026-01-01T00:01:00.000Z"},
@@ -33,6 +33,7 @@ class SyntheticDemoBehaviorIntentTests(unittest.TestCase):
         self.assertEqual(0, first["safety"]["database_connections"])
         self.assertTrue(all(row["enqueue_profile_update"] is False for row in first["events"]))
         self.assertTrue(all(row["reason_code"] == "SYNTHETIC_DEVELOPMENT_ONLY" for row in first["events"]))
+        self.assertEqual("测试书", first["events"][0]["resource_title"])
 
     def test_intent_rejects_real_account_target(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

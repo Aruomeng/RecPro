@@ -48,7 +48,14 @@ def build_import_intent(
     dataset_version = validate_safe_id(str(manifest.get("dataset_version", "")), label="dataset version")
     resources = read_jsonl(root / "resources.jsonl")
     events = read_jsonl(root / "synthetic_events.jsonl")
-    resource_external = {int(row["resource_id"]): str(row["external_id"]) for row in resources}
+    resource_identity = {
+        int(row["resource_id"]): {
+            "external_id": str(row["external_id"]),
+            "title": str(row.get("title", "")).strip(),
+            "authors": tuple(str(item).strip() for item in row.get("authors", []) if str(item).strip()),
+        }
+        for row in resources
+    }
     selected = [row for row in events if row.get("user_research_id") == synthetic_user_id]
     if not selected:
         raise ValueError("synthetic user has no frozen events in this benchmark")
@@ -58,8 +65,11 @@ def build_import_intent(
     for row in selected:
         event_type = str(row.get("event_type", ""))
         resource_id = int(row["resource_id"])
-        if event_type not in _ALLOWED_EVENTS or resource_id not in resource_external:
+        if event_type not in _ALLOWED_EVENTS or resource_id not in resource_identity:
             raise ValueError("synthetic event is outside the behavior import allowlist")
+        identity = resource_identity[resource_id]
+        if not identity["title"]:
+            raise ValueError("synthetic resource lacks a title for bounded reconciliation")
         event_uuid = str(uuid5(_NAMESPACE, f"{dataset_version}:{target_user_id}:{row['event_id']}"))
         if event_uuid in seen_uuid:
             raise ValueError("synthetic event UUID collision")
@@ -69,7 +79,9 @@ def build_import_intent(
             "target_user_id": target_user_id,
             "session_uuid": str(session_uuid),
             "event_type": event_type,
-            "resource_external_id": resource_external[resource_id],
+            "resource_external_id": identity["external_id"],
+            "resource_title": identity["title"],
+            "resource_authors": list(identity["authors"]),
             "occurred_at": str(row["occurred_at"]),
             "reason_code": "SYNTHETIC_DEVELOPMENT_ONLY",
             "enqueue_profile_update": False,
@@ -91,9 +103,17 @@ def build_import_intent(
         "expected_append_rows": {"user_behavior_event": len(planned_events), "profile_update_outbox": 0},
         "required_readonly_reconciliation": {
             "resource_external_ids": sorted({str(row["resource_external_id"]) for row in planned_events}),
+            "resource_identities": [
+                {
+                    "external_id": str(row["resource_external_id"]),
+                    "title": str(row["resource_title"]),
+                    "authors": list(row["resource_authors"]),
+                }
+                for row in planned_events[::2]
+            ],
             "event_uuids": [str(row["event_uuid"]) for row in planned_events],
             "checks": [
-                "every resource_external_id resolves to exactly one resource_catalog row",
+                "every external ID resolves directly, or title plus author resolves to exactly one resource_catalog row",
                 "every event_uuid is absent before apply",
                 "target is an approved research-demo user and not an authenticated reader account",
             ],
