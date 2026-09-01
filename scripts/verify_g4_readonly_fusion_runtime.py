@@ -34,6 +34,10 @@ from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.orchestrator import OrchestrationRequest
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
+from scripts.run_research_workbench import (
+    merge_runtime_values,
+    require_final_readonly_graph,
+)
 from scripts.validate_runtime_env import read_env, validate_compose
 
 
@@ -146,13 +150,20 @@ async def execute(args: argparse.Namespace) -> int:
         "RECPRO_MYSQL_DATABASE",
         "RECPRO_MYSQL_USER",
         "RECPRO_MYSQL_PASSWORD",
-        "RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT",
-        "RECPRO_NEO4J_ADMIN_USER",
-        "RECPRO_NEO4J_ADMIN_PASSWORD",
     )
     missing = [key for key in required if not values.get(key)]
     if missing:
         raise ValueError(f"missing required read-only runtime keys: {missing}")
+    # The orchestration verifier must never fall back to the source graph or
+    # its administrator credentials.  The final replica is a separate Neo4j
+    # Community instance with its database configured read-only; validate that
+    # state before constructing the graph adapter.
+    graph_values = read_env(args.graph_env_file.resolve(strict=True))
+    graph_runtime_values = merge_runtime_values({}, {}, graph_values)
+    graph_state = require_final_readonly_graph(graph_runtime_values)
+    graph_port = graph_values["RECPRO_FINAL_NEO4J_HTTP_HOST_PORT"]
+    graph_username = graph_values.get("RECPRO_FINAL_NEO4J_USER", "neo4j")
+    graph_password = graph_values["RECPRO_FINAL_NEO4J_PASSWORD"]
     chromadb = load_chromadb(
         args.chroma_site_packages.resolve() if args.chroma_site_packages else None
     )
@@ -168,11 +179,11 @@ async def execute(args: argparse.Namespace) -> int:
         chroma_before = int(collection.count())
         graph = Neo4jGraphReader(
             endpoint=(
-                f"http://127.0.0.1:{values['RECPRO_LIBRARY_NEO4J_HTTP_HOST_PORT']}"
+                f"http://127.0.0.1:{graph_port}"
                 "/db/neo4j/tx/commit"
             ),
-            username=values["RECPRO_NEO4J_ADMIN_USER"],
-            password=values["RECPRO_NEO4J_ADMIN_PASSWORD"],
+            username=graph_username,
+            password=graph_password,
             timeout=8,
         )
         vector = ChromaVectorReader(
@@ -316,6 +327,12 @@ async def execute(args: argparse.Namespace) -> int:
             "namespace_name": NAMESPACE_NAME,
             "dimension": CHROMA_DIMENSION,
         },
+        "graph_runtime": {
+            "source": "final-readonly-replica",
+            "access": graph_state["access"],
+            "status": graph_state["status"],
+            "accepted_versions": graph_state["counts"],
+        },
         "dispatches": dispatch_summary,
         "before_counts": before_counts,
         "after_counts": after_counts,
@@ -356,6 +373,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--deadline-seconds", type=float, default=180.0)
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
+    parser.add_argument(
+        "--graph-env-file",
+        type=Path,
+        default=PROJECT_ROOT / ".env.neo4j-readonly-final.local",
+    )
     parser.add_argument("--chroma-path", type=Path, default=PROJECT_ROOT / "data" / "chroma")
     parser.add_argument(
         "--chroma-site-packages",

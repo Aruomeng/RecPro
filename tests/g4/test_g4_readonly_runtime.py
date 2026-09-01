@@ -11,6 +11,9 @@ class G4ReadonlyRuntimeContractTests(unittest.TestCase):
     def test_readonly_runtime_defaults_to_a_bounded_180_second_deadline(self) -> None:
         args = build_parser().parse_args(["--run-id", "g4-readonly-contract-001"])
         self.assertEqual(180.0, args.deadline_seconds)
+        self.assertEqual(
+            ".env.neo4j-readonly-final.local", args.graph_env_file.name
+        )
 
     def test_request_uses_explicit_deadline_without_store_access(self) -> None:
         now = datetime.now(UTC)
