@@ -67,11 +67,18 @@ def load_baseline(path: Path) -> tuple[dict[str, Any], bytes, Path]:
     if not isinstance(payload, dict) or payload.get("status") != "PASS":
         raise ValueError("browser baseline must be a PASS JSON object")
     mysql = payload.get("mysql")
-    counts = mysql.get("counts_after") if isinstance(mysql, dict) else None
+    counts = mysql.get("counts_after") if isinstance(mysql, dict) else payload.get("after_counts")
     if not isinstance(counts, dict) or not counts:
-        raise ValueError("browser baseline must contain mysql.counts_after")
+        raise ValueError("browser baseline must contain mysql.counts_after or after_counts")
     if any(isinstance(value, bool) or not isinstance(value, int) or value < 0 for value in counts.values()):
         raise ValueError("browser baseline counts must be non-negative integers")
+    # The G5 HTTP verifier intentionally exposes its full snapshot as
+    # ``after_counts``.  Normalize that read-only evidence to the browser
+    # builder's historical ``mysql.counts_after`` shape without changing the
+    # raw input hash stored in the generated plan.
+    if not isinstance(mysql, dict):
+        payload = dict(payload)
+        payload["mysql"] = {"counts_after": counts}
     return payload, raw, resolved
 
 

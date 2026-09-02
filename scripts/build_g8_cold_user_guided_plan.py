@@ -184,6 +184,8 @@ def build_plan(*, run_id: str, evidence_path: Path, browser_plan_path: Path) -> 
     require_clean_worktree()
     evidence, evidence_raw, resolved_evidence = load_evidence(evidence_path)
     commit = current_git_commit()
+    if evidence.get("git_commit") != commit:
+        raise ValueError("cold guided read-only evidence is bound to a different Git commit")
     browser_plan, browser_raw, resolved_browser_plan = load_browser_plan(
         browser_plan_path, current_commit=commit, evidence=evidence
     )
