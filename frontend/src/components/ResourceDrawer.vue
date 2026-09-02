@@ -6,11 +6,13 @@ import { useLibraryStore } from "../stores/library";
 import { useInteractionStore } from "../stores/interaction";
 import { useRecommendationStore } from "../stores/recommendation";
 import { useSessionStore } from "../stores/session";
+import { useAuthStore } from "../stores/auth";
 import BookCover from "./BookCover.vue";
 
 const library = useLibraryStore();
 const recommendation = useRecommendationStore();
 const session = useSessionStore();
+const auth = useAuthStore();
 const interaction = useInteractionStore();
 const router = useRouter();
 
@@ -19,6 +21,14 @@ const item = computed(() => recommendation.items.find(
 ));
 const canWrite = computed(() => interaction.canWrite && Boolean(item.value));
 const feedbackAgent = computed(() => interaction.receipt?.agent_action);
+const feedbackModeLabel = computed(() => {
+  if (session.mode === "guest") return "仅本次会话";
+  if (session.mode === "demo") return "研究演示画像 · 真实反馈";
+  return auth.canPersistBehavior ? "正式账号 · 已授权学习" : "正式账号 · 需授权行为学习";
+});
+const feedbackProgressLabel = computed(() => (
+  session.mode === "demo" ? "FeedbackLearningAgent 正在更新研究演示画像…" : "FeedbackLearningAgent 正在处理你的反馈…"
+));
 
 watch(() => [library.detailOpen, library.selectedResource?.resource_id, session.mode] as const, () => {
   interaction.prepareExposure(library.detailOpen ? item.value : undefined);
@@ -91,14 +101,14 @@ async function feedback(type: FeedbackType): Promise<void> {
               </dl>
             </section>
             <section class="drawer-section feedback-block">
-              <div class="section-title-row"><h3>调整推荐</h3><span>{{ session.mode === 'guest' ? '仅本次会话' : '演示画像 · 真实反馈' }}</span></div>
+              <div class="section-title-row"><h3>调整推荐</h3><span>{{ feedbackModeLabel }}</span></div>
               <div class="feedback-actions">
                 <button type="button" @click="feedback('FAVORITE')">♡ 喜欢</button>
                 <button type="button" @click="feedback('BORROW')">＋ 借阅意向</button>
                 <button type="button" @click="feedback('NOT_INTERESTED')">－ 不感兴趣</button>
               </div>
               <p v-if="interaction.localFeedback.length" class="feedback-note">{{ interaction.localFeedback.join(' · ') }}（会话重置后清空）</p>
-              <p v-if="interaction.state === 'sending'" class="feedback-note">FeedbackLearningAgent 正在更新演示画像…</p>
+              <p v-if="interaction.state === 'sending'" class="feedback-note">{{ feedbackProgressLabel }}</p>
               <p v-if="interaction.state === 'error'" class="feedback-note is-error">反馈暂未写入，请稍后重试。</p>
               <div v-if="feedbackAgent" class="feedback-agent-result">
                 <b>{{ feedbackAgent.agent_name }}</b>
