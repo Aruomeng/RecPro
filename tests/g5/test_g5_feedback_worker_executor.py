@@ -91,6 +91,22 @@ class G5FeedbackWorkerExecutorTests(unittest.TestCase):
         self.assertEqual(3, deltas["user_negative_preference"])
         self.assertEqual(28, sum(deltas.values()))
 
+    def test_first_profile_projection_is_created_for_a_new_reader(self) -> None:
+        facts = {
+            "resource_tags": ({"tag_id": 102},),
+            "user_profile_count": 0,
+            "user_interest_tag_ids": (),
+            "user_negative_preference_keys": (),
+        }
+        deltas = expected_final_deltas(facts)
+        self.assertEqual(1, deltas["user_profile"])
+        self.assertEqual(1, deltas["user_interest_tag"])
+        self.assertEqual(1, deltas["user_negative_preference"])
+
+    def test_multiple_profile_projection_rows_are_rejected(self) -> None:
+        with self.assertRaises(ValueError):
+            expected_final_deltas({"resource_tags": (), "user_profile_count": 2})
+
     def test_build_commands_freezes_the_three_interaction_boundaries(self) -> None:
         payload = {
             "impression_uuid": "762b46fa-ccf3-5fe5-96d9-072319e2cb75",

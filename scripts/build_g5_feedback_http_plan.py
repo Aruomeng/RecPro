@@ -128,6 +128,15 @@ def expected_final_deltas(target_facts: Mapping[str, Any]) -> dict[str, int]:
     deltas["user_negative_preference"] = len(
         {(tag_id, "TOPIC_NOT_INTERESTED") for tag_id in tag_ids} - existing_negative_keys
     )
+    # A newly authenticated reader can legitimately have no profile projection
+    # yet.  The first bounded Outbox replay creates that projection; subsequent
+    # replays only update its current row.  Keep this derived from the frozen
+    # target facts so the executor can fail closed if another writer races the
+    # approved plan.
+    profile_count = int(target_facts.get("user_profile_count", 1))
+    if profile_count not in {0, 1}:
+        raise ValueError("target user must have zero or one current user_profile row")
+    deltas["user_profile"] = 1 if profile_count == 0 else 0
     return deltas
 
 
@@ -366,6 +375,24 @@ async def read_target_facts(
             (user_id,),
         )
         profile_count = int((await cursor.fetchone())[0])
+        # A formal IAM account is allowed to enter this append-only path only
+        # after the user has explicitly granted behavior learning. Synthetic
+        # legacy demo identities (which intentionally have no IAM account) keep
+        # their existing controlled-plan compatibility.
+        await cursor.execute(
+            "SELECT COUNT(*) FROM iam_user_account WHERE user_id = %s",
+            (user_id,),
+        )
+        iam_account_count = int((await cursor.fetchone())[0])
+        behavior_learning_consent = None
+        if iam_account_count:
+            await cursor.execute(
+                "SELECT action FROM user_effective_personalization_consent_v "
+                "WHERE user_id = %s AND scope = 'BEHAVIOR_LEARNING'",
+                (user_id,),
+            )
+            consent_row = await cursor.fetchone()
+            behavior_learning_consent = str(consent_row[0]) if consent_row is not None else None
         await cursor.execute(
             "SELECT COUNT(*) FROM user_interest_tag WHERE user_id = %s",
             (user_id,),
@@ -451,8 +478,12 @@ async def read_target_facts(
         raise ValueError(f"existing live profile outbox work would make the bounded worker ambiguous: {outbox_statuses}")
     if any(value != 0 for value in uuid_absence.values()):
         raise ValueError(f"one or more deterministic interaction UUIDs already exist: {uuid_absence}")
-    if profile_count != 1:
-        raise ValueError("target user must have exactly one current user_profile row")
+    if profile_count not in {0, 1}:
+        raise ValueError("target user must have zero or one current user_profile row")
+    if iam_account_count and behavior_learning_consent != "GRANT":
+        raise ValueError(
+            "formal target user must explicitly grant BEHAVIOR_LEARNING before feedback"
+        )
     return {
         "task": task_facts,
         "record": record_facts,
@@ -463,6 +494,8 @@ async def read_target_facts(
         "uuid_absence": uuid_absence,
         "latest_behavior_at": latest_behavior.isoformat() if latest_behavior is not None else None,
         "user_profile_count": profile_count,
+        "iam_account_count": iam_account_count,
+        "behavior_learning_consent": behavior_learning_consent,
         "user_interest_count": interest_count,
         "user_negative_count": negative_count,
         "user_interest_tag_ids": interest_tag_ids,
@@ -651,7 +684,7 @@ def build_plan(
             "runtime probe identity and least-privilege grant guard remain PASS; the runtime user is not a migration/root user",
             f"task {task_id}, record {record_id}, item {item_id}, resource {int(target_facts['item']['resource_id'])}, and user {user_id} remain owned and linked exactly as frozen; task is COMPLETED/context_version=1 and resource_type=BOOK",
             f"the target resource retains the exact frozen imported resource_tag rows (tag_ids={','.join(str(tag['tag_id']) for tag in target_facts['resource_tags'])}) and target_snapshot hash {sha256_bytes(canonical(target_snapshot))}, with no HIDDEN user_resource_state for this user/resource",
-            f"the profile projection row deltas remain exactly user_interest_tag=+{expected_deltas['user_interest_tag']} and user_negative_preference=+{expected_deltas['user_negative_preference']}; existing keys are upserted, not duplicated",
+            f"the profile projection row deltas remain exactly user_profile=+{expected_deltas['user_profile']}, user_interest_tag=+{expected_deltas['user_interest_tag']} and user_negative_preference=+{expected_deltas['user_negative_preference']}; existing keys are upserted, not duplicated",
             "the three deterministic interaction UUIDs are absent, or a retry is accepted only when every persisted payload field is byte-for-byte replay-identical",
             "profile_update_outbox has no pre-existing PENDING or PROCESSING row; feedback and direct behavior each enqueue exactly one new outbox row, while the impression-derived behavior enqueues none",
             "only the eleven MySQL targets in this plan may be touched; recommendation/resource/catalog/declared-profile facts, Neo4j, Chroma, migrations, seed data, and external LLM/network calls are outside the plan",

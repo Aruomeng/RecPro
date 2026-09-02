@@ -185,7 +185,7 @@ def validate_plan(
         for table, target in target_tables.items()
     }
     for table, expected in G5_FIXED_FINAL_DELTAS.items():
-        if table in {"user_interest_tag", "user_negative_preference"}:
+        if table in {"user_interest_tag", "user_negative_preference", "user_profile"}:
             if observed_deltas[table] < 0:
                 raise ValueError(f"ChangePlan contains a negative projection delta for {table}")
         elif observed_deltas[table] != expected:

@@ -82,6 +82,7 @@ G5_FEEDBACK_APPLY_PLAN ?=
 G5_FEEDBACK_APPLY_PLAN_ID ?=
 G5_FEEDBACK_APPLY_PLAN_HASH ?=
 G5_FEEDBACK_APPLY_BASELINE ?=
+FORMAL_FEEDBACK_PREFLIGHT_RUN_ID ?=
 G5_WORKER_WIRING_RUN_ID ?=
 G5_WORKER_READONLY_RUN_ID ?=
 G6_RUN_ID ?=
@@ -187,7 +188,7 @@ G8_BROWSER_SCENARIO_PLAN ?=
 	run-g4-deepseek-demo research-workbench-check research-workbench \
 	verify-g7-optin-http verify-g7-mysql-http-readonly build-g7-recommendation-post-plan execute-g7-recommendation-post verify-g7-recommendation-post-result \
 	build-g4-recommendation-projection-plan execute-g4-recommendation-projection verify-g4-recommendation-projection-result verify-g4-clarification-readonly build-g4-clarification-plan execute-g4-clarification-plan verify-g4-clarification-continuation-readonly build-g4-clarification-continuation-plan execute-g4-clarification-continuation-plan \
-	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
+	verify-g4-http-readonly-host verify-g5-feedback-http-readonly build-g5-feedback-http-plan execute-g5-feedback-worker-plan verify-formal-reader-feedback-preflight verify-g5-worker-wiring verify-g5-worker-readonly-runtime \
 	verify-g8-release-preflight verify-g8-acceptance-coverage build-g8-final-revalidation-plan verify-g8-final-revalidation-plan build-g8-boundary-change-plan execute-g8-boundary-change-plan reconcile-g8-approved-write-evidence build-g8-browser-scenario-plan verify-g8-browser-scenario-plan \
 	build-book-graph-plan verify-book-graph-plan import-book-graph \
 	build-mysql-book-plan verify-mysql-book-plan preflight-mysql-book-catalog import-mysql-book-catalog \
@@ -368,6 +369,10 @@ execute-g5-feedback-worker-plan:
 	@test -n "$(G5_FEEDBACK_APPLY_PLAN_HASH)" || { echo "G5_FEEDBACK_APPLY_PLAN_HASH is required and must be the exact approved plan_hash"; exit 2; }
 	@test -n "$(G5_FEEDBACK_APPLY_BASELINE)" || { echo "G5_FEEDBACK_APPLY_BASELINE is required and must point to the matching PASS read-only baseline"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.execute_g5_feedback_worker_plan --apply --plan "$(G5_FEEDBACK_APPLY_PLAN)" --plan-id "$(G5_FEEDBACK_APPLY_PLAN_ID)" --approved-plan-hash "$(G5_FEEDBACK_APPLY_PLAN_HASH)" --baseline "$(G5_FEEDBACK_APPLY_BASELINE)" --run-id "$(G5_FEEDBACK_APPLY_RUN_ID)" --env-file "$(G5_FEEDBACK_HTTP_READONLY_ENV_FILE)" --secrets-file "$(G5_FEEDBACK_HTTP_READONLY_SECRETS_FILE)"
+
+verify-formal-reader-feedback-preflight:
+	@test -n "$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)" || { echo "FORMAL_FEEDBACK_PREFLIGHT_RUN_ID is required and must identify a new read-only preflight"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. $(PYTHON) -m scripts.verify_formal_reader_feedback_preflight --run-id "$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)" --output-dir "artifacts/verification/g5/$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)"
 
 build-g5-pending-outbox-plan:
 	@test -n "$(G5_PENDING_OUTBOX_PLAN_RUN_ID)" || { echo "G5_PENDING_OUTBOX_PLAN_RUN_ID is required"; exit 2; }
