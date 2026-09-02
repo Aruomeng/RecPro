@@ -105,6 +105,11 @@ G7_RECOMMENDATION_RECONCILE_PLAN ?=
 G7_RECOMMENDATION_RECONCILE_BASELINE ?=
 G7_RECOMMENDATION_RECONCILE_PLAN_HASH ?=
 FORMAL_AUTH_RUN_ID ?=
+FORMAL_CONSENT_PLAN_RUN_ID ?=
+FORMAL_CONSENT_PLAN ?=
+FORMAL_CONSENT_PLAN_ID ?=
+FORMAL_CONSENT_PLAN_HASH ?=
+FORMAL_CONSENT_BASE_URL ?= http://127.0.0.1:18000
 FREEZE_RUN_ID ?=
 EVAL_INPUT_RUN_ID ?=
 BOOK_INTAKE_RUN_ID ?=
@@ -182,7 +187,7 @@ G8_BROWSER_SCENARIO_PLAN ?=
 	test-g2 test-g3 test-g4 test-g5 test-g6 test-g7 test-g8 test-g9 g2-tools-install g2-dataset-report plan-g2-indexes verify-g0 verify-g1-local verify-g1-runtime verify-g1 verify-g2-local verify-g3-local verify-g4-local verify-g5-local \
 	migrate-g2 migrate-g5 migrate-g5-audit seed-g2 replay-g2 verify-g2-runtime migrate-g3 migrate-g3-transition migrate-g3-clarification migrate-g4-agent-logs g3-demo verify-g3-runtime verify-g3-api-runtime verify-g3-clarification-runtime verify-g4-orchestrator verify-g4-agent-logs verify-g4-real-ports verify-g4-composition verify-g4-readonly-fusion verify-g5-runtime compose-config \
 	verify-g5-http-runtime verify-g5-worker-prepare verify-g5-worker-resume verify-g5-audit-replay-runtime \
-	verify-formal-auth-runtime \
+	verify-formal-auth-runtime build-formal-reader-consent-plan execute-formal-reader-consent-plan \
 	verify-experiment-freeze verify-evaluation-freeze-inputs verify-book-intake verify-data-plane-runtime \
 	verify-prompt-bundle verify-llm-real-call-readiness execute-llm-fixture-call verify-g4-real-llm-readonly verify-g4-agent-autonomy verify-g4-http-feedback-autonomy verify-g8-readonly-fault-matrix \
 	run-g4-deepseek-demo research-workbench-check research-workbench \
@@ -373,6 +378,16 @@ execute-g5-feedback-worker-plan:
 verify-formal-reader-feedback-preflight:
 	@test -n "$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)" || { echo "FORMAL_FEEDBACK_PREFLIGHT_RUN_ID is required and must identify a new read-only preflight"; exit 2; }
 	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. $(PYTHON) -m scripts.verify_formal_reader_feedback_preflight --run-id "$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)" --output-dir "artifacts/verification/g5/$(FORMAL_FEEDBACK_PREFLIGHT_RUN_ID)"
+
+build-formal-reader-consent-plan:
+	@test -n "$(FORMAL_CONSENT_PLAN_RUN_ID)" || { echo "FORMAL_CONSENT_PLAN_RUN_ID is required and must identify a new read-only plan"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. $(PYTHON) -m scripts.build_formal_reader_behavior_consent_plan --run-id "$(FORMAL_CONSENT_PLAN_RUN_ID)" --base-url "$(FORMAL_CONSENT_BASE_URL)" --env-file .env.host --output "artifacts/verification/iam/formal-reader-behavior-consent/$(FORMAL_CONSENT_PLAN_RUN_ID)/change-plan.json"
+
+execute-formal-reader-consent-plan:
+	@test -n "$(FORMAL_CONSENT_PLAN)" || { echo "FORMAL_CONSENT_PLAN is required and must point to the approved consent plan"; exit 2; }
+	@test -n "$(FORMAL_CONSENT_PLAN_ID)" || { echo "FORMAL_CONSENT_PLAN_ID is required and must match the approved plan_id"; exit 2; }
+	@test -n "$(FORMAL_CONSENT_PLAN_HASH)" || { echo "FORMAL_CONSENT_PLAN_HASH is required and must match the approved plan_hash"; exit 2; }
+	PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=. $(PYTHON) -m scripts.execute_formal_reader_behavior_consent_plan --apply --plan "$(FORMAL_CONSENT_PLAN)" --plan-id "$(FORMAL_CONSENT_PLAN_ID)" --plan-hash "$(FORMAL_CONSENT_PLAN_HASH)" --base-url "$(FORMAL_CONSENT_BASE_URL)" --env-file .env.host
 
 build-g5-pending-outbox-plan:
 	@test -n "$(G5_PENDING_OUTBOX_PLAN_RUN_ID)" || { echo "G5_PENDING_OUTBOX_PLAN_RUN_ID is required"; exit 2; }
