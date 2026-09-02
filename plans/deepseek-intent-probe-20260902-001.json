@@ -1,0 +1,62 @@
+{
+  "classification": "S0_READ_ONLY",
+  "created_at": "2026-09-02T11:51:17.422312Z",
+  "environment": {
+    "database_identity": null,
+    "environment_id": "recpro-local-deepseek-intent-probe",
+    "host_fingerprint": "sha256:5a25b4d10470e61d24a4c2973edd9aeb93a5b5ebaeeb3bd28fccf052ec51d964",
+    "index_namespace": null,
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "257d0d77046beb5b29de741325db029e0888bf8f",
+  "idempotency_key": "4e8be801-2e79-5e12-9163-06f23efd680e",
+  "input_hashes": {
+    "backend/app/config.py": "962f3d0be206e48f56de58275af1188bf8fc14840edd2ae20b13dc17a0412dab",
+    "backend/app/llm/adapters/deepseek.py": "b122e8f46fd57290af95780af808fa6e59ac828fe92abf0f43278a394a0df2f3",
+    "backend/app/llm/prompts.py": "f9042e0ba4555e1f4135a3d0303c09756e495bbbc65d8a369f8836f1291630da",
+    "backend/app/recommendation/agents/llm_agents.py": "d8f6cc9f901b12079548aef0fb308424d78f39737da56fe621a6d2bd8f2f1b3c",
+    "contracts/prompts/rec-prompts-v1.0.1.json": "1fa3b19788574189ae1680a0ef5565fd378200d146d9c0ba83da583ba3abce1a",
+    "deepseek_intent_policy": "e107f4fd89f73cf3fed6a03c762b07819ab143f4fc4af5faed2573fbaadde329",
+    "fixture": "389857b8c019bd907e82b11763c96e6e78cc4b8b0836c12c6baa4f519eb72fa0",
+    "scripts/build_deepseek_intent_probe_plan.py": "bbbc079c476208eaee9e52979700e996a8dca2fd03094e02d3d488e0296a6ab1",
+    "scripts/execute_deepseek_intent_probe.py": "f7519bd59a5c7f51c232723ccc37e9e4bc7e0df39ec9ccd562a8acde4aea2445",
+    "scripts/g4_llm_plan_policy.py": "ae6e86c44fa398f92f15714d923651316e4a4dcea5271b83a9f9a27e047038f1"
+  },
+  "intent": "Run one direct, non-sensitive IntentUnderstandingAgent probe against the configured DeepSeek deepseek-v4-flash capability to distinguish a real provider failure from a rule fallback. The probe never constructs a recommendation task or opens MySQL, Neo4j, Chroma, Workspace, feedback, or profile ports.",
+  "max_changes": 0,
+  "mode": "APPLY",
+  "plan_hash": "446a24793d3f43f4920c45c154b5ff23c34045ff295b233c8e1f7838f264528e",
+  "plan_id": "20cdabb3-b486-5e2c-86fc-652f6fa24841",
+  "preconditions": [
+    "The user approves this exact plan identity before its external model request.",
+    "The configured provider is DeepSeek, model is deepseek-v4-flash, and the capability is intent.classify.",
+    "Only the fixed non-sensitive text is provided to the agent; no account, identifier, profile, recommendation result, graph data, SQL, Cypher, prompt output, or credential is transmitted or persisted.",
+    "The adapter may make at most two provider attempts for this one Intent Agent invocation; raw model response is never written to evidence.",
+    "All database, graph, vector, Workspace, feedback, behavior, profile, outbox, container, volume, deletion, and overwrite counts remain zero."
+  ],
+  "request_run_id": "deepseek-intent-probe-20260902-001",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "artifacts/verification/deepseek-intent-probe/deepseek-intent-probe-20260902-001/result.json",
+      "kind": "FILE",
+      "operation": "CREATE"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "257d0d77046beb5b29de741325db029e0888bf8f",
+      "kind": "GIT",
+      "operation": "READ"
+    }
+  ]
+}
