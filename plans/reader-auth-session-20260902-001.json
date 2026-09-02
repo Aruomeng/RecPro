@@ -1,0 +1,97 @@
+{
+  "classification": "S2_CONTROLLED_UPDATE",
+  "created_at": "2026-09-02T02:20:55.054354Z",
+  "environment": {
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "environment_id": "recpro-local-reader-auth-session",
+    "host_fingerprint": "sha256:55bad399e55b0e3cbe155c15c854f668224695b8c26a666debea001a02dc1be3",
+    "index_namespace": null,
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "5897f792f3e60f94839eb29fd26af6a6a3a83b7f",
+  "idempotency_key": "reader-auth-session-reader-auth-session-20260902-001",
+  "input_hashes": {
+    "backend/app/api/identity.py": "26806b01f4d1acf219550a4ab8e5b6f3a2b5c94cf24a5c723c1dca3d27416042",
+    "backend/app/composition.py": "2b1450824068d4ff0aa5778f09c3af540849ce95535d687bb3cf04e85324c765",
+    "backend/app/identity/adapters/mysql.py": "54bc82e9756e4be1f71e5ba70221186b012332b85c7999dc2291a4e6f49188e2",
+    "backend/app/identity/application.py": "86223d164d066bf565ca7e6786dc957476db1b4b6330a6ce9ac8f665aca59b47",
+    "backend/app/identity/security.py": "4d867bfb147f7e455b4297b82d12e480d2cc57dc2e544511bb2d7c070e886743",
+    "scripts/build_reader_auth_session_plan.py": "a67599ed9d54713e3d1edfb09c48b65d14887976efcdf7f7aadb0646f4cbce5e",
+    "scripts/execute_reader_auth_session_plan.py": "4137d502148b5d9e713788c17f213665d71f5a3798881288e487f21c26a4e878"
+  },
+  "intent": "Verify one existing synthetic reader through the public local identity API: login, authenticated identity read, one refresh-token rotation, and logout. No account, consent, profile, recommendation, feedback, behavior, graph, vector, workspace audit, or model operation is allowed.",
+  "max_changes": 9,
+  "mode": "APPLY",
+  "plan_hash": "e7bd2b7e86b672ae15f05cfa4e97c0feafe0970a929180e182bb034bd1c784e3",
+  "plan_id": "3cf9bac6-5b83-5bde-b984-1f79c21596b4",
+  "preconditions": [
+    "The user approves this exact plan_id and plan_hash before the executor invokes any POST endpoint.",
+    "The protected stage-2 reader credential file exists with mode 0600; its values are never logged, planned, or written to evidence.",
+    "AUTH_SESSION_BASELINE={\"account\":{\"account_kind\":\"HUMAN\",\"account_uuid\":\"461c4d82-2eb4-53aa-bdf8-137d828b938d\",\"auth_version\":2,\"must_change_password\":false,\"role_version\":1,\"status\":\"ACTIVE\",\"user_id\":10001},\"consents\":{\"BEHAVIOR_LEARNING\":false,\"DECLARED_PROFILE\":true,\"PERSONALIZED_RECOMMENDATION\":true,\"RESEARCH_ANALYTICS\":true},\"counts\":{\"iam_auth_session\":6,\"iam_refresh_token\":7,\"iam_security_event\":12},\"roles\":[\"user\"]}",
+    "The local workbench identity API is ready at the approved loopback base URL.",
+    "Only login, auth/me, refresh, and logout are called; refresh is exactly once and all authentication material stays in memory.",
+    "MySQL append deltas are exactly session +1, refresh-token +2, security-event +2; only the allowlisted current session/token/account fields may be updated.",
+    "No DeepSeek, Neo4j, Chroma, recommendation, profile, consent, behavior, feedback, workspace audit, deletion, container, or volume operation occurs.",
+    "On partial failure facts are retained for inspection; no compensating deletion or overwrite is attempted."
+  ],
+  "request_run_id": "reader-auth-session-20260902-001",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 7,
+      "expected_before_count": 6,
+      "identifier": "recpro.iam_auth_session:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 9,
+      "expected_before_count": 7,
+      "identifier": "recpro.iam_refresh_token:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 14,
+      "expected_before_count": 12,
+      "identifier": "recpro.iam_security_event:reader-auth:reader-auth-session-20260902-001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_user_account:user_id=10001:last-login",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_refresh_token:user_id=10001:initial-consume",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_auth_session:user_id=10001:last-seen-and-revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "artifacts/verification/reader-auth-session/reader-auth-session-20260902-001/acceptance.json",
+      "kind": "FILE",
+      "operation": "CREATE"
+    }
+  ]
+}
