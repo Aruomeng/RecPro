@@ -500,7 +500,10 @@ async def apply(
     }
     if error is not None:
         evidence["error"] = error
-    path.parent.mkdir(parents=True, exist_ok=False)
+    # The read-only builder creates the run directory to hold the approved
+    # ChangePlan.  Reuse that directory, but still refuse to overwrite the
+    # acceptance artifact itself (checked above).
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     if evidence_status != "PASS":
         raise RuntimeError(f"consent plan did not complete; evidence retained at {path.relative_to(PROJECT_ROOT)}")
