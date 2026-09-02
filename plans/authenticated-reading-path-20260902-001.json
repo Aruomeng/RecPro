@@ -1,0 +1,184 @@
+{
+  "classification": "S2_CONTROLLED_UPDATE",
+  "created_at": "2026-09-02T11:58:45.620568Z",
+  "environment": {
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "environment_id": "recpro-local-authenticated-topic",
+    "host_fingerprint": "sha256:8278df3435311a8ae1a91fb0f9f2bdcab6f9391dfac10f04880db1f0928bbfed",
+    "index_namespace": "library_resources__hash_char_ngram_v1",
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "68b036a9c9b23052cd2586daf90b800944218b36",
+  "idempotency_key": "5a5a1421-ed6d-5c48-8b13-2d89ef46fd5f",
+  "input_hashes": {
+    "backend/app/api/agent_workspaces.py": "a2e7f60b43f84c8302cd697622dbd058b94c18e987e8bd14d33ad5887db982fc",
+    "backend/app/api/identity.py": "26806b01f4d1acf219550a4ab8e5b6f3a2b5c94cf24a5c723c1dca3d27416042",
+    "backend/app/api/recommendation_runs.py": "cc79e7031a5a3b82bbe0872fb034a2dffab0535397355dccd2008e30872b7de4",
+    "backend/app/recommendation/application/orchestration.py": "0d87507b6fd8479325ebf25afa202751332fdc19883f22b5e05ed414f6f6f02c",
+    "frontend/src/api/recommendationRunClient.ts": "8754731b8df2933ef87cc343e473a37ce0af4be9f265074cc5e296fe396f988a",
+    "request_payload": "c9f4bbaeaf2697a280886a22b9a6605ec63092235daece88c32de188e0c31a4b",
+    "scripts/build_authenticated_topic_run_plan.py": "fde89872600d82556c29a20366e7194c8bf92e45ca24d154266eff303b2d349b",
+    "scripts/execute_authenticated_topic_run.py": "735ad7b4a1cf836c4dd0304657d3491fedbfd10f2f2e7392602cb8ff1dfd33a3"
+  },
+  "intent": "Execute one formally authenticated reader topic recommendation through the public async API and Fetch-SSE-compatible event endpoint. The authenticated reader is user 10001; the task is bounded to eight BOOK results and the existing three recall channels. Login and logout are included solely to prove the browser-facing Bearer identity boundary.",
+  "max_changes": 59,
+  "mode": "APPLY",
+  "plan_hash": "e7925bfb9b89819defa835863da72ce9d0774a26ef7f1836761b225628be42ab",
+  "plan_id": "d140dbed-26b7-5951-9e76-89ba7c7babd3",
+  "preconditions": [
+    "AUTH_TOPIC_BASELINE={\"account\":{\"auth_version\":2,\"role_version\":1,\"status\":\"ACTIVE\"},\"consents\":{\"BEHAVIOR_LEARNING\":false,\"DECLARED_PROFILE\":true,\"PERSONALIZED_RECOMMENDATION\":true,\"RESEARCH_ANALYTICS\":true},\"counts\":{\"iam_auth_session\":9,\"iam_refresh_token\":11,\"iam_security_event\":17,\"recommendation_agent_artifact\":47,\"recommendation_agent_message\":311,\"recommendation_agent_result\":311,\"recommendation_candidate\":740,\"recommendation_item\":402,\"recommendation_item_explanation\":402,\"recommendation_orchestration_result\":47,\"recommendation_policy_decision\":67,\"recommendation_record\":61,\"recommendation_task\":65,\"recommendation_task_transition\":524,\"recommendation_trace\":65}}",
+    "AUTH_TOPIC_REQUEST={\"input_text\":\"从推荐系统基础到多智能体智慧图书馆的学习路径\",\"limit\":8,\"request_id\":\"5a5a1421-ed6d-5c48-8b13-2d89ef46fd5f\",\"requested_output_type\":\"READING_PATH\",\"requested_resource_types\":[\"BOOK\"],\"scene\":\"SEARCH_AFTER\",\"session_id\":\"837d604e-0d44-51d1-9395-4b17cc669901\"}",
+    "Exact user 10001 credentials remain only in the protected 0600 local file and must not be logged.",
+    "The live workbench is ready at 127.0.0.1:18000 with formal local identity and async recommendation APIs enabled.",
+    "The executor sends Authorization: Bearer only; it must not use X-Demo-User-Id.",
+    "One in-memory authenticated Agent Workspace may be created and one SSE stream may be read; Workspace audit persistence is disabled.",
+    "The only business POST is the frozen topic request; its replay uses the same idempotency key and must append zero rows and issue zero extra model calls.",
+    "DeepSeek deepseek-v4-flash is capped at Intent <=2 and Explanation <=16 requests; raw prompts/responses are never persisted.",
+    "Expected append deltas are recommendation facts {\"iam_auth_session\": 1, \"iam_refresh_token\": 1, \"iam_security_event\": 2, \"recommendation_agent_artifact\": 1, \"recommendation_agent_message\": 7, \"recommendation_agent_result\": 7, \"recommendation_candidate\": 8, \"recommendation_item\": 8, \"recommendation_item_explanation\": 8, \"recommendation_orchestration_result\": 1, \"recommendation_policy_decision\": 1, \"recommendation_record\": 1, \"recommendation_task\": 1, \"recommendation_task_transition\": 8, \"recommendation_trace\": 1}; only three current-state updates are permitted for login, session/token revocation.",
+    "No consent, profile, feedback, behavior, outbox, graph, vector, audit, schema, container, volume, delete, or overwrite operation is allowed."
+  ],
+  "request_run_id": "authenticated-reading-path-20260902-001",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 66,
+      "expected_before_count": 65,
+      "identifier": "recpro.recommendation_task",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 532,
+      "expected_before_count": 524,
+      "identifier": "recpro.recommendation_task_transition",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 62,
+      "expected_before_count": 61,
+      "identifier": "recpro.recommendation_record",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 410,
+      "expected_before_count": 402,
+      "identifier": "recpro.recommendation_item",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 410,
+      "expected_before_count": 402,
+      "identifier": "recpro.recommendation_item_explanation",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 68,
+      "expected_before_count": 67,
+      "identifier": "recpro.recommendation_policy_decision",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 66,
+      "expected_before_count": 65,
+      "identifier": "recpro.recommendation_trace",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 318,
+      "expected_before_count": 311,
+      "identifier": "recpro.recommendation_agent_message",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 318,
+      "expected_before_count": 311,
+      "identifier": "recpro.recommendation_agent_result",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 48,
+      "expected_before_count": 47,
+      "identifier": "recpro.recommendation_agent_artifact",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 48,
+      "expected_before_count": 47,
+      "identifier": "recpro.recommendation_orchestration_result",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 748,
+      "expected_before_count": 740,
+      "identifier": "recpro.recommendation_candidate",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 10,
+      "expected_before_count": 9,
+      "identifier": "recpro.iam_auth_session",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 12,
+      "expected_before_count": 11,
+      "identifier": "recpro.iam_refresh_token",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 19,
+      "expected_before_count": 17,
+      "identifier": "recpro.iam_security_event",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_user_account:user_id=10001:last-login",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_auth_session:planned-session:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_refresh_token:planned-token:revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "artifacts/verification/authenticated-topic-run/authenticated-reading-path-20260902-001/acceptance.json",
+      "kind": "FILE",
+      "operation": "CREATE"
+    }
+  ]
+}
