@@ -334,8 +334,18 @@ def build_commands(payload: Mapping[str, Any]) -> tuple[ImpressionCommand, Feedb
 async def execute(args: argparse.Namespace) -> dict[str, Any]:
     run_id = validate_run_id(args.run_id)
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g5" / run_id
+    evidence_path = evidence_dir / "g5-feedback-worker-apply.json"
     if evidence_dir.exists():
-        raise FileExistsError(f"evidence directory already exists: {evidence_dir}")
+        if not evidence_dir.is_dir():
+            raise FileExistsError(f"evidence target is not a directory: {evidence_dir}")
+        existing = {item.name for item in evidence_dir.iterdir()}
+        allowed = {"g5-feedback-worker-change-plan.json"}
+        if existing - allowed:
+            raise FileExistsError(
+                f"evidence directory contains unexpected files: {sorted(existing - allowed)}"
+            )
+        if evidence_path.exists():
+            raise FileExistsError(f"apply evidence already exists: {evidence_path}")
     plan_path = resolve_inside_root(args.plan, label="G5 ChangePlan")
     baseline_path = resolve_inside_root(args.baseline, label="G5 baseline")
     plan, _plan_raw = validate_plan(
@@ -555,8 +565,12 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "identity": identity,
         "target_snapshot": target_facts,
     }
-    evidence_dir.mkdir(parents=True, exist_ok=False)
-    evidence_path = evidence_dir / "g5-feedback-worker-apply.json"
+    # The DRY_RUN builder creates the run directory to hold the approved plan.
+    # Reuse that directory, while the explicit existence check above prevents
+    # overwriting an acceptance artifact or mixing unrelated files.
+    evidence_dir.mkdir(parents=True, exist_ok=True)
+    if evidence_path.exists():
+        raise FileExistsError(f"apply evidence already exists: {evidence_path}")
     evidence_path.write_text(
         json.dumps(evidence, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
         encoding="utf-8",
