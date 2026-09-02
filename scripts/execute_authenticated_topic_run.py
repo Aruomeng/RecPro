@@ -118,6 +118,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     if not isinstance(result, dict) or len(result.get("items", [])) != 8: raise RuntimeError("recommendation result contract is invalid")
     statuses["replay"], replay = client.request("POST", "/api/v1/recommendation-runs", request, h)
     if statuses["replay"] != 202 or not isinstance(replay, dict) or replay.get("replayed") is not True or replay.get("task_id") != task_id: raise RuntimeError("idempotent recommendation replay failed")
+    workspace_events = []
+    statuses["workspace_snapshot"], snapshot = client.request("GET", f"/api/v1/agent-workspaces/{workspace_id}", headers=auth)
+    if statuses["workspace_snapshot"] != 200 or not isinstance(snapshot, dict):
+        raise RuntimeError("authenticated workspace snapshot read failed")
+    workspace_events = snapshot.get("recent_events", []) if isinstance(snapshot.get("recent_events"), list) else []
     statuses["logout"], _ = client.request("POST", "/api/v1/auth/logout", headers=auth)
     if statuses["logout"] != 204: raise RuntimeError("test logout failed")
     _, after = await baseline(env, 10001)
@@ -126,9 +131,6 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     for table, expected in planned.items():
         if table in deltas and deltas[table] != expected: raise RuntimeError(f"unexpected database delta for {table}")
     if after["account"] != before["account"] or after["consents"] != before["consents"]: raise RuntimeError("run changed account version or consent state")
-    workspace_events = []
-    statuses["workspace_snapshot"], snapshot = client.request("GET", f"/api/v1/agent-workspaces/{workspace_id}", headers=auth)
-    if statuses["workspace_snapshot"] == 200 and isinstance(snapshot, dict): workspace_events = snapshot.get("recent_events", []) if isinstance(snapshot.get("recent_events"), list) else []
     proof = {"status":"PASS", "mode":"APPROVED_FORMAL_BEARER_TOPIC_RUN", "plan_id":args.plan_id, "plan_hash":args.plan_hash, "run_id":p["request_run_id"], "user_id":10001, "statuses":statuses, "task_id":task_id, "workspace_id":workspace_id, "result_status":final["status"], "result_items":len(result["items"]), "sse_event_count":len(events), "workspace_event_count":len(workspace_events), "append_deltas":deltas, "account_and_consents_unchanged":True, "deepseek_max_authorized":18, "database_physical_deletions":0, "file_deletions":0, "neo4j_writes":0, "chroma_writes":0, "feedback_behavior_profile_writes":0, "credential_values_printed":0, "verified_at":datetime.now(UTC).isoformat()}
     evidence_path.parent.mkdir(parents=True, exist_ok=False); evidence_path.write_text(json.dumps(proof,ensure_ascii=False,indent=2,sort_keys=True)+"\n")
     return proof | {"evidence_path":str(evidence_path.relative_to(ROOT))}
