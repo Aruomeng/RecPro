@@ -94,10 +94,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     token = str(login["access_token"]); auth = {"Authorization": f"Bearer {token}"}
     statuses["me"], me = client.request("GET", "/api/v1/auth/me", headers=auth)
     if statuses["me"] != 200 or not isinstance(me, dict) or int(me.get("user",{}).get("user_id",0)) != 10001: raise RuntimeError("Bearer identity validation failed")
-    statuses["workspace"], workspace = client.request("POST", "/api/v1/agent-workspaces", {"session_id": p["request_run_id"], "mode":"authenticated"}, auth)
-    if statuses["workspace"] != 202 or not isinstance(workspace, dict) or not isinstance(workspace.get("workspace_id"), str): raise RuntimeError("authenticated workspace creation failed")
+    workspace_session_id = str(__import__('uuid').uuid5(__import__('uuid').NAMESPACE_URL, f"authenticated-topic:{p['request_run_id']}:workspace"))
+    statuses["workspace"], workspace = client.request("POST", "/api/v1/agent-workspaces", {"session_id": workspace_session_id, "mode":"authenticated"}, auth)
+    workspace_snapshot = workspace.get("workspace") if isinstance(workspace, dict) else None
+    if statuses["workspace"] != 202 or not isinstance(workspace_snapshot, dict) or not isinstance(workspace_snapshot.get("workspace_id"), str): raise RuntimeError("authenticated workspace creation failed")
+    workspace_id = str(workspace_snapshot["workspace_id"])
     request = json.loads(bytes.fromhex(p["input_hashes"]["request_payload"]).decode()) if False else {"request_id":p["idempotency_key"], "session_id":str(__import__('uuid').uuid5(__import__('uuid').NAMESPACE_URL, f"authenticated-topic:{p['request_run_id']}:session")), "scene":"SEARCH_AFTER", "input_text":"多智能体、知识图谱与智慧图书馆", "requested_resource_types":["BOOK"], "requested_output_type":"TOPIC_RESOURCES", "limit":8}
-    h = auth | {"Idempotency-Key": p["idempotency_key"], "X-Agent-Workspace-Id": workspace["workspace_id"]}
+    h = auth | {"Idempotency-Key": p["idempotency_key"], "X-Agent-Workspace-Id": workspace_id}
     if hashlib.sha256(canonical(request)).hexdigest() != p["input_hashes"]["request_payload"]:
         raise RuntimeError("frozen recommendation request does not match its approved hash")
     statuses["run_create"], accepted = client.request("POST", "/api/v1/recommendation-runs", request, h)
@@ -124,9 +127,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         if table in deltas and deltas[table] != expected: raise RuntimeError(f"unexpected database delta for {table}")
     if after["account"] != before["account"] or after["consents"] != before["consents"]: raise RuntimeError("run changed account version or consent state")
     workspace_events = []
-    statuses["workspace_snapshot"], snapshot = client.request("GET", f"/api/v1/agent-workspaces/{workspace['workspace_id']}", headers=auth)
-    if statuses["workspace_snapshot"] == 200 and isinstance(snapshot, dict): workspace_events = snapshot.get("events", []) if isinstance(snapshot.get("events"), list) else []
-    proof = {"status":"PASS", "mode":"APPROVED_FORMAL_BEARER_TOPIC_RUN", "plan_id":args.plan_id, "plan_hash":args.plan_hash, "run_id":p["request_run_id"], "user_id":10001, "statuses":statuses, "task_id":task_id, "workspace_id":workspace["workspace_id"], "result_status":final["status"], "result_items":len(result["items"]), "sse_event_count":len(events), "workspace_event_count":len(workspace_events), "append_deltas":deltas, "account_and_consents_unchanged":True, "deepseek_max_authorized":18, "database_physical_deletions":0, "file_deletions":0, "neo4j_writes":0, "chroma_writes":0, "feedback_behavior_profile_writes":0, "credential_values_printed":0, "verified_at":datetime.now(UTC).isoformat()}
+    statuses["workspace_snapshot"], snapshot = client.request("GET", f"/api/v1/agent-workspaces/{workspace_id}", headers=auth)
+    if statuses["workspace_snapshot"] == 200 and isinstance(snapshot, dict): workspace_events = snapshot.get("recent_events", []) if isinstance(snapshot.get("recent_events"), list) else []
+    proof = {"status":"PASS", "mode":"APPROVED_FORMAL_BEARER_TOPIC_RUN", "plan_id":args.plan_id, "plan_hash":args.plan_hash, "run_id":p["request_run_id"], "user_id":10001, "statuses":statuses, "task_id":task_id, "workspace_id":workspace_id, "result_status":final["status"], "result_items":len(result["items"]), "sse_event_count":len(events), "workspace_event_count":len(workspace_events), "append_deltas":deltas, "account_and_consents_unchanged":True, "deepseek_max_authorized":18, "database_physical_deletions":0, "file_deletions":0, "neo4j_writes":0, "chroma_writes":0, "feedback_behavior_profile_writes":0, "credential_values_printed":0, "verified_at":datetime.now(UTC).isoformat()}
     evidence_path.parent.mkdir(parents=True, exist_ok=False); evidence_path.write_text(json.dumps(proof,ensure_ascii=False,indent=2,sort_keys=True)+"\n")
     return proof | {"evidence_path":str(evidence_path.relative_to(ROOT))}
 
