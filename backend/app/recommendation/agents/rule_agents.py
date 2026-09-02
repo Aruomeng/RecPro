@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.recommendation.agents.base import Agent
+from backend.app.recommendation.agents.intent_guidance import looks_like_guided_clarification
 from backend.app.recommendation.agents.topic_terms import extract_topic_terms
 from backend.app.shared_kernel.contracts.autonomy import (
     attach_decision,
@@ -76,6 +77,29 @@ class RuleIntentUnderstandingAgent:
         text = str(message.payload.get("input_text") or "").strip()
         requested_types = [str(item) for item in message.payload.get("resource_types", [])]
         output_type = message.payload.get("output_type")
+        if text and looks_like_guided_clarification(text):
+            payload = {
+                "intent_type": "UNCLEAR",
+                "confidence": 0.72,
+                "topic_terms": [],
+                "resource_types": requested_types or ["BOOK", "PAPER"],
+                "reason_codes": ["AMBIGUOUS_USER_GOAL"],
+            }
+            return _result(
+                message,
+                agent_name=self.name,
+                agent_version="intent-guided-rule-v1",
+                payload=payload,
+                confidence=0.72,
+                warnings=("LLM_INTENT_SKIPPED_AMBIGUOUS_INPUT",),
+                fallback_used=True,
+                decision=AgentDecision(
+                    action=AgentActionType.ASK_CLARIFICATION,
+                    target="RecommendationOrchestrator",
+                    reason_code="AMBIGUOUS_USER_GOAL",
+                    confidence=0.72,
+                ),
+            )
         if not text and not requested_types and output_type is None:
             payload = {
                 "intent_type": "UNCLEAR",

@@ -20,6 +20,7 @@ from backend.app.shared_kernel.contracts.autonomy import (
     validate_decision,
 )
 from backend.app.recommendation.agents.base import Agent
+from backend.app.recommendation.agents.intent_guidance import looks_like_guided_clarification
 from backend.app.recommendation.agents.topic_terms import extract_topic_terms
 from backend.app.shared_kernel.contracts.agent import AgentDecision, AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
@@ -94,25 +95,6 @@ def _rule_payload(message: AgentMessage) -> tuple[dict[str, object], float]:
     )
 
 
-_GUIDED_CLARIFICATION_MARKERS = (
-    "不确定",
-    "不清楚",
-    "不知道",
-    "没想好",
-    "没有想好",
-    "梳理方向",
-    "先帮我梳理",
-    "还没有明确",
-)
-
-
-def _looks_like_guided_clarification(text: str) -> bool:
-    """Detect an explicit lack of research direction before spending an LLM call."""
-
-    normalized = "".join(text.split()).lower()
-    return any(marker.lower() in normalized for marker in _GUIDED_CLARIFICATION_MARKERS)
-
-
 def _intent_fallback_reason(exc: Exception) -> str:
     """Classify a provider failure without retaining provider text or prompts."""
 
@@ -156,7 +138,7 @@ class LLMIntentUnderstandingAgent:
                 ),
             )
 
-        if _looks_like_guided_clarification(text):
+        if looks_like_guided_clarification(text):
             requested_types = [str(item) for item in message.payload.get("resource_types", [])]
             payload = {
                 "intent_type": "UNCLEAR",

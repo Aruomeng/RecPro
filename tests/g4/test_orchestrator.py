@@ -88,6 +88,26 @@ class G4OrchestratorTest(unittest.TestCase):
         self.assertNotIn("RankingAgent", {step["agent_name"] for step in result.trace})
         self.assertEqual("WAITING_CLARIFICATION", result.transitions[-1]["to_status"])
 
+    def test_guided_marker_path_stops_at_guided_before_recall(self) -> None:
+        result = self.execute(
+            self.request(
+                input_text="我还不确定要研究什么，先帮我梳理方向",
+                resource_types=("BOOK", "PAPER"),
+                output_type="PERSONALIZED_FEED",
+            )
+        )
+        self.assertEqual(TaskStatus.WAITING_CLARIFICATION, result.status)
+        self.assertEqual("GUIDED", result.payload["decision"]["delivery_strategy"])
+        self.assertEqual(2, len(result.payload["questions"]))
+        self.assertNotIn("CandidateRecallAgent", {step["agent_name"] for step in result.trace})
+        self.assertNotIn("RankingAgent", {step["agent_name"] for step in result.trace})
+        self.assertTrue(result.payload["agent_results"]["IntentUnderstandingAgent"]["fallback_used"])
+        self.assertIn("LLM_INTENT_SKIPPED_AMBIGUOUS_INPUT", result.payload["warnings"])
+        self.assertEqual(
+            "AMBIGUOUS_USER_GOAL",
+            result.payload["agent_results"]["IntentUnderstandingAgent"]["autonomy"]["reason_code"],
+        )
+
     def test_continuation_starts_from_waiting_context(self) -> None:
         result = self.execute(self.request(initial_status=TaskStatus.WAITING_CLARIFICATION, context_version=2))
         self.assertEqual(TaskStatus.COMPLETED, result.status)
