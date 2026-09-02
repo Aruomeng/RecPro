@@ -53,6 +53,8 @@ class LLMIntentAgentTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(AgentResultStatus.PARTIAL, result.status)
         self.assertIsNone(result.error_code)
         self.assertIn("LLM_INTENT_FALLBACK", result.warnings)
+        self.assertEqual("LLM_INTENT_PROVIDER_UNAVAILABLE", result.payload["llm_fallback_reason_code"])
+        self.assertEqual("LLM_INTENT_PROVIDER_UNAVAILABLE", result.decision.reason_code)
         self.assertEqual("TOPIC_RECOMMENDATION", result.payload["intent_type"])
 
     async def test_empty_input_never_calls_provider(self) -> None:
@@ -85,6 +87,7 @@ class LLMIntentAgentTest(unittest.IsolatedAsyncioTestCase):
         )
         self.assertTrue(result.fallback_used)
         self.assertIsNone(result.error_code)
+        self.assertEqual("LLM_INTENT_OUTPUT_REJECTED", result.payload["llm_fallback_reason_code"])
 
 
 if __name__ == "__main__":

@@ -113,6 +113,19 @@ def _looks_like_guided_clarification(text: str) -> bool:
     return any(marker.lower() in normalized for marker in _GUIDED_CLARIFICATION_MARKERS)
 
 
+def _intent_fallback_reason(exc: Exception) -> str:
+    """Classify a provider failure without retaining provider text or prompts."""
+
+    if isinstance(exc, TimeoutError):
+        return "LLM_INTENT_TIMEOUT"
+    if isinstance(exc, ValueError):
+        # Includes bounded JSON/schema/allow-list validation failures.
+        return "LLM_INTENT_OUTPUT_REJECTED"
+    if isinstance(exc, OSError):
+        return "LLM_INTENT_TRANSPORT_UNAVAILABLE"
+    return "LLM_INTENT_PROVIDER_UNAVAILABLE"
+
+
 class LLMIntentUnderstandingAgent:
     """Use the configured text capability for classification, never for facts."""
 
@@ -221,8 +234,10 @@ class LLMIntentUnderstandingAgent:
             )
         except asyncio.CancelledError:
             raise
-        except (TimeoutError, RuntimeError, ValueError, OSError):
+        except (TimeoutError, RuntimeError, ValueError, OSError) as exc:
             payload, confidence = _rule_payload(message)
+            fallback_reason = _intent_fallback_reason(exc)
+            payload["llm_fallback_reason_code"] = fallback_reason
             return _result(
                 message,
                 agent_name=self.name,
@@ -230,13 +245,13 @@ class LLMIntentUnderstandingAgent:
                 payload=payload,
                 confidence=min(confidence, 0.62),
                 evidence_ref="rule:intent-fallback-v1",
-                warnings=("LLM_INTENT_FALLBACK",),
+                warnings=("LLM_INTENT_FALLBACK", fallback_reason),
                 fallback_used=True,
                 status=AgentResultStatus.PARTIAL,
                 decision=AgentDecision(
                     action=AgentActionType.FALLBACK,
                     target="RecommendationOrchestrator",
-                    reason_code="LLM_INTENT_FALLBACK",
+                    reason_code=fallback_reason,
                     confidence=min(confidence, 0.62),
                 ),
             )
