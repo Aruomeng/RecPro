@@ -91,15 +91,18 @@ def read_g4_candidate_baseline(path: Path) -> int:
     value = data.get("candidate_persistence_rows")
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= 60:
         raise ValueError("G4 candidate persistence count is invalid")
-    if data.get("channels") != ["MYSQL", "GRAPH", "VECTOR"]:
-        raise ValueError("G4 baseline did not prove all three recall channels")
+    channels = data.get("channels")
+    if not isinstance(channels, list) or not channels or any(item not in {"MYSQL", "GRAPH", "VECTOR"} for item in channels):
+        raise ValueError("G4 baseline returned an invalid recall channel set")
     return value
 
 
-def plan(run_id: str, database_identity: str, state: dict[str, Any], candidate_rows: int) -> dict[str, Any]:
+def plan(run_id: str, database_identity: str, state: dict[str, Any], candidate_rows: int, *, input_text: str, output_type: str) -> dict[str, Any]:
     if re.fullmatch(r"[a-z0-9][a-z0-9-]{2,63}", run_id) is None:
         raise ValueError("run id is invalid")
     clean(); head = commit(); user_id = 10001
+    if not input_text.strip() or len(input_text) > 2000 or output_type not in {"TOPIC_RESOURCES", "READING_PATH"}:
+        raise ValueError("recommendation request is outside the public bounds")
     counts = state["counts"]
     deltas = dict(REC_DELTAS); deltas["recommendation_candidate"] = candidate_rows
     deltas.update({"iam_auth_session": 1, "iam_refresh_token": 1, "iam_security_event": 2})
@@ -112,7 +115,7 @@ def plan(run_id: str, database_identity: str, state: dict[str, Any], candidate_r
     ])
     request_id = str(uuid5(NAMESPACE_URL, f"authenticated-topic:{run_id}:request"))
     session_id = str(uuid5(NAMESPACE_URL, f"authenticated-topic:{run_id}:session"))
-    payload = {"request_id": request_id, "session_id": session_id, "scene": "SEARCH_AFTER", "input_text": "多智能体、知识图谱与智慧图书馆", "requested_resource_types": ["BOOK"], "requested_output_type": "TOPIC_RESOURCES", "limit": 8}
+    payload = {"request_id": request_id, "session_id": session_id, "scene": "SEARCH_AFTER", "input_text": input_text.strip(), "requested_resource_types": ["BOOK"], "requested_output_type": output_type, "limit": 8}
     marker = "AUTH_TOPIC_BASELINE=" + json.dumps(state, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     p: dict[str, Any] = {
         "schema_version": "1.0.0", "plan_id": str(uuid5(NAMESPACE_URL, f"authenticated-topic-plan:{head}:{run_id}")),
@@ -123,7 +126,8 @@ def plan(run_id: str, database_identity: str, state: dict[str, Any], candidate_r
         "targets": targets, "input_hashes": {x: digest(ROOT / x) for x in sorted(INPUTS)} | {"request_payload": hashlib.sha256(canonical(payload)).hexdigest()},
         "idempotency_key": request_id, "request_run_id": run_id, "max_changes": sum(deltas.values()) + 3,
         "preconditions": [
-            marker, "Exact user 10001 credentials remain only in the protected 0600 local file and must not be logged.",
+            marker, "AUTH_TOPIC_REQUEST=" + json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")),
+            "Exact user 10001 credentials remain only in the protected 0600 local file and must not be logged.",
             "The live workbench is ready at 127.0.0.1:18000 with formal local identity and async recommendation APIs enabled.",
             "The executor sends Authorization: Bearer only; it must not use X-Demo-User-Id.",
             "One in-memory authenticated Agent Workspace may be created and one SSE stream may be read; Workspace audit persistence is disabled.",
@@ -146,7 +150,7 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
     env = read_env((ROOT / args.env_file).resolve(strict=True))
     identity, state = await baseline(env, 10001)
     candidate_rows = read_g4_candidate_baseline(Path(args.g4_baseline))
-    result = plan(args.run_id, identity, state, candidate_rows)
+    result = plan(args.run_id, identity, state, candidate_rows, input_text=args.input_text, output_type=args.output_type)
     output = (ROOT / args.output).resolve(); output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2, sort_keys=True); handle.write("\n")
@@ -154,5 +158,5 @@ async def main_async(args: argparse.Namespace) -> dict[str, Any]:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--run-id", required=True); parser.add_argument("--g4-baseline", required=True); parser.add_argument("--output", required=True); parser.add_argument("--env-file", default=".env.host")
+    parser = argparse.ArgumentParser(description=__doc__); parser.add_argument("--run-id", required=True); parser.add_argument("--g4-baseline", required=True); parser.add_argument("--output", required=True); parser.add_argument("--env-file", default=".env.host"); parser.add_argument("--input-text", default="多智能体、知识图谱与智慧图书馆"); parser.add_argument("--output-type", choices=("TOPIC_RESOURCES", "READING_PATH"), default="TOPIC_RESOURCES")
     print(json.dumps(asyncio.run(main_async(parser.parse_args())), ensure_ascii=False, indent=2, sort_keys=True))

@@ -76,6 +76,15 @@ def planned_baseline(p: dict[str, Any]) -> dict[str, Any]:
     raise ValueError("plan omitted exact state baseline")
 
 
+def planned_request(p: dict[str, Any]) -> dict[str, Any]:
+    for value in p["preconditions"]:
+        if value.startswith("AUTH_TOPIC_REQUEST="):
+            request = json.loads(value.removeprefix("AUTH_TOPIC_REQUEST="))
+            if isinstance(request, dict):
+                return request
+    raise ValueError("plan omitted the frozen public recommendation request")
+
+
 def output_path(run_id: str) -> Path: return ROOT / "artifacts/verification/authenticated-topic-run" / run_id / "acceptance.json"
 
 
@@ -99,7 +108,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     workspace_snapshot = workspace.get("workspace") if isinstance(workspace, dict) else None
     if statuses["workspace"] != 202 or not isinstance(workspace_snapshot, dict) or not isinstance(workspace_snapshot.get("workspace_id"), str): raise RuntimeError("authenticated workspace creation failed")
     workspace_id = str(workspace_snapshot["workspace_id"])
-    request = json.loads(bytes.fromhex(p["input_hashes"]["request_payload"]).decode()) if False else {"request_id":p["idempotency_key"], "session_id":str(__import__('uuid').uuid5(__import__('uuid').NAMESPACE_URL, f"authenticated-topic:{p['request_run_id']}:session")), "scene":"SEARCH_AFTER", "input_text":"多智能体、知识图谱与智慧图书馆", "requested_resource_types":["BOOK"], "requested_output_type":"TOPIC_RESOURCES", "limit":8}
+    request = planned_request(p)
+    if request.get("request_id") != p["idempotency_key"] or request.get("session_id") != str(__import__('uuid').uuid5(__import__('uuid').NAMESPACE_URL, f"authenticated-topic:{p['request_run_id']}:session")):
+        raise RuntimeError("frozen recommendation request identity does not match the plan")
     h = auth | {"Idempotency-Key": p["idempotency_key"], "X-Agent-Workspace-Id": workspace_id}
     if hashlib.sha256(canonical(request)).hexdigest() != p["input_hashes"]["request_payload"]:
         raise RuntimeError("frozen recommendation request does not match its approved hash")
@@ -116,6 +127,8 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     if not isinstance(final, dict) or final.get("terminal") is not True or final.get("status") not in {"COMPLETED", "DEGRADED_COMPLETED"}: raise RuntimeError("recommendation did not reach an acceptable terminal state")
     result = final.get("result")
     if not isinstance(result, dict) or len(result.get("items", [])) != 8: raise RuntimeError("recommendation result contract is invalid")
+    if request.get("requested_output_type") == "READING_PATH" and (not isinstance(result.get("groups"), list) or not result.get("groups")):
+        raise RuntimeError("reading-path result omitted its bounded stage groups")
     statuses["replay"], replay = client.request("POST", "/api/v1/recommendation-runs", request, h)
     if statuses["replay"] != 202 or not isinstance(replay, dict) or replay.get("replayed") is not True or replay.get("task_id") != task_id: raise RuntimeError("idempotent recommendation replay failed")
     workspace_events = []
@@ -131,7 +144,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     for table, expected in planned.items():
         if table in deltas and deltas[table] != expected: raise RuntimeError(f"unexpected database delta for {table}")
     if after["account"] != before["account"] or after["consents"] != before["consents"]: raise RuntimeError("run changed account version or consent state")
-    proof = {"status":"PASS", "mode":"APPROVED_FORMAL_BEARER_TOPIC_RUN", "plan_id":args.plan_id, "plan_hash":args.plan_hash, "run_id":p["request_run_id"], "user_id":10001, "statuses":statuses, "task_id":task_id, "workspace_id":workspace_id, "result_status":final["status"], "result_items":len(result["items"]), "sse_event_count":len(events), "workspace_event_count":len(workspace_events), "append_deltas":deltas, "account_and_consents_unchanged":True, "deepseek_max_authorized":18, "database_physical_deletions":0, "file_deletions":0, "neo4j_writes":0, "chroma_writes":0, "feedback_behavior_profile_writes":0, "credential_values_printed":0, "verified_at":datetime.now(UTC).isoformat()}
+    proof = {"status":"PASS", "mode":"APPROVED_FORMAL_BEARER_RECOMMENDATION_RUN", "plan_id":args.plan_id, "plan_hash":args.plan_hash, "run_id":p["request_run_id"], "user_id":10001, "output_type":request.get("requested_output_type"), "statuses":statuses, "task_id":task_id, "workspace_id":workspace_id, "result_status":final["status"], "result_items":len(result["items"]), "reading_path_group_count":len(result.get("groups", [])) if isinstance(result.get("groups"), list) else 0, "sse_event_count":len(events), "workspace_event_count":len(workspace_events), "append_deltas":deltas, "account_and_consents_unchanged":True, "deepseek_max_authorized":18, "database_physical_deletions":0, "file_deletions":0, "neo4j_writes":0, "chroma_writes":0, "feedback_behavior_profile_writes":0, "credential_values_printed":0, "verified_at":datetime.now(UTC).isoformat()}
     evidence_path.parent.mkdir(parents=True, exist_ok=False); evidence_path.write_text(json.dumps(proof,ensure_ascii=False,indent=2,sort_keys=True)+"\n")
     return proof | {"evidence_path":str(evidence_path.relative_to(ROOT))}
 
