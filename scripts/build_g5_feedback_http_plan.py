@@ -25,6 +25,11 @@ import asyncmy
 from jsonschema import Draft202012Validator, FormatChecker
 
 from backend.app.observability.adapters.mysql_readiness import GrantSafetyEvaluator
+from backend.app.profile.replay import (
+    BehaviorForReplay,
+    ResourceTagEvidence,
+    compute_profile_snapshot,
+)
 from scripts.validate_runtime_env import read_env, validate_compose
 
 
@@ -94,7 +99,7 @@ def target_snapshot_from_facts(target_facts: Mapping[str, Any]) -> dict[str, Any
     describe different facts at review and apply time.
     """
 
-    return {
+    snapshot: dict[str, Any] = {
         "task": target_facts["task"],
         "record": target_facts["record"],
         "item": target_facts["item"],
@@ -106,6 +111,19 @@ def target_snapshot_from_facts(target_facts: Mapping[str, Any]) -> dict[str, Any
         "user_interest_tag_ids": target_facts.get("user_interest_tag_ids", ()),
         "user_negative_preference_keys": target_facts.get("user_negative_preference_keys", ()),
     }
+    # Newer plans bind the complete as-of replay inputs.  Keeping these keys
+    # optional preserves compatibility with historical plans while preventing
+    # a stale profile projection or missing replay-log row from being silently
+    # treated as a fixed three-row budget.
+    for key in (
+        "replay_events",
+        "replay_resource_tags",
+        "replay_log_source_event_ids",
+        "replay_projection",
+    ):
+        if key in target_facts:
+            snapshot[key] = target_facts[key]
+    return snapshot
 
 
 def expected_final_deltas(target_facts: Mapping[str, Any]) -> dict[str, int]:
@@ -124,10 +142,34 @@ def expected_final_deltas(target_facts: Mapping[str, Any]) -> dict[str, int]:
         for item in target_facts.get("user_negative_preference_keys", ())
     }
     deltas = dict(G5_FIXED_FINAL_DELTAS)
-    deltas["user_interest_tag"] = len(tag_ids - existing_interest_ids)
-    deltas["user_negative_preference"] = len(
-        {(tag_id, "TOPIC_NOT_INTERESTED") for tag_id in tag_ids} - existing_negative_keys
-    )
+    projection = target_facts.get("replay_projection")
+    if projection is not None:
+        if not isinstance(projection, Mapping):
+            raise ValueError("replay_projection must be an object")
+        try:
+            final_interest_ids = {
+                int(tag_id) for tag_id in projection["final_interest_tag_ids"]
+            }
+            final_negative_keys = {
+                (int(item["tag_id"]), str(item["reason_code"]))
+                for item in projection["final_negative_preference_keys"]
+            }
+            profile_change_log_delta = int(projection["profile_change_log_delta"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("replay_projection fields are invalid") from exc
+        if profile_change_log_delta < 0:
+            raise ValueError("replay_projection profile_change_log_delta must be non-negative")
+        deltas["profile_change_log"] = profile_change_log_delta
+        deltas["user_interest_tag"] = len(final_interest_ids - existing_interest_ids)
+        deltas["user_negative_preference"] = len(final_negative_keys - existing_negative_keys)
+    else:
+        # Historical plans only froze the selected resource's tag keys.  Keep
+        # their deterministic compatibility path; newly generated plans use
+        # the complete replay projection above.
+        deltas["user_interest_tag"] = len(tag_ids - existing_interest_ids)
+        deltas["user_negative_preference"] = len(
+            {(tag_id, "TOPIC_NOT_INTERESTED") for tag_id in tag_ids} - existing_negative_keys
+        )
     # A newly authenticated reader can legitimately have no profile projection
     # yet.  The first bounded Outbox replay creates that projection; subsequent
     # replays only update its current row.  Keep this derived from the frozen
@@ -138,6 +180,140 @@ def expected_final_deltas(target_facts: Mapping[str, Any]) -> dict[str, int]:
         raise ValueError("target user must have zero or one current user_profile row")
     deltas["user_profile"] = 1 if profile_count == 0 else 0
     return deltas
+
+
+def _aware_replay_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        parsed = parse_utc(value, label="replay event timestamp")
+    else:
+        raise ValueError("replay event timestamp is invalid")
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(UTC)
+
+
+def _replay_projection(
+    target_facts: Mapping[str, Any], *, interaction_payload: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Derive the exact profile row/log deltas before any interaction write.
+
+    Profile refresh replays *all* user behavior visible at each Outbox event,
+    not only the selected resource's tags.  This pure calculation mirrors the
+    Worker input and freezes the two as-of horizons so a plan cannot undercount
+    rows that become visible during a full deterministic replay.
+    """
+
+    raw_events = target_facts.get("replay_events")
+    raw_tags = target_facts.get("replay_resource_tags")
+    if not isinstance(raw_events, Sequence) or isinstance(raw_events, (str, bytes)):
+        raise ValueError("replay_events are required for a new bounded plan")
+    if not isinstance(raw_tags, Mapping):
+        raise ValueError("replay_resource_tags are required for a new bounded plan")
+    tags_by_resource: dict[int, tuple[ResourceTagEvidence, ...]] = {}
+    for resource_key, tag_rows in raw_tags.items():
+        if not isinstance(tag_rows, Sequence) or isinstance(tag_rows, (str, bytes)):
+            raise ValueError("replay_resource_tags contains an invalid row set")
+        resource_id = int(resource_key)
+        tags_by_resource[resource_id] = tuple(
+            ResourceTagEvidence(
+                tag_id=int(row["tag_id"]),
+                weight=float(row["weight"]),
+                confidence=float(row["confidence"]),
+            )
+            for row in tag_rows
+            if isinstance(row, Mapping)
+        )
+    existing: list[BehaviorForReplay] = []
+    max_event_id = 0
+    for raw in raw_events:
+        if not isinstance(raw, Mapping):
+            raise ValueError("replay_events contains an invalid event")
+        event_id = int(raw["event_id"])
+        max_event_id = max(max_event_id, event_id)
+        resource_id = raw.get("resource_id")
+        resource_key = int(resource_id) if resource_id is not None else None
+        existing.append(
+            BehaviorForReplay(
+                event_id=event_id,
+                event_uuid=str(raw["event_uuid"]),
+                event_type=str(raw["event_type"]),
+                resource_id=resource_key,
+                occurred_at=_aware_replay_datetime(raw["occurred_at"]),
+                reason_code=(str(raw["reason_code"]) if raw.get("reason_code") is not None else None),
+                tags=tags_by_resource.get(resource_key, ()) if resource_key is not None else (),
+            )
+        )
+    target_resource_id = int(interaction_payload["resource_id"])
+    target_tags = tuple(
+        ResourceTagEvidence(
+            tag_id=int(row["tag_id"]),
+            weight=float(row["weight"]),
+            confidence=float(row["confidence"]),
+        )
+        for row in target_facts["resource_tags"]
+    )
+    impression_at = _aware_replay_datetime(interaction_payload["impression_rendered_at"])
+    feedback_at = _aware_replay_datetime(interaction_payload["feedback_occurred_at"])
+    behavior_at = _aware_replay_datetime(interaction_payload["behavior_occurred_at"])
+    planned = (
+        BehaviorForReplay(
+            event_id=max_event_id + 1,
+            event_uuid=str(interaction_payload["impression_uuid"]),
+            event_type="RECOMMENDATION_IMPRESSION",
+            resource_id=target_resource_id,
+            occurred_at=impression_at,
+            reason_code=None,
+            tags=target_tags,
+        ),
+        BehaviorForReplay(
+            event_id=max_event_id + 2,
+            event_uuid=str(interaction_payload["feedback_uuid"]),
+            event_type="NOT_INTERESTED",
+            resource_id=target_resource_id,
+            occurred_at=feedback_at,
+            reason_code="TOPIC_NOT_INTERESTED",
+            tags=target_tags,
+        ),
+        BehaviorForReplay(
+            event_id=max_event_id + 3,
+            event_uuid=str(interaction_payload["behavior_uuid"]),
+            event_type="CLICK_RECOMMENDATION",
+            resource_id=target_resource_id,
+            occurred_at=behavior_at,
+            reason_code=None,
+            tags=target_tags,
+        ),
+    )
+    all_events = tuple((*existing, *planned))
+    first_snapshot = compute_profile_snapshot(
+        user_id=int(interaction_payload["user_id"]),
+        as_of=feedback_at,
+        events=all_events,
+        formula_version="profile-g2-v1",
+    )
+    final_snapshot = compute_profile_snapshot(
+        user_id=int(interaction_payload["user_id"]),
+        as_of=behavior_at,
+        events=all_events,
+        formula_version="profile-g2-v1",
+    )
+    logged_ids = {int(value) for value in target_facts.get("replay_log_source_event_ids", ())}
+    first_ids = {event.event_id for event in all_events if event.occurred_at <= feedback_at}
+    final_ids = {event.event_id for event in all_events if event.occurred_at <= behavior_at}
+    first_missing = first_ids - logged_ids
+    second_missing = final_ids - (logged_ids | first_ids)
+    return {
+        "feedback_replay_event_count": first_snapshot.event_count,
+        "behavior_replay_event_count": final_snapshot.event_count,
+        "final_interest_tag_ids": [signal.tag_id for signal in final_snapshot.interests],
+        "final_negative_preference_keys": [
+            {"tag_id": signal.tag_id, "reason_code": signal.reason_code}
+            for signal in final_snapshot.negatives
+        ],
+        "profile_change_log_delta": len(first_missing) + len(second_missing),
+    }
 
 
 def resolve_inside_root(value: Path, *, label: str, strict: bool = True) -> Path:
@@ -337,6 +513,47 @@ async def read_target_facts(
             }
             for row in await cursor.fetchall()
         )
+        # Freeze the complete behavior horizon used by the profile Worker.
+        # Replaying only the selected resource's tags underestimates both the
+        # final projection keys and the number of historical change-log rows
+        # that may be filled by the first as-of replay.
+        await cursor.execute(
+            "SELECT id, event_uuid, event_type, resource_id, occurred_at, reason_code "
+            "FROM user_behavior_event WHERE user_id = %s "
+            "ORDER BY occurred_at, id, event_uuid LIMIT 5000",
+            (user_id,),
+        )
+        behavior_rows = tuple(await cursor.fetchall())
+        behavior_resource_ids = tuple(
+            sorted({int(row[3]) for row in behavior_rows if row[3] is not None} | {int(resource_id)})
+        )
+        if len(behavior_rows) >= 5000:
+            raise ValueError("target user behavior horizon exceeds the bounded plan limit")
+        replay_resource_tags: dict[str, list[dict[str, object]]] = {
+            str(value): [] for value in behavior_resource_ids
+        }
+        if behavior_resource_ids:
+            placeholders = ",".join("%s" for _ in behavior_resource_ids)
+            await cursor.execute(
+                "SELECT resource_id, tag_id, weight, confidence, source FROM resource_tag "
+                f"WHERE resource_id IN ({placeholders}) ORDER BY resource_id, tag_id, source",
+                behavior_resource_ids,
+            )
+            for row in await cursor.fetchall():
+                replay_resource_tags[str(int(row[0]))].append(
+                    {
+                        "tag_id": int(row[1]),
+                        "weight": float(row[2]),
+                        "confidence": float(row[3]),
+                        "source": str(row[4]),
+                    }
+                )
+        await cursor.execute(
+            "SELECT source_event_id FROM profile_change_log "
+            "WHERE source_type = 'REPLAY' AND formula_version = 'profile-g2-v1' "
+            "ORDER BY source_event_id"
+        )
+        replay_log_source_event_ids = tuple(int(row[0]) for row in await cursor.fetchall())
         await cursor.execute(
             "SELECT user_id, resource_id, state_type, state_version "
             "FROM user_resource_state WHERE user_id = %s AND resource_id = %s "
@@ -500,6 +717,25 @@ async def read_target_facts(
         "user_negative_count": negative_count,
         "user_interest_tag_ids": interest_tag_ids,
         "user_negative_preference_keys": negative_preference_keys,
+        "replay_events": tuple(
+            {
+                "event_id": int(row[0]),
+                "event_uuid": str(row[1]),
+                "event_type": str(row[2]),
+                "resource_id": int(row[3]) if row[3] is not None else None,
+                "occurred_at": (
+                    row[4].replace(tzinfo=UTC).isoformat()
+                    if isinstance(row[4], datetime) and (row[4].tzinfo is None or row[4].utcoffset() is None)
+                    else row[4].astimezone(UTC).isoformat()
+                    if isinstance(row[4], datetime)
+                    else str(row[4])
+                ),
+                "reason_code": str(row[5]) if row[5] is not None else None,
+            }
+            for row in behavior_rows
+        ),
+        "replay_resource_tags": replay_resource_tags,
+        "replay_log_source_event_ids": replay_log_source_event_ids,
     }
 
 
@@ -620,6 +856,11 @@ def build_plan(
         "worker_limit": worker_limit,
         "formula_version": "profile-g2-v1",
     }
+    target_facts = dict(target_facts)
+    target_facts["replay_projection"] = _replay_projection(
+        target_facts,
+        interaction_payload=interaction_payload,
+    )
     commit = current_git_commit()
     project = str(baseline.get("compose_project") or values.get("COMPOSE_PROJECT_NAME") or "")
     database = str(values["RECPRO_MYSQL_DATABASE"])
@@ -676,6 +917,7 @@ def build_plan(
         "idempotency_key": str(feedback_uuid),
         "request_run_id": run_id,
         "interaction_payload": interaction_payload,
+        "replay_projection": target_facts["replay_projection"],
         "max_changes": max_changes,
         "preconditions": [
             "the supplied G5 feedback HTTP read-only evidence is PASS, hash-identical, zero-write, and its full before/after table counts remain unchanged",

@@ -80,6 +80,9 @@ FINAL_DELTAS = {
     "user_negative_preference": 2,
     "user_profile": 0,
 }
+DYNAMIC_DELTAS = frozenset(
+    {"profile_change_log", "user_interest_tag", "user_negative_preference", "user_profile"}
+)
 
 
 def resolve_inside_root(value: Path, *, label: str, strict: bool = True) -> Path:
@@ -185,7 +188,7 @@ def validate_plan(
         for table, target in target_tables.items()
     }
     for table, expected in G5_FIXED_FINAL_DELTAS.items():
-        if table in {"user_interest_tag", "user_negative_preference", "user_profile"}:
+        if table in DYNAMIC_DELTAS:
             if observed_deltas[table] < 0:
                 raise ValueError(f"ChangePlan contains a negative projection delta for {table}")
         elif observed_deltas[table] != expected:
@@ -205,6 +208,21 @@ def validate_plan(
             UUID(str(payload[name]))
         except (KeyError, ValueError, TypeError, AttributeError) as exc:
             raise ValueError(f"interaction_payload.{name} is not a UUID") from exc
+    projection = plan.get("replay_projection")
+    if projection is not None:
+        if not isinstance(projection, Mapping):
+            raise ValueError("replay_projection must be an object")
+        for name in ("final_interest_tag_ids", "final_negative_preference_keys"):
+            if not isinstance(projection.get(name), list):
+                raise ValueError(f"replay_projection.{name} must be an array")
+        try:
+            profile_change_log_delta = int(projection["profile_change_log_delta"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("replay_projection.profile_change_log_delta is invalid") from exc
+        if profile_change_log_delta < 0:
+            raise ValueError("replay_projection.profile_change_log_delta must be non-negative")
+        if observed_deltas["profile_change_log"] != profile_change_log_delta:
+            raise ValueError("ChangePlan profile_change_log delta does not match replay_projection")
     return plan, raw
 
 
@@ -415,6 +433,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
     finally:
         target_facts_connection.close()
+    # The builder freezes a deterministic full-horizon projection.  Attach the
+    # reviewed projection only after the live pre-write facts are read so the
+    # target snapshot hash covers both the database inputs and the planned
+    # as-of calculation without treating the not-yet-persisted events as live.
+    if plan.get("replay_projection") is not None:
+        target_facts = dict(target_facts)
+        target_facts["replay_projection"] = plan["replay_projection"]
     target_snapshot_hash = sha256_bytes(canonical(target_snapshot_from_facts(target_facts)))
     if target_snapshot_hash != str(plan["input_hashes"].get("target_snapshot", "")):
         raise ValueError("live recommendation ownership/tag/state snapshot differs from the approved plan")

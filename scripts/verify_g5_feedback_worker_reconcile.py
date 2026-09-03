@@ -185,19 +185,28 @@ def assess(
     }
     if changed_non_targets:
         errors.append(f"protected/non-target tables changed: {changed_non_targets}")
-    for table, expected in (
+    fixed_expectations = (
         ("recommendation_impression", 1),
         ("recommendation_feedback", 1),
         ("user_behavior_event", 3),
         ("profile_update_outbox", 2),
         ("user_resource_state", 1),
         ("profile_replay_run", 2),
-        ("profile_change_log", 3),
         ("domain_state_transition", 9),
         ("user_profile", 0),
-    ):
+    )
+    for table, expected in fixed_expectations:
         if observed.get(table) != expected:
             errors.append(f"{table} delta expected {expected}, observed {observed.get(table)}")
+    # Profile replay fills any previously unlogged historical events visible
+    # at the new as-of horizons.  Older plans froze a fixed +3 value, so keep
+    # that mismatch as an explicit budget drift rather than misreporting an
+    # otherwise complete interaction chain as missing facts.
+    dynamic_budget_drift = {
+        table: {"planned": planned.get(table), "observed": observed.get(table)}
+        for table in ("profile_change_log",)
+        if planned.get(table) != observed.get(table)
+    }
     variable_drift = {
         table: {"planned": planned.get(table), "observed": observed.get(table)}
         for table in ("user_interest_tag", "user_negative_preference")
@@ -221,13 +230,17 @@ def assess(
         errors.append("Worker did not produce exactly three replay change-log rows")
     if len(facts["profile"]) != 1:
         errors.append("target user does not have exactly one current profile row")
-    status = "RECONCILIATION_FAILED" if errors else (
-        "PARTIAL_APPLY_RECONCILED" if variable_drift else "PASS"
-    )
+    if errors:
+        status = "RECONCILIATION_FAILED"
+    elif variable_drift or dynamic_budget_drift:
+        status = "PARTIAL_APPLY_RECONCILED"
+    else:
+        status = "PASS"
     return status, errors, {
         "observed_deltas": observed,
         "planned_deltas": planned,
         "projection_delta_drift": variable_drift,
+        "dynamic_budget_drift": dynamic_budget_drift,
         "changed_non_targets": changed_non_targets,
     }
 

@@ -66,6 +66,23 @@ def validate_run_id(value: str) -> str:
     return value
 
 
+def parse_evaluation_at(value: str) -> datetime:
+    """Parse a fixed UTC horizon used for deterministic read-only replay."""
+
+    normalized = value.strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError as exc:
+        raise ValueError("evaluation-at must be an ISO-8601 datetime") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError("evaluation-at must include a timezone")
+    return parsed.astimezone(UTC)
+
+
+def format_evaluation_at(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 def load_chromadb(site_packages: Path | None) -> Any:
     if site_packages is not None:
         resolved = site_packages.resolve(strict=True)
@@ -205,7 +222,7 @@ async def execute(args: argparse.Namespace) -> int:
             index_version=INDEX_VERSION,
             retry_policy=RetryPolicy(max_attempts=2),
         )
-        now = datetime.now(UTC)
+        now = parse_evaluation_at(args.evaluation_at) if args.evaluation_at else datetime.now(UTC)
         resource_types = tuple(args.resource_type or ("BOOK",))
         request = build_request(
             run_id,
@@ -280,6 +297,18 @@ async def execute(args: argparse.Namespace) -> int:
             raise ValueError("G4 read-only candidate channel components are invalid")
         candidate_channel_counts.update(parts)
         candidate_persistence_rows += len(parts)
+    candidate_resource_ids = tuple(
+        sorted(
+            int(candidate["resource_id"])
+            for candidate in candidates
+            if isinstance(candidate.get("resource_id"), int)
+        )
+    )
+    if args.assert_resource_absent is not None and args.assert_resource_absent in candidate_resource_ids:
+        raise ValueError(
+            "read-only recommendation still contains the resource expected to be suppressed: "
+            f"{args.assert_resource_absent}"
+        )
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -304,6 +333,8 @@ async def execute(args: argparse.Namespace) -> int:
         "orchestration_status": first.status.value,
         "dispatch_count": len(first.dispatches),
         "candidate_count": len(candidates),
+        "candidate_resource_ids": list(candidate_resource_ids),
+        "evaluation_at": format_evaluation_at(now),
         "channels": channels,
         "query_spec": {
             "input_text": args.input_text,
@@ -371,6 +402,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--resource-type", action="append", default=None)
     parser.add_argument("--output-type", default="TOPIC_RESOURCES")
     parser.add_argument("--deadline-seconds", type=float, default=180.0)
+    parser.add_argument(
+        "--evaluation-at",
+        default=None,
+        help="optional fixed UTC evaluation horizon (ISO-8601) for as-of evidence",
+    )
+    parser.add_argument(
+        "--assert-resource-absent",
+        type=int,
+        default=None,
+        help="fail if this resource id is present in the read-only candidate set",
+    )
     parser.add_argument("--env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     parser.add_argument("--secrets-file", type=Path, default=PROJECT_ROOT / ".env.user-secrets")
     parser.add_argument(
