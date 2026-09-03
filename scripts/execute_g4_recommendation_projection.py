@@ -747,6 +747,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     run_id = validate_run_id(args.run_id)
     if args.plan_id is None or args.approved_plan_hash is None:
         raise ValueError("--plan-id and --approved-plan-hash are required")
+    plan_path = resolve_inside_root(args.plan, label="ChangePlan")
     plan, plan_raw = validate_plan(
         args.plan,
         approved_plan_id=args.plan_id,
@@ -1043,6 +1044,15 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             raise RuntimeError("G4 HTTP Explanation attempts exceed the approved bound")
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
+    # Plan builders conventionally place the DRY_RUN JSON in a directory named
+    # after the request run.  An apply may intentionally reuse that run id,
+    # but must never try to create a second artifact beside the plan with an
+    # ``exist_ok=False`` collision after the business transaction has already
+    # committed.  Keep historical apply paths unchanged when they are already
+    # separate, while routing this same-directory shape to a deterministic
+    # sibling directory.
+    if evidence_dir.resolve() == plan_path.parent.resolve():
+        evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / f"{run_id}-apply"
     if evidence_dir.exists():
         raise FileExistsError(f"evidence directory already exists: {evidence_dir}")
     evidence = {
@@ -1051,7 +1061,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         "run_id": run_id,
         "approved_plan_id": args.plan_id,
         "approved_plan_hash": args.approved_plan_hash,
-        "plan_path": str(resolve_inside_root(args.plan, label="ChangePlan")),
+        "plan_path": str(plan_path),
         "plan_git_commit": plan["git_commit"],
         "current_git_commit": current_commit,
         "mysql_baseline_path": str(
