@@ -233,7 +233,11 @@ def build_plan(*, run_id: str, evidence_path: Path, browser_plan_path: Path) -> 
             "request_payload": sha256_bytes(canonical(request_payload)),
         },
         "idempotency_key": str(request_payload["request_id"]),
-        "request_run_id": run_id,
+        # The artifact plan has its own run id, while the request UUIDs are
+        # frozen by the read-only evidence run.  Bind the executor to the
+        # evidence run that generated the exact request rather than allowing
+        # two similarly named runs to be confused.
+        "request_run_id": str(evidence["run_id"]),
         "max_changes": sum(EXPECTED_DELTAS.values()),
         "preconditions": [
             "the Compose project, database identity, host fingerprint and current Git commit match immediately before apply",
