@@ -79,6 +79,21 @@ class G4ProjectionPlanTests(unittest.TestCase):
             limit=8,
         )
 
+    def test_query_spec_accepts_bounded_book_and_paper_set(self) -> None:
+        query_spec = {
+            "input_text": "多智能体、知识图谱和智慧图书馆",
+            "resource_types": ["BOOK", "PAPER"],
+            "output_type": "TOPIC_RESOURCES",
+            "limit": 8,
+        }
+        validate_g4_projection_request_matches_query_spec(
+            query_spec,
+            input_text="多智能体、知识图谱和智慧图书馆",
+            resource_types=["BOOK", "PAPER"],
+            output_type="TOPIC_RESOURCES",
+            limit=8,
+        )
+
     def test_query_spec_rejects_semantic_or_metadata_drift(self) -> None:
         with self.assertRaises(ValueError):
             validate_g4_projection_query_spec(

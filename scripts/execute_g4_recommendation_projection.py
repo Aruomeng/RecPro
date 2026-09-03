@@ -32,6 +32,7 @@ from fastapi.testclient import TestClient
 from jsonschema import Draft202012Validator, FormatChecker
 
 from scripts.g4_projection_contract import (
+    ALLOWED_G4_RESOURCE_TYPES,
     validate_g4_projection_request_matches_query_spec,
 )
 from scripts.g4_llm_plan_policy import (
@@ -326,8 +327,8 @@ def load_request_payload(
         raise ValueError("request_payload user_id must be positive")
     if request_payload["scene"] != "SEARCH_AFTER":
         raise ValueError("request_payload scene is not SEARCH_AFTER")
-    if request_payload["requested_resource_types"] != ["BOOK"]:
-        raise ValueError("request_payload resource types are not the approved BOOK set")
+    if tuple(request_payload["requested_resource_types"]) not in ALLOWED_G4_RESOURCE_TYPES:
+        raise ValueError("request_payload resource types are not an approved BOOK or BOOK/PAPER set")
     output_type = request_payload["requested_output_type"]
     if output_type not in {"TOPIC_RESOURCES", "READING_PATH"}:
         raise ValueError("request_payload output type is not approved")
@@ -344,10 +345,10 @@ def load_request_payload(
         raise ValueError("reconstructed request payload hash does not match the plan")
     if int(request_payload["user_id"]) < 1:
         raise ValueError("request_payload user_id must be positive")
-    if not isinstance(request_payload["requested_resource_types"], list) or not request_payload[
-        "requested_resource_types"
-    ]:
-        raise ValueError("request_payload resource types must be a non-empty list")
+    if not isinstance(request_payload["requested_resource_types"], list) or tuple(
+        request_payload["requested_resource_types"]
+    ) not in ALLOWED_G4_RESOURCE_TYPES:
+        raise ValueError("request_payload resource types must be an approved BOOK or BOOK/PAPER set")
     if request_payload["g4_channels"] != ["MYSQL", "GRAPH", "VECTOR"]:
         raise ValueError("request_payload G4 channels are not the approved set")
     return request_payload

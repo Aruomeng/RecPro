@@ -12,6 +12,7 @@ EXPECTED_G4_QUERY_SPEC: dict[str, object] = {
     "output_type": "TOPIC_RESOURCES",
     "limit": 8,
 }
+ALLOWED_G4_RESOURCE_TYPES = (("BOOK",), ("BOOK", "PAPER"))
 _ALLOWED_METADATA_FIELDS = frozenset({"deadline_seconds"})
 _ALLOWED_OUTPUT_TYPES = frozenset({"TOPIC_RESOURCES", "READING_PATH"})
 
@@ -43,8 +44,9 @@ def validate_g4_projection_query_spec(value: object) -> dict[str, Any]:
     input_text = value.get("input_text")
     if not isinstance(input_text, str) or not input_text.strip() or len(input_text) > 2000:
         raise ValueError("G4 baseline input_text must contain 1-2000 characters")
-    if value.get("resource_types") != ["BOOK"]:
-        raise ValueError("G4 baseline resource_types are not the approved BOOK set")
+    resource_types = value.get("resource_types")
+    if not isinstance(resource_types, list) or tuple(resource_types) not in ALLOWED_G4_RESOURCE_TYPES:
+        raise ValueError("G4 baseline resource_types are not an approved BOOK or BOOK/PAPER set")
     _validate_output_limit(
         output_type=value.get("output_type"),
         limit=value.get("limit"),
@@ -95,6 +97,7 @@ def validate_g4_projection_request_matches_query_spec(
 
 
 __all__ = [
+    "ALLOWED_G4_RESOURCE_TYPES",
     "EXPECTED_G4_QUERY_SPEC",
     "validate_g4_projection_query_spec",
     "validate_g4_projection_request_matches_query_spec",

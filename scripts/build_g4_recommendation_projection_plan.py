@@ -21,6 +21,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from jsonschema import Draft202012Validator, FormatChecker
 
 from scripts.g4_projection_contract import (
+    ALLOWED_G4_RESOURCE_TYPES,
     validate_g4_projection_request_matches_query_spec,
 )
 from scripts.g4_llm_plan_policy import (
@@ -143,6 +144,7 @@ def build_plan(
     g4_baseline_path: Path,
     user_id: int,
     input_text: str = "多智能体系统与智慧图书馆",
+    resource_types: Sequence[str] = ("BOOK",),
     output_type: str = "TOPIC_RESOURCES",
     limit: int = 8,
     request_id: str | None = None,
@@ -158,6 +160,8 @@ def build_plan(
         raise ValueError("user id must be positive")
     if not isinstance(input_text, str) or not input_text.strip() or len(input_text) > 2000:
         raise ValueError("input text must contain 1-2000 characters")
+    if tuple(resource_types) not in ALLOWED_G4_RESOURCE_TYPES:
+        raise ValueError("resource_types must be BOOK or BOOK/PAPER")
     if output_type not in {"TOPIC_RESOURCES", "READING_PATH"}:
         raise ValueError("output type must be TOPIC_RESOURCES or READING_PATH")
     minimum_limit = 6 if output_type == "READING_PATH" else 1
@@ -211,7 +215,7 @@ def build_plan(
     validate_g4_projection_request_matches_query_spec(
         g4_baseline.get("query_spec"),
         input_text=input_text,
-        resource_types=["BOOK"],
+        resource_types=list(resource_types),
         output_type=output_type,
         limit=limit,
     )
@@ -244,7 +248,7 @@ def build_plan(
         "user_id": user_id,
         "scene": "SEARCH_AFTER",
         "input_text": input_text.strip(),
-        "requested_resource_types": ["BOOK"],
+        "requested_resource_types": list(resource_types),
         "requested_output_type": output_type,
         "limit": limit,
         "g4_channels": ["MYSQL", "GRAPH", "VECTOR"],
@@ -383,6 +387,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--user-id", type=int, default=1001)
     parser.add_argument("--input-text", default="多智能体系统与智慧图书馆")
     parser.add_argument(
+        "--resource-type",
+        action="append",
+        dest="resource_types",
+        choices=("BOOK", "PAPER"),
+        help="repeat to select the bounded resource set (default: BOOK)",
+    )
+    parser.add_argument(
         "--output-type",
         default="TOPIC_RESOURCES",
         choices=("TOPIC_RESOURCES", "READING_PATH"),
@@ -402,6 +413,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             g4_baseline_path=args.g4_baseline,
             user_id=args.user_id,
             input_text=args.input_text,
+            resource_types=tuple(args.resource_types or ("BOOK",)),
             output_type=args.output_type,
             limit=args.limit,
             request_id=args.request_id,
