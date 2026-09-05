@@ -27,6 +27,8 @@ const externalContext = computed(() => workspace.snapshot?.context_summary.exter
 const availableCount = computed(() => (library.overview?.availability ?? [])
   .filter((item) => item.name === "AVAILABLE_BORROW" || item.name === "AVAILABLE_ONLINE")
   .reduce((total, item) => total + item.count, 0));
+const dataUnavailable = computed(() => (!library.overview && !!library.overviewError) || (!library.graph && !!library.graphError));
+const dataRetrying = computed(() => library.loadingOverview || library.loadingGraph);
 const categoryOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item" },
   color: ["#2563eb", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8"],
@@ -44,6 +46,14 @@ onMounted(async () => {
   const topic = topics.value[1] ?? "人工智能";
   if (!library.graph) await library.searchGraph(topic);
 });
+
+async function retryData(): Promise<void> {
+  const topic = topics.value[1] ?? "人工智能";
+  const pending: Promise<void>[] = [];
+  if (!library.overview) pending.push(library.retryOverview());
+  if (!library.graph) pending.push(library.retryGraph(topic));
+  await Promise.all(pending);
+}
 
 function explore(topic: string, route = "/recommend"): void {
   recommendation.query = topic;
@@ -81,8 +91,17 @@ function explore(topic: string, route = "/recommend"): void {
       <div class="hero-knowledge glass-panel">
         <div class="mini-panel-title"><span>LIVE KNOWLEDGE MAP</span><b>{{ library.graph?.nodes.length ?? 0 }} 个局部节点</b></div>
         <GraphCanvas :graph="library.graph" compact @node-click="(node) => node.resource_id && library.openResource(node.resource_id)" />
+        <div v-if="library.graphError && !library.graph" class="graph-retry" role="status">
+          <span>{{ library.graphError }}</span>
+          <button type="button" :disabled="dataRetrying" @click="library.retryGraph(library.graphQuery)">{{ dataRetrying ? '正在重试…' : '重新读取' }}</button>
+        </div>
         <button class="panel-link" type="button" @click="router.push('/graph')">进入知识宇宙 →</button>
       </div>
+    </section>
+
+    <section v-if="dataUnavailable" class="data-retry" role="alert">
+      <div><b>实时馆藏数据暂时不可用</b><span>{{ library.overviewError || library.graphError }} 已保留页面结构，可安全重新读取。</span></div>
+      <button type="button" :disabled="dataRetrying" @click="retryData">{{ dataRetrying ? '正在重新读取…' : '重新读取数据' }}</button>
     </section>
 
     <section class="home-dashboard">
@@ -95,7 +114,7 @@ function explore(topic: string, route = "/recommend"): void {
       </div>
       <div class="category-mini glass-panel">
         <div class="mini-panel-title"><span>馆藏分类分布</span><b>真实只读数据</b></div>
-        <EChart :option="categoryOption" :loading="library.loadingOverview" :empty="!library.loadingOverview && !library.overview" :error="library.error && !library.overview ? library.error : ''" aria-label="馆藏分类占比环形图" />
+        <EChart :option="categoryOption" :loading="library.loadingOverview" :empty="!library.loadingOverview && !library.overview" :error="library.overviewError" aria-label="馆藏分类占比环形图" />
         <div class="category-legend">
           <span v-for="(item, index) in topCategories" :key="item.name"><i :class="`tone-${index + 1}`" /><b>{{ item.name }}</b><em>{{ item.count.toLocaleString('zh-CN') }} · {{ categoryTotal ? Math.round(item.count / categoryTotal * 100) : 0 }}%</em></span>
         </div>
