@@ -19,6 +19,15 @@
 .hero-proof b { color: var(--v2-primary); font-size: 12px; }.hero-proof strong, .hero-proof small { display: block; }.hero-proof strong { margin-top: 4px; font-size: 15px; }.hero-proof small { color: var(--v2-muted); font-size: 12px; }
 .adaptive-summary { width: 100%; min-height: 62px; margin-top: 12px; padding: 10px 14px; border: 1px solid #dbeafe; border-radius: 12px; background: #f8fbff; color: var(--v2-text); text-align: left; cursor: pointer; }
 .adaptive-summary span, .adaptive-summary b, .adaptive-summary small { display: block; }.adaptive-summary span { color: var(--v2-primary); font-size: 12px; font-weight: 700; }.adaptive-summary b { margin-top: 3px; font-size: 15px; }.adaptive-summary small { color: var(--v2-muted); font-size: 13px; }
+@media (max-width: 1599px) and (min-width: 721px) {
+  /* At medium desktop widths the long guidance copy must not be squeezed
+     into a one-character grid track. Keep the workspace label prominent and
+     give status/guidance two readable, wrapping columns below it. */
+  .adaptive-summary { grid-template-columns: minmax(0, 1fr) minmax(180px, auto); align-items: center; gap: 4px 14px; }
+  .adaptive-summary span { grid-column: 1 / -1; }
+  .adaptive-summary b { min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
+  .adaptive-summary small { min-width: 0; line-height: 1.45; overflow-wrap: anywhere; }
+}
 .hero-knowledge { min-height: 500px; height: auto; padding: 18px; }
 .hero-knowledge .graph-canvas { min-height: 415px; height: calc(100% - 30px); }
 .panel-link { min-height: 46px; background: #fff; border: 1px solid #bfdbfe; color: var(--v2-primary-strong); font-size: 14px; }
