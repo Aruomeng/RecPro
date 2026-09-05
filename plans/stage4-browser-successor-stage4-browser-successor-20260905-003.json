@@ -1,0 +1,237 @@
+{
+  "aggregate_budget": {
+    "chroma_writes": 0,
+    "container_deletions": 0,
+    "database_physical_deletions": 0,
+    "database_writes": 0,
+    "external_llm_requests": 0,
+    "files_deleted": 0,
+    "neo4j_writes": 0,
+    "network_requests": 0,
+    "outbox_claims": 0,
+    "volume_deletions": 0
+  },
+  "classification": "S3_BROWSER_SCENARIO_SUCCESSOR",
+  "created_at": "2026-09-05T13:30:00Z",
+  "environment": {
+    "background_planning": "DISABLED",
+    "compose_project": "recpro-g2-tianyuhang-20260809a",
+    "graph_version": "lib-books-v2-20260828",
+    "llm_model": "deepseek-v4-flash",
+    "llm_provider": "deepseek",
+    "mysql_database": "recpro",
+    "vector_index_version": "lib-books-vector-v1-20260811"
+  },
+  "fixed_identities": {
+    "demo_profile_user_id": 1001,
+    "guest_user_id": 9000001,
+    "new_account_ids": [],
+    "real_account_ids": []
+  },
+  "git_commit": "d8610d6df3f95d29fe912582185a78e6a38b4e93",
+  "input_hashes": {
+    "backend/app/agent_workspace/runtime.py": "8f5bfd2681276187da02e85ab755d595ef9dd7517a5d6753ce47fcb9d03b0f23",
+    "backend/app/api/recommendation.py": "76c7e93e8bf1a32076510b0cb3248456067f56e632bfd476205a3d2c7ef366ae",
+    "docs/acceptance_matrix.md": "2098f0cb465ca96605d68a327e12b0ba4142f6eb625816f1e1a35fdc37ffb9a5",
+    "scripts/build_stage4_browser_successor_plan.py": "7ceacaf0b40538391b72f8a395b6c57f5babf5a93b61720936f8c91d34b3e79f"
+  },
+  "intent": "Freeze six browser scenarios and exact identities for a later approved run; perform no business write, model request, infrastructure change, or deletion.",
+  "mode": "DRY_RUN",
+  "plan_hash": "011aa06ec0d487f8eeec7ffcb5f90ba330451672c629ba0b8465094e40df4762",
+  "plan_id": "f2bbb316-ebac-57c7-8022-d2a0878a248f",
+  "preconditions": [
+    "the user approves this exact plan_id and plan_hash before any business POST or model request",
+    "current Git commit and all input hashes remain unchanged at execution",
+    "six request/session/workspace UUID triples are unused and are checked read-only before each run",
+    "each apply scenario gets a successor plan with exact MySQL append rows and DeepSeek budget",
+    "background planning remains disabled during the browser run",
+    "failure is forward-only; no compensating delete, truncate, drop, overwrite, container removal, or volume removal is allowed"
+  ],
+  "safety_assertions": {
+    "artifact_overwrites": 0,
+    "business_writes_authorized": false,
+    "container_deletions": 0,
+    "database_physical_deletions": 0,
+    "deepseek_requests_authorized": false,
+    "file_deletions": 0,
+    "volume_deletions": 0
+  },
+  "scenarios": [
+    {
+      "actions": [
+        "overview",
+        "graph",
+        "resource"
+      ],
+      "apply_requires_new_plan": false,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "READ_ONLY",
+      "fixture_user": "demo_cold",
+      "request_uuid": "aa5f1a21-eb22-5474-8e5b-cbf50118f8e3",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "cold_exploration",
+      "session_uuid": "1f077a85-9539-5810-91df-f9eaa488b229",
+      "workspace_uuid": "3d5916aa-53bc-58b4-9e9f-0c53801b849c"
+    },
+    {
+      "actions": [
+        "recommendation",
+        "sse",
+        "replay"
+      ],
+      "apply_requires_new_plan": true,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "BUSINESS_APPEND_REQUIRED",
+      "fixture_user": "demo_clear",
+      "request_uuid": "fdf023a2-f4e0-53db-b15f-30b25280e944",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "clear_recommendation",
+      "session_uuid": "450910be-a279-599c-b8ca-b2649987847f",
+      "workspace_uuid": "548f50aa-68f4-517c-be94-5791c397000f"
+    },
+    {
+      "actions": [
+        "recommendation",
+        "graph_path",
+        "replay"
+      ],
+      "apply_requires_new_plan": true,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "BUSINESS_APPEND_REQUIRED",
+      "fixture_user": "demo_topic",
+      "request_uuid": "47e096a1-f1cd-56b2-9d50-7698cd53f32f",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "topic_evidence",
+      "session_uuid": "641ab2de-7788-5e29-afd8-71f202bcdd4e",
+      "workspace_uuid": "84654675-d3e4-5136-94bb-052e53efdf69"
+    },
+    {
+      "actions": [
+        "recommendation",
+        "reading_path",
+        "replay"
+      ],
+      "apply_requires_new_plan": true,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "BUSINESS_APPEND_REQUIRED",
+      "fixture_user": "demo_path",
+      "request_uuid": "6d99c2b0-97ac-5342-9548-1de344e55028",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "reading_path",
+      "session_uuid": "41a33733-a1d4-5c45-9bc7-80c5110da1f7",
+      "workspace_uuid": "42c69eca-07a4-5c7d-92ad-28331ef090d7"
+    },
+    {
+      "actions": [
+        "impression",
+        "feedback",
+        "outbox"
+      ],
+      "apply_requires_new_plan": true,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "BUSINESS_APPEND_REQUIRED",
+      "fixture_user": "demo_negative",
+      "request_uuid": "c250262c-db80-5761-822e-0617306218a5",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "negative_feedback",
+      "session_uuid": "32134eef-29c4-5e32-8a3c-89f9f36f5749",
+      "workspace_uuid": "2cd317e3-0a88-53b3-9f14-baa631163e2c"
+    },
+    {
+      "actions": [
+        "readiness",
+        "fault_injection",
+        "replay"
+      ],
+      "apply_requires_new_plan": false,
+      "dry_run_budget": {
+        "chroma_writes": 0,
+        "database_writes": 0,
+        "external_llm_requests": 0,
+        "neo4j_writes": 0,
+        "network_requests": 0,
+        "outbox_claims": 0
+      },
+      "execution_mode": "READ_ONLY_FAULT_INJECTION",
+      "fixture_user": "demo_degraded",
+      "request_uuid": "994e1c62-6589-558b-bf36-87c626a15c1f",
+      "required_evidence": [
+        "request_response_contract",
+        "SSE_sequence_and_agent_states",
+        "DOM_and_screenshot_assertions",
+        "before_after_database_counts",
+        "idempotent_replay_delta"
+      ],
+      "scenario_id": "dependency_degradation",
+      "session_uuid": "ac6a3d27-5da7-5091-be13-f0e67b05545e",
+      "workspace_uuid": "8d536a47-2d70-5ed0-b7b6-e0ef1b7f30e2"
+    }
+  ],
+  "schema_version": "recpro-stage4-browser-successor-plan-v1",
+  "status": "READY_FOR_EXPLICIT_APPROVAL"
+}
