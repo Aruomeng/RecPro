@@ -1,0 +1,153 @@
+{
+  "classification": "S1_APPEND",
+  "created_at": "2026-09-05T02:55:47.012634Z",
+  "environment": {
+    "database_identity": "mysql://recpro-g2-tianyuhang-20260809a/recpro",
+    "environment_id": "recpro-g2-tianyuhang-20260809a",
+    "host_fingerprint": "sha256:49a3c6caef44d572fe271ebf1bf86f00203a6c0f0c00140880c9d745a6e8980b",
+    "index_namespace": "library_resources__hash_char_ngram_v1",
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "ace95dae7b7a3a68031efaf5415b5657f30702ab",
+  "idempotency_key": "cd48dc31-bbe4-5301-add2-939cb872ad9e",
+  "input_hashes": {
+    "config_bundle": "220b0fb30f38fef7ca148c43b1f2751715c7df7ecf7d47e7ddfce7ff2847a5c6",
+    "deepseek_explanation_policy": "be58988f71e03df4cfeaa7ea1c322d1d2fa5f7c12228ccac9cf6e399bbe41009",
+    "deepseek_intent_policy": "e107f4fd89f73cf3fed6a03c762b07819ab143f4fc4af5faed2573fbaadde329",
+    "g4_baseline_readonly_evidence": "8010c83bbfdeda52f944a96d417ec93f03c648d5585a4e6ca6a8cf2817328e0c",
+    "mysql_baseline_readonly_evidence": "c0a1438ffd9be488e34ae9fd82d3c3caf9dea6a8b15a59c5368c0f62a5ddc6c1",
+    "request_payload": "636e31bd3e5e5c7ec0e03442bc8fd7cb9263f000019f37a2a3dda2de1f0b3f55"
+  },
+  "intent": "Prepare one bounded G4 HTTP projection with DeepSeek deepseek-v4-flash Intent classification and evidence-constrained Explanation rendering for explicit review; no apply is authorized by this plan.",
+  "max_changes": 52,
+  "mode": "DRY_RUN",
+  "plan_hash": "7e0684f01c53360baa5d91f6c6d38b1a6cbd85b33dd9fdca3b9540a1692872c6",
+  "plan_id": "7d8cab40-4b56-5591-a8dd-a7b806d13417",
+  "preconditions": [
+    "target Compose project/database identity and both PASS baselines match immediately before apply",
+    "all expected_before_count values are re-read immediately before apply",
+    "G4 graph/vector versions, exact query_spec and candidate enrichment remain unchanged",
+    "request_id and idempotency key are absent or replay-identical before apply",
+    "writer transaction must commit all G3 and G4 rows together or rollback all of them",
+    "no migration, seed, UPDATE, DELETE, graph write, or vector write is part of this plan",
+    "apply requires a separate explicit approval of this unchanged plan hash",
+    "DeepSeek is capability-scoped to IntentUnderstandingAgent and ExplanationAgent only",
+    "Intent receives only frozen non-sensitive input_text; Explanation receives only ranked factors and allowlisted evidence refs",
+    "at most two Intent attempts plus 16 Explanation attempts are authorized; raw provider responses are not persisted",
+    "Explanation is bounded to 8 ranked items with four-way concurrency and per-item evidence-template fallback",
+    "every successful Explanation must use only allowlisted refs and include each used ref as an exact bracketed marker",
+    "same-request HTTP replay must add zero rows and must not call DeepSeek again"
+  ],
+  "request_payload": {
+    "g4_channels": [
+      "MYSQL",
+      "GRAPH",
+      "VECTOR"
+    ],
+    "input_text": "请给我一条从推荐系统基础到多智能体智慧图书馆的学习路径",
+    "limit": 8,
+    "request_id": "cd48dc31-bbe4-5301-add2-939cb872ad9e",
+    "requested_output_type": "READING_PATH",
+    "requested_resource_types": [
+      "BOOK"
+    ],
+    "scene": "SEARCH_AFTER",
+    "session_id": "a8ed48ad-f200-587c-a295-22c491ad92ed",
+    "user_id": 1001
+  },
+  "request_run_id": "stage4-path-successor-20260905-001",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 72,
+      "expected_before_count": 71,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_task",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 576,
+      "expected_before_count": 568,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_task_transition",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 789,
+      "expected_before_count": 781,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_candidate",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 67,
+      "expected_before_count": 66,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_record",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 450,
+      "expected_before_count": 442,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_item",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 450,
+      "expected_before_count": 442,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_item_explanation",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 74,
+      "expected_before_count": 73,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_policy_decision",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 72,
+      "expected_before_count": 71,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_trace",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 357,
+      "expected_before_count": 350,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_agent_message",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 357,
+      "expected_before_count": 350,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_agent_result",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 54,
+      "expected_before_count": 53,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_agent_artifact",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 54,
+      "expected_before_count": 53,
+      "identifier": "recpro-g2-tianyuhang-20260809a.recpro.recommendation_orchestration_result",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    }
+  ]
+}
