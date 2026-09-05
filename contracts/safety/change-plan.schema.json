@@ -170,6 +170,40 @@
         "formula_version": {"type": "string", "const": "profile-g2-v1"}
       }
     },
+    "replay_projection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "feedback_replay_event_count",
+        "behavior_replay_event_count",
+        "final_interest_tag_ids",
+        "final_negative_preference_keys",
+        "profile_change_log_delta"
+      ],
+      "properties": {
+        "feedback_replay_event_count": {"type": "integer", "minimum": 0},
+        "behavior_replay_event_count": {"type": "integer", "minimum": 0},
+        "final_interest_tag_ids": {
+          "type": "array",
+          "items": {"type": "integer", "minimum": 1},
+          "uniqueItems": true
+        },
+        "final_negative_preference_keys": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["tag_id", "reason_code"],
+            "properties": {
+              "tag_id": {"type": "integer", "minimum": 1},
+              "reason_code": {"type": "string", "const": "TOPIC_NOT_INTERESTED"}
+            }
+          },
+          "uniqueItems": true
+        },
+        "profile_change_log_delta": {"type": "integer", "minimum": 0}
+      }
+    },
     "max_changes": {"type": "integer", "minimum": 0},
     "preconditions": {
       "type": "array",
