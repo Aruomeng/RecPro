@@ -1,0 +1,90 @@
+{
+  "classification": "S2_CONTROLLED_UPDATE",
+  "created_at": "2026-09-05T20:08:00Z",
+  "environment": {
+    "database_identity": "mysql://127.0.0.1:62306/recpro",
+    "environment_id": "recpro-local-authenticated-ui-login",
+    "host_fingerprint": "sha256:c735890c59d0512506abcc7f548178ca224e2608ff8bf25e39c7dfeb9fab88fe",
+    "index_namespace": null,
+    "workspace": "/Users/tianyuhang/Documents/RecPro"
+  },
+  "git_commit": "2cf2a5a4832f751365fe37464ff756617683452d",
+  "idempotency_key": "authenticated-ui-login-authenticated-ui-login-20260905-001",
+  "input_hashes": {
+    "frontend/src/App.vue": "180536d384b96360d73e13cefe06dafa865cd00ff15b7eddfeaace17d44a3109",
+    "frontend/src/api/identityClient.ts": "9450de1be203dea5d8a040ae0b5e928bf2c4bc25e7162d8a941f145dd1ac099c",
+    "frontend/src/components/LoginDialog.vue": "b0a3f4515c6b1525ab4ae3cfe88280d1f1426d5fbdf4a9d7a9a86126f99b0186",
+    "frontend/src/main.ts": "7245409850a4c77416992efc01c66a8c52b3775acfbdaf2a17bdbbe4159e03f6",
+    "frontend/src/stores/auth.ts": "76e192558e50ad01a0f3cdd675a9e12964f85700e244a31a8a5984e6faa32e6a",
+    "scripts/build_authenticated_ui_login_plan.py": "993310d296c5bc6a7353fa78c0370ac6aae42742e637c3b76b1c10f21bd24222"
+  },
+  "intent": "Use the browser-facing LibraMAS login dialog with synthetic reader user 10001, verify the Bearer account chip, open the read-only personalization panel, confirm its four existing grants and declared profile, then log out. No consent toggle, profile edit, recommendation, feedback, behavior, workspace audit, Neo4j, Chroma, DeepSeek, or other business write is allowed.",
+  "max_changes": 7,
+  "mode": "APPLY",
+  "plan_hash": "9d92248ef8bbfb666009caf096059b29885d16108e07600865110c60a6829da6",
+  "plan_id": "97512296-7b04-596a-9fc3-bd6ff2e43416",
+  "preconditions": [
+    "The user approves this exact plan_id and canonical plan_hash before the browser submits the login form.",
+    "The protected .env.stage2-reader-login.local file exists with mode 0600; its identifier and password are never printed, planned, or written to evidence.",
+    "UI_LOGIN_BASELINE={\"account\":{\"account_kind\":\"HUMAN\",\"account_uuid\":\"461c4d82-2eb4-53aa-bdf8-137d828b938d\",\"auth_version\":2,\"must_change_password\":false,\"role_version\":1,\"status\":\"ACTIVE\",\"user_id\":10001},\"consents\":{\"BEHAVIOR_LEARNING\":true,\"DECLARED_PROFILE\":true,\"PERSONALIZED_RECOMMENDATION\":true,\"RESEARCH_ANALYTICS\":true},\"counts\":{\"iam_auth_session\":12,\"iam_refresh_token\":14,\"iam_security_event\":23,\"recommendation_task\":75,\"user_behavior_event\":102,\"user_declared_profile\":3,\"user_personalization_consent_fact\":6},\"roles\":[\"user\"]}",
+    "The local frontend and identity API are ready on the approved loopback URLs; the browser uses the formal Bearer flow and never sends X-Demo-User-Id.",
+    "The only POST endpoints allowed are /api/v1/auth/login and /api/v1/auth/logout. GET /api/v1/auth/me and GET /api/v1/me/profile may be read; the consent panel is opened but no consent action is submitted.",
+    "Expected MySQL append deltas are iam_auth_session +1, iam_refresh_token +1, iam_security_event +2. Only last-login and the created session logout revocation may update current security state.",
+    "The no-change tables in UI_LOGIN_BASELINE must remain unchanged: recommendation_task, user_behavior_event, user_declared_profile, and user_personalization_consent_fact.",
+    "DeepSeek requests, Neo4j writes, Chroma writes, recommendation facts, feedback facts, behavior facts, workspace audit facts, schema changes, containers, volumes, overwrites, and deletions are forbidden.",
+    "If the browser or API fails after login, retain any appended facts for inspection and do not retry the login or compensate with deletion."
+  ],
+  "request_run_id": "authenticated-ui-login-20260905-001",
+  "safety_assertions": {
+    "counts_must_not_decrease": true,
+    "database_physical_deletions": 0,
+    "destructive_capabilities_required": false,
+    "file_deletions": 0,
+    "overwrite_existing": false
+  },
+  "schema_version": "1.0.0",
+  "targets": [
+    {
+      "expected_after_min_count": 13,
+      "expected_before_count": 12,
+      "identifier": "recpro.iam_auth_session:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 15,
+      "expected_before_count": 14,
+      "identifier": "recpro.iam_refresh_token:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 25,
+      "expected_before_count": 23,
+      "identifier": "recpro.iam_security_event:user_id=10001",
+      "kind": "MYSQL",
+      "operation": "APPEND"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_user_account:user_id=10001:last-login",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 1,
+      "identifier": "recpro.iam_auth_session:user_id=10001:logout-revoke",
+      "kind": "MYSQL",
+      "operation": "UPDATE_STATUS"
+    },
+    {
+      "expected_after_min_count": 1,
+      "expected_before_count": 0,
+      "identifier": "artifacts/verification/authenticated-ui-login/authenticated-ui-login-20260905-001/acceptance.json",
+      "kind": "FILE",
+      "operation": "CREATE"
+    }
+  ]
+}
