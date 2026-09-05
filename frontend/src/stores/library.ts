@@ -5,7 +5,8 @@ import { explorationClient } from "../api/explorationClient";
 import type { GraphPathView, GraphView, LibraryOverview, ResourceDetail } from "../domain/exploration";
 import { useAgentWorkspaceStore } from "./agentWorkspace";
 
-type ReadOptions = { force?: boolean; maxAttempts?: number };
+type ReadOptions = { maxAttempts?: number };
+type OverviewReadOptions = ReadOptions & { force?: boolean };
 
 const DEFAULT_MAX_ATTEMPTS = 2;
 const MAX_ALLOWED_ATTEMPTS = 3;
@@ -58,7 +59,7 @@ export const useLibraryStore = defineStore("library", () => {
   const resourceError = ref("");
   const error = computed(() => graphError.value || overviewError.value || graphPathError.value || resourceError.value);
 
-  async function loadOverview(options: ReadOptions = {}): Promise<void> {
+  async function loadOverview(options: OverviewReadOptions = {}): Promise<void> {
     if ((overview.value && !options.force) || loadingOverview.value) return;
     loadingOverview.value = true;
     overviewError.value = "";
@@ -98,7 +99,7 @@ export const useLibraryStore = defineStore("library", () => {
   }
 
   async function retryGraph(query = graphQuery.value): Promise<void> {
-    await searchGraph(query, { force: true });
+    await searchGraph(query);
   }
 
   async function loadGraphPaths(sourceId: string, targetId: string): Promise<void> {
