@@ -20,6 +20,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from backend.app.observability.adapters.mysql_readiness import GrantSafetyEvaluator
 from scripts.build_g4_clarification_continuation_plan import (
     CONFIG_PATH,
+    MAX_CONTINUATION_APPEND_ROWS,
     canonical,
     load_evidence,
     resolve_inside_root,
@@ -97,8 +98,24 @@ def validate_plan(
         if table in target_tables:
             raise ValueError(f"continuation plan contains duplicate target: {table}")
         target_tables[table] = target
-    if int(plan.get("max_changes", -1)) != 44:
-        raise ValueError("continuation plan max_changes must equal 44")
+    planned_rows = 0
+    for table, target in target_tables.items():
+        before = int(target.get("expected_before_count", -1))
+        after = int(target.get("expected_after_min_count", -1))
+        if before < 0 or after <= before:
+            raise ValueError(f"continuation target has an invalid append delta: {table}")
+        planned_rows += after - before
+    max_changes = int(plan.get("max_changes", -1))
+    if not 1 <= max_changes <= MAX_CONTINUATION_APPEND_ROWS:
+        raise ValueError(
+            "continuation plan append scope exceeds the bounded row budget: "
+            f"{max_changes} > {MAX_CONTINUATION_APPEND_ROWS}"
+        )
+    if planned_rows != max_changes:
+        raise ValueError(
+            "continuation plan max_changes does not equal target deltas: "
+            f"{max_changes} != {planned_rows}"
+        )
     return plan, raw
 
 

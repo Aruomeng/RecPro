@@ -20,6 +20,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "contracts" / "safety" / "change-plan.schema.json"
 CONFIG_PATH = PROJECT_ROOT / "contracts" / "config" / "examples" / "rec-1.0.0.json"
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
+MAX_CONTINUATION_APPEND_ROWS = 128
 
 
 def canonical(value: object) -> bytes:
@@ -93,6 +94,12 @@ def load_evidence(path: Path) -> tuple[dict[str, Any], bytes]:
     for table, delta in deltas.items():
         if table not in before or int(delta) < 1:
             raise ValueError(f"continuation evidence has an invalid target delta: {table}")
+    expected_rows = sum(int(delta) for delta in deltas.values())
+    if expected_rows < 1 or expected_rows > MAX_CONTINUATION_APPEND_ROWS:
+        raise ValueError(
+            "continuation evidence append scope exceeds the bounded row budget: "
+            f"{expected_rows} > {MAX_CONTINUATION_APPEND_ROWS}"
+        )
     if int(evidence.get("candidate_count", 0)) < 1 or int(evidence.get("item_count", 0)) < 1:
         raise ValueError("continuation evidence did not produce recommendation items")
     return evidence, raw
@@ -135,8 +142,11 @@ def build_plan(*, run_id: str, evidence_path: Path) -> dict[str, Any]:
             }
         )
         max_changes += delta
-    if max_changes != 44:
-        raise ValueError(f"continuation plan must be exactly 44 rows, got {max_changes}")
+    if not 1 <= max_changes <= MAX_CONTINUATION_APPEND_ROWS:
+        raise ValueError(
+            "continuation plan append scope exceeds the bounded row budget: "
+            f"{max_changes} > {MAX_CONTINUATION_APPEND_ROWS}"
+        )
     plan: dict[str, Any] = {
         "schema_version": "1.0.0",
         "plan_id": str(uuid5(NAMESPACE_URL, f"g4-clarification-continuation-plan:{run_id}")),
