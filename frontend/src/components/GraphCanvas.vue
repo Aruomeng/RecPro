@@ -8,7 +8,7 @@ import "../charts/registerGraph";
 const props = defineProps<{ graph: GraphView | null; compact?: boolean; allowedTypes?: string[]; selectedId?: string; highlightedEdgeIds?: string[] }>();
 const emit = defineEmits<{ nodeClick: [node: GraphNode] }>();
 const types = ["Book", "Work", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"];
-const colors = ["#2563eb", "#1d4ed8", "#0891b2", "#4f46e5", "#0284c7", "#7c3aed", "#0d9488", "#64748b"];
+const colors = ["#245fc1", "#1c4e9e", "#0891b2", "#4f46e5", "#0284c7", "#6d5bd0", "#0d9488", "#64748b"];
 const visibleNodes = computed(() => (props.graph?.nodes ?? []).filter((node) => !props.allowedTypes?.length || props.allowedTypes.includes(node.type)));
 const visibleIds = computed(() => new Set(visibleNodes.value.map((node) => node.id)));
 const option = computed<EChartsOption>(() => ({
@@ -20,7 +20,7 @@ const option = computed<EChartsOption>(() => ({
     type: "graph", layout: "force", roam: true, draggable: true, focusNodeAdjacency: true, scaleLimit: { min: 0.45, max: 4 },
     force: { repulsion: props.compact ? 85 : 160, edgeLength: props.compact ? 55 : 100, gravity: 0.08 },
     categories: types.map((name, index) => ({ name, itemStyle: { color: colors[index] } })),
-    label: { show: !props.compact, color: "#334155", fontSize: 12, formatter: "{b}", width: 120, overflow: "truncate" },
+    label: { show: !props.compact, color: "#334155", fontSize: 15, lineHeight: 19, formatter: "{b}", width: 170, overflow: "break" },
     labelLayout: { hideOverlap: true, moveOverlap: "shiftY" },
     edgeSymbol: ["none", "arrow"], edgeSymbolSize: 6,
     lineStyle: { color: "source", opacity: 0.34, width: 1.2, curveness: 0.08 },
@@ -39,7 +39,7 @@ const option = computed<EChartsOption>(() => ({
     })),
     links: (props.graph?.edges ?? []).filter((edge) => visibleIds.value.has(edge.source) && visibleIds.value.has(edge.target)).map((edge) => ({
       id: edge.id, source: edge.source, target: edge.target, value: 1, name: edge.label,
-      lineStyle: props.highlightedEdgeIds?.includes(edge.id) ? { color: "#2563eb", opacity: 1, width: 4 } : undefined,
+      lineStyle: props.highlightedEdgeIds?.includes(edge.id) ? { color: "#245fc1", opacity: 1, width: 4 } : undefined,
     })),
   }],
 }));

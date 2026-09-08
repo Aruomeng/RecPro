@@ -5,6 +5,7 @@ import ResourceDrawer from "./components/ResourceDrawer.vue";
 import SystemStatus from "./components/SystemStatus.vue";
 import AgentRail from "./components/AgentRail.vue";
 import LoginDialog from "./components/LoginDialog.vue";
+import UiIcon from "./components/UiIcon.vue";
 import { useAgentWorkspaceStore } from "./stores/agentWorkspace";
 import { useLibraryStore } from "./stores/library";
 import { useSessionStore } from "./stores/session";
@@ -50,7 +51,7 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); system.clearRunti
     <aside class="nav-rail" aria-label="主导航">
       <RouterLink class="brand-mark" to="/" aria-label="LibraMAS 首页"><span>LM</span><i /></RouterLink>
       <nav>
-        <RouterLink v-for="([path, icon, label]) in nav" :key="path" :to="path" :aria-label="label"><b>{{ icon }}</b><span>{{ label }}</span></RouterLink>
+        <RouterLink v-for="([path, , label]) in nav" :key="path" :to="path" :aria-label="label"><UiIcon :name="path" /><span>{{ label }}</span></RouterLink>
       </nav>
       <button class="rail-status" type="button" aria-label="打开系统状态" @click="system.drawerOpen = true"><i :class="{ up: system.healthy }" /><span>状态</span></button>
     </aside>
@@ -77,7 +78,7 @@ onBeforeUnmount(() => { session.stop(); agentWorkspace.stop(); system.clearRunti
     <Transition name="drawer">
       <div v-if="system.drawerOpen" class="drawer-layer" role="presentation" @click.self="system.drawerOpen = false">
         <aside class="system-drawer" role="dialog" aria-modal="true" aria-label="系统运行状态">
-          <button class="icon-button drawer-close" type="button" aria-label="关闭" @click="system.drawerOpen = false">×</button>
+          <button class="icon-button drawer-close" type="button" aria-label="关闭" @click="system.drawerOpen = false"><UiIcon name="close" /></button>
           <span class="eyebrow">SYSTEM READINESS</span><h2>系统状态</h2>
           <p>技术信息仅在此处展示，不占用读者主界面。</p>
           <SystemStatus

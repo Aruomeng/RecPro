@@ -6,6 +6,7 @@ import type { EChartsCoreOption as EChartsOption } from "echarts/core";
 import EChart from "../components/EChart.vue";
 import "../charts/registerPie";
 import GraphCanvas from "../components/GraphCanvas.vue";
+import UiIcon from "../components/UiIcon.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
 import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
@@ -31,14 +32,14 @@ const dataUnavailable = computed(() => (!library.overview && !!library.overviewE
 const dataRetrying = computed(() => library.loadingOverview || library.loadingGraph);
 const categoryOption = computed<EChartsOption>(() => ({
   tooltip: { trigger: "item" },
-  color: ["#2563eb", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8"],
+  color: ["#245fc1", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8"],
   series: [{
     type: "pie", radius: ["58%", "82%"], center: ["50%", "52%"], padAngle: 3,
     itemStyle: { borderRadius: 8, borderColor: "#ffffff", borderWidth: 2 },
     label: { show: false },
     data: (library.overview?.categories ?? []).slice(0, 6).map((item) => ({ name: item.name, value: item.count })),
   }],
-  title: { text: categoryTotal.value.toLocaleString("zh-CN"), subtext: "分类资源", left: "center", top: "42%", textStyle: { fontSize: 22, fontWeight: 750 }, subtextStyle: { fontSize: 12 } },
+  title: { text: categoryTotal.value.toLocaleString("zh-CN"), subtext: "分类资源", left: "center", top: "42%", textStyle: { fontSize: 24, fontWeight: 750 }, subtextStyle: { fontSize: 14 } },
 }));
 
 onMounted(async () => {
@@ -70,9 +71,9 @@ function explore(topic: string, route = "/recommend"): void {
         <h1>今天，想探索什么？</h1>
         <p>八位智能体将从真实馆藏、知识图谱与语义空间中，为你编织一条专属阅读线索。</p>
         <form class="hero-search" @submit.prevent="explore(recommendation.query)">
-          <span aria-hidden="true">⌕</span>
+          <span aria-hidden="true"><UiIcon name="search" /></span>
           <input v-model="recommendation.query" aria-label="输入想探索的主题" placeholder="试试：多智能体如何改变智慧图书馆？" />
-          <button type="submit">开始探索 <b>→</b></button>
+          <button type="submit">开始探索 <UiIcon name="arrow" /></button>
         </form>
         <div class="topic-shortcuts" aria-label="热门主题">
           <button v-for="topic in topics" :key="topic" type="button" @click="explore(topic)"><i />{{ topic }}</button>
@@ -85,7 +86,7 @@ function explore(topic: string, route = "/recommend"): void {
         <button class="adaptive-summary" type="button" @click="workspace.expanded = true">
           <span><i :class="workspace.state" />全局 Agent Workspace</span>
           <b>{{ workspace.activeCount ? `${workspace.activeCount} 位 Agent 正在协作` : '已感知当前会话与馆藏状态' }}</b>
-          <small>{{ workspace.guidanceMessage }} →</small>
+          <small>{{ workspace.guidanceMessage }} <UiIcon name="arrow" /></small>
         </button>
       </div>
       <div class="hero-knowledge glass-panel">
@@ -95,7 +96,7 @@ function explore(topic: string, route = "/recommend"): void {
           <span>{{ library.graphError }}</span>
           <button type="button" :disabled="dataRetrying" @click="library.retryGraph(library.graphQuery)">{{ dataRetrying ? '正在重试…' : '重新读取' }}</button>
         </div>
-        <button class="panel-link" type="button" @click="router.push('/graph')">进入知识宇宙 →</button>
+        <button class="panel-link" type="button" @click="router.push('/graph')">进入知识宇宙 <UiIcon name="arrow" /></button>
       </div>
     </section>
 
@@ -120,9 +121,9 @@ function explore(topic: string, route = "/recommend"): void {
         </div>
       </div>
       <div class="quick-actions">
-        <button type="button" class="quick-card is-primary" @click="explore(recommendation.query, workspace.primaryEntry.route)"><span>01 · REAL AGENTS</span><strong>8 位</strong><b>{{ workspace.primaryEntry.label }}</b><p>看见智能体如何理解问题、召回馆藏并解释每一本书。</p><small>MySQL · Neo4j · Chroma</small><i>↗</i></button>
-        <button type="button" class="quick-card" @click="explore(recommendation.query, '/graph')"><span>02 · LIVE GRAPH</span><strong>{{ (library.overview?.graph.nodes ?? 0).toLocaleString('zh-CN') }}</strong><b>探索知识图谱</b><p>搜索真实实体，点击节点展开作者、主题、分类和出版关系。</p><small>最多显示 60 个局部节点</small><i>↗</i></button>
-        <button type="button" class="quick-card" @click="explore(recommendation.query, '/path')"><span>03 · READING PATH</span><strong>3 阶段</strong><b>生成阅读路径</b><p>从入门到深化，把推荐书目组织成可继续探索的学习路线。</p><small>{{ availableCount.toLocaleString('zh-CN') }} 项当前可借或在线</small><i>↗</i></button>
+        <button type="button" class="quick-card is-primary" @click="explore(recommendation.query, workspace.primaryEntry.route)"><span>01 · REAL AGENTS</span><strong>8 位</strong><b>{{ workspace.primaryEntry.label }}</b><p>看见智能体如何理解问题、召回馆藏并解释每一本书。</p><small>MySQL · Neo4j · Chroma</small><UiIcon name="external" /></button>
+        <button type="button" class="quick-card" @click="explore(recommendation.query, '/graph')"><span>02 · LIVE GRAPH</span><strong>{{ (library.overview?.graph.nodes ?? 0).toLocaleString('zh-CN') }}</strong><b>探索知识图谱</b><p>搜索真实实体，点击节点展开作者、主题、分类和出版关系。</p><small>最多显示 60 个局部节点</small><UiIcon name="external" /></button>
+        <button type="button" class="quick-card" @click="explore(recommendation.query, '/path')"><span>03 · READING PATH</span><strong>3 阶段</strong><b>生成阅读路径</b><p>从入门到深化，把推荐书目组织成可继续探索的学习路线。</p><small>{{ availableCount.toLocaleString('zh-CN') }} 项当前可借或在线</small><UiIcon name="external" /></button>
       </div>
     </section>
     <section class="home-agent-guidance">

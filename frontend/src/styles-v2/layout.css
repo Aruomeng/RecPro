@@ -18,7 +18,7 @@
 .nav-rail nav { gap: 8px; }
 .nav-rail nav a, .rail-status { min-height: 68px; color: var(--v2-muted); border-radius: 14px; }
 .nav-rail nav a b { font-size: 23px; }
-.nav-rail nav a span, .rail-status span { font-size: 12px; font-weight: 650; }
+.nav-rail nav a span, .rail-status span { font-size: var(--v2-caption); font-weight: 650; }
 .nav-rail nav a:hover, .nav-rail nav a.router-link-active { color: var(--v2-primary); background: var(--v2-primary-soft); transform: none; }
 .kiosk-frame { margin-left: var(--rail); min-height: 100vh; height: auto; display: grid; grid-template-rows: 72px minmax(calc(100vh - 72px), auto); }
 .top-bar {
@@ -28,9 +28,9 @@
   background: rgba(255, 255, 255, .96);
   backdrop-filter: saturate(160%) blur(12px);
 }
-.breadcrumb { color: var(--v2-muted); font-size: 14px; }
+.breadcrumb { color: var(--v2-muted); font-size: var(--v2-caption); }
 .breadcrumb b { color: var(--v2-text); }
-.session-label { color: var(--v2-muted); font-size: 12px; }
+.session-label { color: var(--v2-muted); font-size: var(--v2-caption); }
 .mode-switch { height: 52px; padding: 0; border-color: var(--v2-border); background: var(--v2-surface-soft); }
 .mode-switch button { min-width: 88px; min-height: 50px; color: var(--v2-muted); }
 .rail-status { width: 52px; }
@@ -59,7 +59,7 @@
 .graph-search, .path-create { min-width: min(520px, 48vw); }
 .view-header input, .path-create input, .graph-search input {
   min-width: 0; flex: 1; height: 56px; border-color: var(--v2-border); background: #fff;
-  color: var(--v2-text); font-size: 16px;
+  color: var(--v2-text); font-size: var(--v2-body);
 }
 .view-header button, .path-create button, .graph-search button, .secondary-action {
   min-height: 56px; height: auto; border-radius: 12px; background: var(--v2-primary); color: #fff;
@@ -85,12 +85,12 @@
   .brand-mark { display: none; }
   .nav-rail nav { flex: 1; flex-direction: row; gap: 2px; }
   .nav-rail nav a { min-height: 52px; flex: 1; }
-  .nav-rail nav a b { font-size: 17px; }.nav-rail nav a span { font-size: 10px; }
+  .nav-rail nav a b { font-size: 17px; }.nav-rail nav a span { font-size: var(--v2-caption); }
   .rail-status { width: 48px; min-height: 52px; }
   .kiosk-frame { margin-left: 0; padding-bottom: 126px; grid-template-rows: 64px auto; }
   .top-bar { height: 64px; padding: 0 14px; }
   .breadcrumb span, .breadcrumb i, .top-actions .system-dot { display: none; }
-  .mode-switch button { min-width: 70px; font-size: 13px; }
+  .mode-switch button { min-width: 70px; font-size: var(--v2-caption); }
   .kiosk-content { padding: 16px 14px 30px; }
   .view-header { min-height: 0; margin-bottom: 16px; }
   .view-header h1 { font-size: 28px; }.view-header p { font-size: 15px; }

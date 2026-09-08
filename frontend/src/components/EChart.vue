@@ -23,13 +23,13 @@ use([
   AriaComponent, GridComponent, LegendComponent, TitleComponent, TooltipComponent, CanvasRenderer,
 ]);
 registerTheme("libramas-blue", {
-  color: ["#2563eb", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8", "#38bdf8"],
-  textStyle: { color: "#334155", fontFamily: "Inter, PingFang SC, Microsoft YaHei, sans-serif", fontSize: 13 },
+  color: ["#245fc1", "#0891b2", "#4f46e5", "#0d9488", "#60a5fa", "#818cf8", "#38bdf8"],
+  textStyle: { color: "#334155", fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI, PingFang SC, Microsoft YaHei, sans-serif", fontSize: 15 },
   title: { textStyle: { color: "#0f172a" }, subtextStyle: { color: "#64748b" } },
-  legend: { textStyle: { color: "#475569", fontSize: 13 } },
-  tooltip: { backgroundColor: "#ffffff", borderColor: "#dbe4f0", textStyle: { color: "#0f172a", fontSize: 13 }, extraCssText: "box-shadow:0 10px 28px rgba(15,23,42,.12);border-radius:10px" },
-  categoryAxis: { axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b", fontSize: 12 }, splitLine: { lineStyle: { color: "#eef2f7" } } },
-  valueAxis: { axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b", fontSize: 12 }, splitLine: { lineStyle: { color: "#eef2f7" } } },
+  legend: { textStyle: { color: "#475569", fontSize: 15 } },
+  tooltip: { backgroundColor: "#ffffff", borderColor: "#dbe4f0", textStyle: { color: "#0f172a", fontSize: 15 }, extraCssText: "box-shadow:0 10px 28px rgba(15,23,42,.12);border-radius:10px" },
+  categoryAxis: { axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b", fontSize: 15 }, splitLine: { lineStyle: { color: "#eef2f7" } } },
+  valueAxis: { axisLine: { lineStyle: { color: "#cbd5e1" } }, axisLabel: { color: "#64748b", fontSize: 15 }, splitLine: { lineStyle: { color: "#eef2f7" } } },
 });
 
 function render(option: EChartsOption): void {

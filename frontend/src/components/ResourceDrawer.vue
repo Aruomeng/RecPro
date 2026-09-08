@@ -8,6 +8,7 @@ import { useRecommendationStore } from "../stores/recommendation";
 import { useSessionStore } from "../stores/session";
 import { useAuthStore } from "../stores/auth";
 import BookCover from "./BookCover.vue";
+import UiIcon from "./UiIcon.vue";
 
 const library = useLibraryStore();
 const recommendation = useRecommendationStore();
@@ -54,7 +55,7 @@ async function feedback(type: FeedbackType): Promise<void> {
     <Transition name="drawer">
       <div v-if="library.detailOpen" class="drawer-layer" role="presentation" @click.self="close">
         <aside class="resource-drawer" role="dialog" aria-modal="true" aria-label="图书详情">
-          <button class="icon-button drawer-close" type="button" aria-label="关闭详情" @click="close">×</button>
+          <button class="icon-button drawer-close" type="button" aria-label="关闭详情" @click="close"><UiIcon name="close" /></button>
           <div v-if="!library.selectedResource" class="drawer-loading"><i /> 正在读取真实馆藏详情…</div>
           <template v-else>
             <div class="drawer-book-head">
@@ -68,7 +69,7 @@ async function feedback(type: FeedbackType): Promise<void> {
                   <span>{{ library.selectedResource.publisher || '出版社未知' }}</span>
                   <span>{{ library.selectedResource.borrowable_copies > 0 ? `可借 ${library.selectedResource.borrowable_copies} 册` : '馆内/在线阅览' }}</span>
                 </div>
-                <button class="drawer-graph-link" type="button" @click="openGraph">在知识图谱中查看关联 →</button>
+                <button class="drawer-graph-link" type="button" @click="openGraph">在知识图谱中查看关联 <UiIcon name="arrow" /></button>
               </div>
             </div>
             <section class="drawer-section">
@@ -103,9 +104,9 @@ async function feedback(type: FeedbackType): Promise<void> {
             <section class="drawer-section feedback-block">
               <div class="section-title-row"><h3>调整推荐</h3><span>{{ feedbackModeLabel }}</span></div>
               <div class="feedback-actions">
-                <button type="button" @click="feedback('FAVORITE')">♡ 喜欢</button>
-                <button type="button" @click="feedback('BORROW')">＋ 借阅意向</button>
-                <button type="button" @click="feedback('NOT_INTERESTED')">－ 不感兴趣</button>
+                <button type="button" @click="feedback('FAVORITE')"><UiIcon name="heart" />喜欢</button>
+                <button type="button" @click="feedback('BORROW')"><UiIcon name="plus" />借阅意向</button>
+                <button type="button" @click="feedback('NOT_INTERESTED')"><UiIcon name="minus" />不感兴趣</button>
               </div>
               <p v-if="interaction.localFeedback.length" class="feedback-note">{{ interaction.localFeedback.join(' · ') }}（会话重置后清空）</p>
               <p v-if="interaction.state === 'sending'" class="feedback-note">{{ feedbackProgressLabel }}</p>
@@ -113,7 +114,7 @@ async function feedback(type: FeedbackType): Promise<void> {
               <div v-if="feedbackAgent" class="feedback-agent-result">
                 <b>{{ feedbackAgent.agent_name }}</b>
                 <span>{{ feedbackAgent.action }} · {{ feedbackAgent.reason_code }}</span>
-                <small>画像版本 {{ interaction.receipt?.profile_version_before ?? '—' }} → {{ interaction.receipt?.profile_version_after ?? '—' }}</small>
+                <small>画像版本 {{ interaction.receipt?.profile_version_before ?? '—' }} 至 {{ interaction.receipt?.profile_version_after ?? '—' }}</small>
               </div>
               <div v-if="interaction.receipt?.resource_state" class="feedback-resource-state"><b>资源抑制状态</b><span>{{ interaction.receipt.resource_state.state_type }}</span><small v-if="interaction.receipt.resource_state.suppress_until">有效至 {{ new Date(interaction.receipt.resource_state.suppress_until).toLocaleString('zh-CN') }}</small></div>
             </section>

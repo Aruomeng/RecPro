@@ -15,6 +15,7 @@ import {
   isUuid,
 } from "../domain/recommendation";
 import InteractionPanel from "./InteractionPanel.vue";
+import UiIcon from "./UiIcon.vue";
 
 const props = withDefaults(defineProps<{
   pipelineEnabled?: boolean;
@@ -341,7 +342,7 @@ function typeLabel(type: ResourceType): string {
     </form>
 
     <p v-if="notice" class="workbench-note" :class="{ 'workbench-note--warning': !pipelineEnabled }" role="status">
-      <span aria-hidden="true">{{ pipelineEnabled ? "↗" : "i" }}</span>{{ notice }}
+      <span aria-hidden="true"><UiIcon :name="pipelineEnabled ? 'external' : 'book'" /></span>{{ notice }}
     </p>
     <p v-if="errorMessage" class="workbench-error" role="alert">{{ errorMessage }}</p>
 

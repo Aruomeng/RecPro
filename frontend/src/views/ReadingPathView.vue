@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import BookCover from "../components/BookCover.vue";
+import UiIcon from "../components/UiIcon.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
 const recommendation = useRecommendationStore();
@@ -20,7 +21,7 @@ function start(): void { void recommendation.start("READING_PATH"); }
 <template>
   <div class="path-view">
     <header class="view-header"><div><span class="eyebrow">PERSONAL LEARNING JOURNEY</span><h1>阅读路径</h1><p>由真实资源难度和稳定排序构建入门、进阶、深化三阶段。</p></div>
-      <form class="path-create" @submit.prevent="start"><input v-model="recommendation.query" aria-label="阅读路径主题" placeholder="输入学习主题" /><button type="submit" :disabled="recommendation.phase === 'streaming'">生成路径 →</button></form>
+      <form class="path-create" @submit.prevent="start"><input v-model="recommendation.query" aria-label="阅读路径主题" placeholder="输入学习主题" /><button type="submit" :disabled="recommendation.phase === 'streaming'">生成路径 <UiIcon name="arrow" /></button></form>
     </header>
     <section v-if="stages.length" class="learning-path">
       <article v-for="(stage, stageIndex) in stages" :key="stage.group_id" class="path-stage glass-panel">

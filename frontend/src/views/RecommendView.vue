@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import BookCover from "../components/BookCover.vue";
+import UiIcon from "../components/UiIcon.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
 import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
@@ -53,7 +54,7 @@ function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void
       <div class="output-modes"><button v-for="([value, label]) in outputs" :key="value" type="button" :class="{ active: recommendation.outputType === value }" @click="recommendation.outputType = value">{{ label }}</button></div>
       <p v-if="workspace.preferredOutputType && workspace.preferredOutputType !== recommendation.outputType" class="policy-hint">策略 Agent 建议本情境使用 {{ workspace.preferredOutputType }}；你当前的明确选择不会被覆盖。</p>
       <button class="primary-action" type="button" :disabled="recommendation.phase === 'streaming' || recommendation.phase === 'starting'" @click="recommendation.start()">
-        <span>{{ recommendation.phase === 'streaming' ? '协作进行中' : '启动多智能体推荐' }}</span><b>→</b>
+        <span>{{ recommendation.phase === 'streaming' ? '协作进行中' : '启动多智能体推荐' }}</span><UiIcon name="arrow" />
       </button>
       <p v-if="recommendation.error" class="inline-error">{{ errorText }}</p>
       <div class="channel-strip">
@@ -75,7 +76,7 @@ function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void
         <span>当前 Agent</span><b>{{ activeEvent?.agent_name || (recommendation.phase === 'success' ? '全部阶段已结束' : '等待任务') }}</b>
         <span>真实完成事件</span><b>{{ completedEvents.length }} 条</b><span>累计 Agent 耗时</span><b>{{ elapsedMs }} ms</b>
       </div>
-      <button type="button" @click="workspace.expanded = true">查看 8 个 Agent 的详细状态 →</button>
+      <button type="button" @click="workspace.expanded = true">查看 8 个 Agent 的详细状态 <UiIcon name="arrow" /></button>
     </section>
 
     <section v-if="recommendation.phase === 'clarification'" class="clarification-stage glass-panel full-span">
@@ -84,7 +85,7 @@ function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void
         <h3>{{ question.question }}</h3>
         <div class="option-cards"><button v-for="option in question.options" :key="option" type="button" :class="{ active: recommendation.answers[question.slot] === option }" @click="recommendation.answers[question.slot] = option">{{ option }}</button></div>
       </div>
-      <button class="primary-action compact" type="button" @click="recommendation.clarify()">继续同一任务 →</button>
+      <button class="primary-action compact" type="button" @click="recommendation.clarify()">继续同一任务 <UiIcon name="arrow" /></button>
     </section>
 
     <section v-if="recommendation.items.length" class="result-shelf full-span">
@@ -108,13 +109,13 @@ function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void
             </div>
             <span v-if="(item.evidence?.negative_penalty ?? 0) > 0" class="penalty-label">负反馈惩罚 −{{ item.evidence?.negative_penalty.toFixed(2) }}</span>
             <button v-if="item.evidence?.graph_path_refs?.length" class="graph-evidence-link" type="button" @click.stop="inspectGraphEvidence(item)">
-              <span>Neo4j 路径证据 {{ item.evidence.graph_path_refs.length }} 条</span><b>进入图谱核验 →</b>
+              <span>Neo4j 路径证据 {{ item.evidence.graph_path_refs.length }} 条</span><b>进入图谱核验 <UiIcon name="arrow" /></b>
             </button>
           </div>
         </article>
       </div>
     </section>
     <section v-else-if="recommendation.phase === 'error'" class="run-state-card is-error-state full-span"><span>运行未完成</span><h2>{{ errorText }}</h2><p>当前页面没有使用无法验证的结果。若请求已持久化，使用同一幂等身份重试不会重复新增事实。</p><button type="button" @click="recommendation.start()">安全重试</button></section>
-    <section v-else class="recommend-empty full-span"><span>⌁</span><h2>从一个研究主题开始</h2><p>输入主题后，真实 Agent 事件、三通道状态、证据分数和推荐结果将在这里展开。</p></section>
+    <section v-else class="recommend-empty full-span"><span><UiIcon name="book" /></span><h2>从一个研究主题开始</h2><p>输入主题后，真实 Agent 事件、三通道状态、证据分数和推荐结果将在这里展开。</p></section>
   </div>
 </template>

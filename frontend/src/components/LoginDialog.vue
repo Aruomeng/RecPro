@@ -3,6 +3,7 @@ import { computed, ref, watch } from "vue";
 
 import type { ConsentScope } from "../domain/identity";
 import { useAuthStore } from "../stores/auth";
+import UiIcon from "./UiIcon.vue";
 
 const auth = useAuthStore();
 const tab = ref<"login" | "activate" | "reset">("login");
@@ -104,7 +105,7 @@ async function saveProfile(): Promise<void> {
   <Transition name="drawer">
     <div v-if="auth.dialogOpen || auth.onboardingOpen" class="auth-layer" role="presentation" @click.self="close">
       <section class="auth-dialog" role="dialog" aria-modal="true" :aria-label="title">
-        <button v-if="!mustChangePassword" class="icon-button auth-close" type="button" aria-label="关闭" @click="close">×</button>
+        <button v-if="!mustChangePassword" class="icon-button auth-close" type="button" aria-label="关闭" @click="close"><UiIcon name="close" /></button>
         <span class="eyebrow">LIBRAMAS IDENTITY</span>
         <h2>{{ title }}</h2>
 

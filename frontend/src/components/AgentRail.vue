@@ -4,6 +4,7 @@ import { useRouter } from "vue-router";
 import type { InteractionDirective, WorkspaceAgent, WorkspaceEvent } from "../domain/agentWorkspace";
 import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
 import { useRecommendationStore } from "../stores/recommendation";
+import UiIcon from "./UiIcon.vue";
 
 const workspace = useAgentWorkspaceStore();
 const recommendation = useRecommendationStore();
@@ -66,7 +67,7 @@ async function accept(directive: InteractionDirective): Promise<void> {
       <section v-if="workspace.expanded" class="agent-workspace-panel">
         <header class="agent-panel__header">
           <div><span>AGENT WORKSPACE</span><h2>全局协作现场</h2></div>
-          <button type="button" aria-label="收起智能体工作栏" @click="workspace.expanded = false">→</button>
+          <button type="button" aria-label="收起智能体工作栏" @click="workspace.expanded = false"><UiIcon name="arrow" /></button>
         </header>
         <div class="workspace-status">
           <span><i :class="workspace.state" />{{ workspace.state === 'online' ? '事件流已连接' : workspace.state === 'connecting' ? '正在连接' : '协作流降级' }}</span>
@@ -120,7 +121,7 @@ async function accept(directive: InteractionDirective): Promise<void> {
 
         <section v-if="handoffs.length" class="agent-panel-section handoff-list">
           <div class="section-caption"><b>最近任务转交</b><span>真实事件目标</span></div>
-          <ol><li v-for="event in handoffs" :key="event.sequence"><span>{{ event.agent_name }}</span><i>→</i><b>{{ event.target }}</b><small>{{ event.action || event.reason_code }}</small></li></ol>
+          <ol><li v-for="event in handoffs" :key="event.sequence"><span>{{ event.agent_name }}</span><i><UiIcon name="handoff" /></i><b>{{ event.target }}</b><small>{{ event.action || event.reason_code }}</small></li></ol>
         </section>
 
         <section class="agent-panel-section data-sources">
