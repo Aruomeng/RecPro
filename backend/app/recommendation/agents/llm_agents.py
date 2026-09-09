@@ -20,8 +20,10 @@ from backend.app.shared_kernel.contracts.autonomy import (
     validate_decision,
 )
 from backend.app.recommendation.agents.base import Agent
-from backend.app.recommendation.agents.intent_guidance import looks_like_guided_clarification
-from backend.app.recommendation.agents.topic_terms import extract_topic_terms
+from backend.app.recommendation.domain.intent_text import (
+    extract_topic_terms,
+    looks_like_guided_clarification,
+)
 from backend.app.shared_kernel.contracts.agent import AgentDecision, AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
 

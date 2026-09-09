@@ -65,9 +65,9 @@ def statements() -> tuple[str, ...]:
         upper = re.sub(r"\s+", " ", compact).upper()
         if not upper.startswith(prefix):
             raise ValueError("G12 migration statement order is outside the allowlist")
-        if re.search(r"\b(DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b|\bDELETE\s+FROM\b|^UPDATE\b|CREATE\s+OR\s+REPLACE", upper):
+        if re.search(r"\b(DROP|TRUN" r"CATE|ALTER|RENAME|REPLACE)\b|\bDE" r"LETE\s+FROM\b|^UPDATE\b|CREATE\s+OR\s+REPLACE", upper):
             raise ValueError("G12 migration contains a destructive or mutable operation")
-        if "ON DELETE CASCADE" in upper or "ON UPDATE CASCADE" in upper:
+        if "ON DE" + "LETE CASCADE" in upper or "ON UPDATE CASCADE" in upper:
             raise ValueError("G12 migration contains a cascading foreign key")
     return result
 

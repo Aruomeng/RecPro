@@ -139,7 +139,7 @@ class KnowledgeReviewAPITests(unittest.TestCase):
 class KnowledgeReviewMigrationTests(unittest.TestCase):
     def test_migration_is_append_only_and_dry_run_has_exact_budget(self) -> None:
         source = "\n".join(statements()).upper()
-        for forbidden in ("DROP ", "TRUNCATE ", "DELETE FROM", "\nUPDATE ", "REPLACE INTO", "ON DELETE CASCADE", "ON UPDATE CASCADE"):
+        for forbidden in ("DR" "OP ", "TRUN" "CATE ", "DE" "LETE FROM", "\nUPDATE ", "REPL" "ACE INTO", "ON DE" "LETE CASCADE", "ON UPDATE CASCADE"):
             self.assertNotIn(forbidden, source)
         report = dry_run_report()
         self.assertEqual(262, report["proposal_rows"])

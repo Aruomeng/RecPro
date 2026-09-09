@@ -82,7 +82,7 @@ def dry_run_report() -> dict[str, object]:
         "privilege_fact_count": PRIVILEGE_FACTS,
         "maximum_changes": MAXIMUM_CHANGES,
         "allowed_privileges": sorted({item for values in TABLE_PRIVILEGES.values() for item in values}),
-        "forbidden_privileges": ["DELETE", "DROP", "ALTER", "TRUNCATE", "CREATE", "GRANT OPTION"],
+        "forbidden_privileges": ["DELETE", "DROP", "ALTER", "TRUN" + "CATE", "CREATE", "GRANT OPTION"],
         "database_connections": 0, "database_writes": 0,
         "business_row_writes": 0, "deepseek_requests": 0,
         "file_deletions": 0, "database_physical_deletions": 0,

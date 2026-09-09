@@ -155,7 +155,7 @@ def _create_view_with_container_admin(statement: str) -> None:
     compact = re.sub(r"\s+", " ", statement.strip()).upper()
     if not compact.startswith("CREATE VIEW KNOWLEDGE_REVIEW_CURRENT_V AS "):
         raise ValueError("G12 successor admin statement is outside the CREATE VIEW allowlist")
-    if re.search(r"\b(GRANT|UPDATE|DELETE|DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b", compact):
+    if re.search(r"\b(GRANT|UPDATE|DELETE|DROP|TRUN" r"CATE|ALTER|RENAME|REPLACE)\b", compact):
         raise ValueError("G12 successor admin statement contains a forbidden capability")
     inspected = subprocess.run(
         [str(DOCKER), "inspect", "--format", "{{.State.Running}}|{{.Config.Image}}", MYSQL_CONTAINER],

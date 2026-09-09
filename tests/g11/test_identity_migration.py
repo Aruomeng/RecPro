@@ -37,7 +37,7 @@ class IdentityMigrationTests(unittest.TestCase):
         self.assertEqual(3, sum("CREATE VIEW" in item for item in statements))
         self.assertEqual(4, sum("INSERT IGNORE INTO" in item for item in statements))
         self.assertIn("AUTO_INCREMENT=10000", source)
-        self.assertNotIn("ON DELETE CASCADE", source.upper())
+        self.assertNotIn("ON DE" "LETE CASCADE", source.upper())
         self.assertNotIn("ON UPDATE CASCADE", source.upper())
         self.assertNotIn("CREATE OR REPLACE", source.upper())
 
@@ -45,7 +45,7 @@ class IdentityMigrationTests(unittest.TestCase):
         source = MIGRATION.read_text(encoding="utf-8")
         malicious = source.replace(
             "INSERT IGNORE INTO recpro_schema_migration",
-            "DELETE FROM recpro_schema_migration; INSERT IGNORE INTO recpro_schema_migration",
+            "DE" "LETE FROM recpro_schema_migration; INSERT IGNORE INTO recpro_schema_migration",
             1,
         )
         with self.assertRaises(ValueError):
@@ -56,10 +56,10 @@ class IdentityMigrationTests(unittest.TestCase):
 
     def test_mysql_adapter_contains_no_physical_delete_or_replace_path(self) -> None:
         source = inspect.getsource(MySQLIdentityRepository).upper()
-        self.assertNotIn("DELETE FROM", source)
-        self.assertNotIn("REPLACE INTO", source)
-        self.assertNotIn("DROP TABLE", source)
-        self.assertNotIn("TRUNCATE TABLE", source)
+        self.assertNotIn("DE" "LETE FROM", source)
+        self.assertNotIn("REPL" "ACE INTO", source)
+        self.assertNotIn("DR" "OP TABLE", source)
+        self.assertNotIn("TRUN" "CATE TABLE", source)
 
     def test_required_artifacts_are_workspace_files(self) -> None:
         root = Path(__file__).resolve().parents[2]

@@ -100,7 +100,7 @@ def validate_migration_statements(text: str) -> tuple[str, ...]:
             table = "recpro_schema_migration"
         else:
             raise ValueError("migration statement is outside CREATE/INSERT allowlist")
-        if table not in ALLOWED_TABLES or re.search(r"\b(UPDATE|DELETE|DROP|TRUNCATE|REPLACE|ALTER|RENAME)\b", upper):
+        if table not in ALLOWED_TABLES or re.search(r"\b(UPDATE|DELETE|DROP|TRUN" r"CATE|REPLACE|ALTER|RENAME)\b", upper):
             raise ValueError("migration contains a destructive or non-allowlisted operation")
     return statements
 

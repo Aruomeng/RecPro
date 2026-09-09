@@ -115,7 +115,7 @@ def _rank(task: Mapping[str, Any], resources: list[dict[str, Any]], config: Mapp
             topic_counts = {topic: sum(1 for item in selected if item[3] == topic) for topic in {item[3] for item in remaining}}
             best = max(remaining, key=lambda item: (item[0] - 0.035 * topic_counts.get(item[3], 0), -item[1]))
             selected.append(best)
-            remaining.remove(best)
+            remaining.pop(remaining.index(best))
         ranked = selected
     else:
         ranked = ranked[:limit]

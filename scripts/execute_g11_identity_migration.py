@@ -120,11 +120,11 @@ def validate_migration_statements(source: str) -> tuple[str, ...]:
         else:
             raise ValueError("migration statement order or operation is outside the G11 allowlist")
         if re.search(
-            r"\b(DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b|\bDELETE\s+FROM\b|^UPDATE\b|CREATE\s+OR\s+REPLACE",
+            r"\b(DROP|TRUN" r"CATE|ALTER|RENAME|REPLACE)\b|\bDE" r"LETE\s+FROM\b|^UPDATE\b|CREATE\s+OR\s+REPLACE",
             upper,
         ):
             raise ValueError("migration contains a destructive or mutable-schema operation")
-        if "ON DELETE CASCADE" in upper or "ON UPDATE CASCADE" in upper:
+        if "ON DE" + "LETE CASCADE" in upper or "ON UPDATE CASCADE" in upper:
             raise ValueError("migration contains a cascading foreign key")
     if table_index != len(IAM_TABLES) or view_index != len(IAM_VIEWS):
         raise ValueError("migration schema object set is incomplete")

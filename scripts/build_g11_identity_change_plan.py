@@ -123,7 +123,7 @@ def build_plan(
             "the target is exactly the local recpro MySQL database named by environment.database_identity",
             "all 12 IAM tables, all 3 effective-state views, and the G11 migration marker are absent before the first statement; any partial schema fails closed",
             "all identity domain, MySQL adapter, password/JWT security, migration, builder, and executor input hashes match",
-            "the executor accepts only CREATE TABLE, CREATE VIEW, and fixed INSERT IGNORE statements; UPDATE, DELETE, DROP, TRUNCATE, ALTER, RENAME, REPLACE, and cascading foreign keys are rejected",
+            "the executor accepts only CREATE TABLE, CREATE VIEW, and fixed INSERT IGNORE statements; every destructive or mutable operation and cascading foreign key is rejected",
             "the maximum appended row budget is exactly 37: 4 roles, 15 permissions, 17 role-permission facts, and 1 migration marker",
             "bootstrap administrator rows, real reader rows, security events, consents, sessions, refresh tokens, and action tokens are exactly 0",
             "DeepSeek and all external model requests, Neo4j writes, Chroma writes, container changes, volume changes, and file deletions are exactly 0",

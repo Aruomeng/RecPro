@@ -10,8 +10,10 @@ from typing import Any
 from uuid import uuid5
 
 from backend.app.recommendation.agents.base import Agent
-from backend.app.recommendation.agents.intent_guidance import looks_like_guided_clarification
-from backend.app.recommendation.agents.topic_terms import extract_topic_terms
+from backend.app.recommendation.domain.intent_text import (
+    extract_topic_terms,
+    looks_like_guided_clarification,
+)
 from backend.app.shared_kernel.contracts.autonomy import (
     attach_decision,
     default_decision,

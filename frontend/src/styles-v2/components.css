@@ -66,6 +66,7 @@
   }
 }
 .rail-summary span { font-size: var(--v2-caption); }
+.rail-summary em { min-width: 24px; height: 24px; font-size: var(--v2-caption); }
 @media (max-width: 1099px) { .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .metric-grid { grid-template-columns: 1fr; }.metric-card { padding: 16px; } }
 

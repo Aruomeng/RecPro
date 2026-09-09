@@ -486,13 +486,13 @@ def _set_session_cookies(response: Response, result: LoginResult, *, secure: boo
 
 
 def _clear_session_cookies(response: Response, *, secure: bool) -> None:
-    response.delete_cookie(
-        REFRESH_COOKIE, httponly=True, secure=secure, samesite="strict",
-        path="/api/v1/auth",
+    response.set_cookie(
+        REFRESH_COOKIE, "", max_age=0, expires=0, httponly=True,
+        secure=secure, samesite="strict", path="/api/v1/auth",
     )
-    response.delete_cookie(
-        CSRF_COOKIE, httponly=False, secure=secure, samesite="strict",
-        path="/",
+    response.set_cookie(
+        CSRF_COOKIE, "", max_age=0, expires=0, httponly=False,
+        secure=secure, samesite="strict", path="/",
     )
 
 

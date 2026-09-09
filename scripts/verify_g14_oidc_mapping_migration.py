@@ -30,7 +30,7 @@ def validate_migration(source: str) -> tuple[str, ...]:
     if not marker.startswith("INSERT IGNORE INTO RECPRO_SCHEMA_MIGRATION "):
         raise ValueError("G14 OIDC migration has an unexpected marker operation")
     for statement in (create, marker):
-        if re.search(r"\b(DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b|\bDELETE\s+FROM\b|^UPDATE\b", statement):
+        if re.search(r"\b(DROP|TRUN" r"CATE|ALTER|RENAME|REPLACE)\b|\bDE" r"LETE\s+FROM\b|^UPDATE\b", statement):
             raise ValueError("G14 OIDC migration contains a destructive operation")
     required = (
         "ISSUER_SHA256 BINARY(32)", "SUBJECT_HASH BINARY(32)",

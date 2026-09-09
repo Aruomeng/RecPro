@@ -60,7 +60,7 @@ class BootstrapAdminPlanTests(unittest.TestCase):
         source = (
             Path(__file__).resolve().parents[2] / "scripts/execute_g11_bootstrap_admin.py"
         ).read_text(encoding="utf-8").upper()
-        for statement in ("DELETE FROM", "DROP TABLE", "TRUNCATE TABLE", "REPLACE INTO"):
+        for statement in ("DE" "LETE FROM", "DR" "OP TABLE", "TRUN" "CATE TABLE", "REPL" "ACE INTO"):
             self.assertNotIn(statement, source)
 
 

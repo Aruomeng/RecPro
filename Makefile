@@ -474,10 +474,10 @@ run-g4-deepseek-demo:
 		exec $(PYTHON) -m uvicorn backend.app.g4_demo_main:app --host 127.0.0.1 --port "$(DEMO_BACKEND_PORT)"
 
 research-workbench-check:
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --check-only --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)" --npm "$(NPM)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --check-only --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)"
 
 research-workbench:
-	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)" --npm "$(NPM)"
+	PYTHONDONTWRITEBYTECODE=1 $(PYTHON) -m scripts.run_research_workbench --env-file "$(DEMO_BACKEND_ENV_FILE)" --secrets-file "$(G4_REAL_LLM_READONLY_SECRETS_FILE)" --backend-port "$(DEMO_BACKEND_PORT)" --frontend-port 5173 --python "$(PYTHON)"
 
 verify-g4-agent-autonomy:
 	@test -n "$(G4_AGENT_AUTONOMY_RUN_ID)" || { echo "G4_AGENT_AUTONOMY_RUN_ID is required and must identify a new evidence run"; exit 2; }

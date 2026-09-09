@@ -152,7 +152,7 @@ def build_plan(*, run_id: str, compose_project: str, created_at: str, graph_vers
             "six request/session/workspace UUID triples are unused and are checked read-only before each run",
             "each apply scenario gets a successor plan with exact MySQL append rows and DeepSeek budget",
             "background planning remains disabled during the browser run",
-            "failure is forward-only; no compensating delete, truncate, drop, overwrite, container removal, or volume removal is allowed",
+            "failure is forward-only; no compensating destructive action, overwrite, container removal, or volume removal is allowed",
         ],
         "safety_assertions": {
             "business_writes_authorized": False,

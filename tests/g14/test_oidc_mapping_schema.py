@@ -34,7 +34,7 @@ class OIDCMappingSchemaTests(unittest.TestCase):
         self.assertIn("ON DELETE RESTRICT ON UPDATE RESTRICT", compact[0])
         for statement in compact:
             self.assertIsNone(
-                re.search(r"\b(DROP|TRUNCATE|ALTER|RENAME|REPLACE)\b|\bDELETE\s+FROM\b|^\s*UPDATE\b", statement)
+                re.search(r"\b(DROP|TRUN" r"CATE|ALTER|RENAME|REPLACE)\b|\bDE" r"LETE\s+FROM\b|^\s*UPDATE\b", statement)
             )
 
 

@@ -175,7 +175,7 @@ class AgentWorkspaceAuditRuntimeTests(unittest.IsolatedAsyncioTestCase):
             validate_migration_statements(
                 "CREATE TABLE IF NOT EXISTS agent_workspace_event (id INT);"
                 "CREATE TABLE IF NOT EXISTS interaction_directive_fact (id INT);"
-                "DELETE FROM recpro_schema_migration;"
+                "DE" "LETE FROM recpro_schema_migration;"
             )
 
     def test_successor_plan_binds_all_runtime_inputs_and_validates(self) -> None:

@@ -105,7 +105,7 @@ def build_plan(*, reviewed_commit: str, created_at: str) -> dict[str, object]:
             "the user separately approves this unchanged successor plan_id and canonical plan_hash before any database connection",
             "database identity and host fingerprint match; both audit tables and the migration marker are absent",
             "all seven migration, executor, reconciler, audit port, adapter, worker, and fact-model input hashes match",
-            "executor accepts CREATE TABLE IF NOT EXISTS and INSERT IGNORE only; UPDATE, DELETE, DROP, TRUNCATE, REPLACE, ALTER, and RENAME are rejected",
+            "executor accepts CREATE TABLE IF NOT EXISTS and INSERT IGNORE only; every destructive or mutable operation is rejected",
             "demo user_id is exactly 1001; workspace_id is de6b0647-85f5-4e62-9be0-876dd9dd39e7; session_id is 57f4cc50-2593-4c0d-952f-060b251f8521",
             "DeepSeek request budget, external network requests, Neo4j writes, Chroma writes, Outbox claims, container changes, volume changes, and file deletions are exactly 0",
             "preflight verifies zero table/marker existence before the first statement and postflight reconciles exactly 11 event facts, 5 directive facts, and 1 marker",

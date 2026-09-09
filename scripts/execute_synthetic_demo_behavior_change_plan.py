@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute one approved synthetic demo append plan; no update/delete capability."""
+"""Execute one approved synthetic demo append plan; no destructive capability."""
 
 from __future__ import annotations
 

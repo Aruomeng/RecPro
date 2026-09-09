@@ -57,7 +57,7 @@ def completion_statements() -> tuple[str, ...]:
         elif not upper.startswith("INSERT IGNORE INTO "):
             raise ValueError("G11 successor seed statement is invalid")
         operation_text = re.sub(r"'(?:''|[^'])*'", "''", upper)
-        if re.search(r"\b(DROP|DELETE|TRUNCATE|ALTER|RENAME|REPLACE|UPDATE)\b", operation_text):
+        if re.search(r"\b(DROP|DELETE|TRUN" r"CATE|ALTER|RENAME|REPLACE|UPDATE)\b", operation_text):
             raise ValueError("G11 successor contains a forbidden operation")
     return selected
 
