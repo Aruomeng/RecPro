@@ -29,6 +29,11 @@ from scripts.g4_llm_plan_policy import (
     load_deepseek_intent_policy,
     policy_hash,
 )
+from scripts.g4_graph_evidence_contract import (
+    V2_GRAPH_EVIDENCE_PRECONDITION,
+    V2_GRAPH_ZERO_LLM_PRECONDITION,
+    validate_v2_readonly_evidence,
+)
 from scripts.validate_runtime_env import read_env, validate_compose
 
 
@@ -151,6 +156,7 @@ def build_plan(
     session_id: str | None = None,
     enable_deepseek_intent: bool = False,
     enable_deepseek_explanation: bool = False,
+    require_v2_graph_paths: bool = False,
     llm_env_file: Path = PROJECT_ROOT / ".env.host",
     compose_env_file: Path = PROJECT_ROOT / ".env.compose",
 ) -> dict[str, Any]:
@@ -171,6 +177,8 @@ def build_plan(
         raise ValueError("request_id and session_id must be supplied together")
     if enable_deepseek_explanation and not enable_deepseek_intent:
         raise ValueError("DeepSeek Explanation requires DeepSeek Intent in this HTTP plan")
+    if require_v2_graph_paths and (enable_deepseek_intent or enable_deepseek_explanation):
+        raise ValueError("Stage 2 v2 Graph evidence plans authorize zero DeepSeek requests")
     mysql_baseline, mysql_raw = load_pass_evidence(
         mysql_baseline_path, label="MySQL baseline evidence"
     )
@@ -205,13 +213,18 @@ def build_plan(
         if mysql_counts[table] != g4_counts[table]:
             raise ValueError(f"shared table {table} differs between baselines")
     enrichment = g4_baseline.get("candidate_enrichment")
-    if enrichment != {
-        "channel_scores": True,
-        "channel_ranks": True,
-        "primary_channel": True,
-        "evidence_confidence": True,
-    }:
+    if not isinstance(enrichment, dict) or any(
+        enrichment.get(field) is not True
+        for field in {
+            "channel_scores",
+            "channel_ranks",
+            "primary_channel",
+            "evidence_confidence",
+        }
+    ):
         raise ValueError("G4 baseline does not prove the writer candidate enrichment")
+    if require_v2_graph_paths:
+        validate_v2_readonly_evidence(g4_baseline, require_graph_paths=True)
     validate_g4_projection_request_matches_query_spec(
         g4_baseline.get("query_spec"),
         input_text=input_text,
@@ -226,6 +239,8 @@ def build_plan(
     ):
         raise ValueError("G4 baseline candidate channel counts are inconsistent")
     commit = git_commit()
+    if require_v2_graph_paths and g4_baseline.get("git_commit") != commit:
+        raise ValueError("Stage 2 G4 evidence was not generated from the current commit")
     project, database = load_compose_identity(compose_env_file)
     if request_id is None:
         request_uuid = uuid5(
@@ -325,6 +340,15 @@ def build_plan(
                 "same-request HTTP replay must add zero rows and must not call DeepSeek again",
             ]
         )
+    if require_v2_graph_paths:
+        preconditions.extend(
+            [
+                V2_GRAPH_EVIDENCE_PRECONDITION,
+                V2_GRAPH_ZERO_LLM_PRECONDITION,
+                "the approved read-only evidence proves at least one Graph-scored candidate and 100% routeable path coverage",
+                "same-request replay must preserve items, groups, decision, versions, and v2 graph evidence while adding zero rows",
+            ]
+        )
 
     plan: dict[str, Any] = {
         "schema_version": "1.0.0",
@@ -403,6 +427,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--session-id")
     parser.add_argument("--enable-deepseek-intent", action="store_true")
     parser.add_argument("--enable-deepseek-explanation", action="store_true")
+    parser.add_argument("--require-v2-graph-paths", action="store_true")
     parser.add_argument("--llm-env-file", type=Path, default=PROJECT_ROOT / ".env.host")
     parser.add_argument("--compose-env-file", type=Path, default=PROJECT_ROOT / ".env.compose")
     args = parser.parse_args(argv)
@@ -420,6 +445,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             session_id=args.session_id,
             enable_deepseek_intent=args.enable_deepseek_intent,
             enable_deepseek_explanation=args.enable_deepseek_explanation,
+            require_v2_graph_paths=args.require_v2_graph_paths,
             llm_env_file=args.llm_env_file,
             compose_env_file=args.compose_env_file,
         )

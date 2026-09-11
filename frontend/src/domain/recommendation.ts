@@ -1,3 +1,5 @@
+import { parseGraphPathRoute } from "./graphPathReference";
+
 export type ResourceType = "BOOK" | "PAPER";
 export type RecommendationOutputType = "PERSONALIZED_FEED" | "TOPIC_RESOURCES" | "READING_PATH";
 export type TriggerScene = "HOME" | "SEARCH_AFTER" | "RESOURCE_DETAIL" | "FEEDBACK_REFRESH" | "EXPLANATION";
@@ -71,6 +73,8 @@ export interface RecommendationEvidence {
   primary_channel?: string;
   evidence_refs: string[];
   graph_path_refs?: string[];
+  graph_version?: string | null;
+  graph_path_coverage_state?: "COVERED" | "NOT_USED" | "DEGRADED";
   negative_penalty: number;
 }
 
@@ -300,13 +304,44 @@ function decodeItem(value: unknown, path: string): void {
 function decodeEvidence(value: unknown, path: string): void {
   const evidence = record(value, path);
   number(evidence.score, `${path}.score`, 0, 1); stringArray(evidence.channels, `${path}.channels`, { nonEmpty: true });
+  const channels = evidence.channels as string[];
   const scores = record(evidence.channel_scores, `${path}.channel_scores`);
   Object.entries(scores).forEach(([key, score]) => number(score, `${path}.channel_scores.${key}`, 0));
   const ranks = record(evidence.channel_ranks, `${path}.channel_ranks`);
   Object.entries(ranks).forEach(([key, rank]) => number(rank, `${path}.channel_ranks.${key}`, 1));
   if (evidence.primary_channel !== undefined) text(evidence.primary_channel, `${path}.primary_channel`, { nullable: true });
   stringArray(evidence.evidence_refs, `${path}.evidence_refs`, { nonEmpty: true });
-  if (evidence.graph_path_refs !== undefined) stringArray(evidence.graph_path_refs, `${path}.graph_path_refs`);
+  if (evidence.graph_path_refs !== undefined) {
+    stringArray(evidence.graph_path_refs, `${path}.graph_path_refs`);
+    const graphPathRefs = evidence.graph_path_refs as string[];
+    assert(graphPathRefs.length <= 10, `${path}.graph_path_refs`, "at most 10 references", graphPathRefs);
+    graphPathRefs.forEach((reference, index) => assert(
+      reference.startsWith("graphpath:"),
+      `${path}.graph_path_refs[${index}]`,
+      "graphpath reference",
+      reference,
+    ));
+  }
+  if (evidence.graph_version !== undefined) text(evidence.graph_version, `${path}.graph_version`, { nullable: true });
+  if (evidence.graph_path_coverage_state !== undefined) {
+    assert(
+      ["COVERED", "NOT_USED", "DEGRADED"].includes(String(evidence.graph_path_coverage_state)),
+      `${path}.graph_path_coverage_state`,
+      "COVERED, NOT_USED, or DEGRADED",
+      evidence.graph_path_coverage_state,
+    );
+    if (evidence.graph_path_coverage_state === "COVERED") {
+      assert(
+        Array.isArray(evidence.graph_path_refs) && evidence.graph_path_refs.length > 0 &&
+          evidence.graph_path_refs.every((reference) => parseGraphPathRoute(reference) !== null) &&
+          channels.includes("GRAPH") && typeof evidence.graph_version === "string" &&
+          evidence.graph_version.startsWith("lib-books-v2-"),
+        `${path}.graph_path_coverage_state`,
+        "COVERED with v2 Graph channel and path references",
+        evidence.graph_path_coverage_state,
+      );
+    }
+  }
   number(evidence.negative_penalty, `${path}.negative_penalty`, 0, 1);
 }
 

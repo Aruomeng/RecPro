@@ -102,13 +102,17 @@ export const useLibraryStore = defineStore("library", () => {
     await searchGraph(query);
   }
 
-  async function loadGraphPaths(sourceId: string, targetId: string): Promise<void> {
+  async function loadGraphPaths(sourceId: string, targetId: string, expectedPathRef?: string): Promise<void> {
     loadingGraph.value = true;
     graphPathError.value = "";
     try {
       const paths = await explorationClient.graphPaths(sourceId, targetId, 3, 10);
       graphPaths.value = paths;
-      highlightedPathId.value = paths.paths[0]?.path_id ?? null;
+      highlightedPathId.value = (
+        paths.paths.find((path) => path.path_id === expectedPathRef)?.path_id
+        ?? paths.paths[0]?.path_id
+        ?? null
+      );
       const nodes = new Map((graph.value?.nodes ?? []).map((node) => [node.id, node]));
       const edges = new Map((graph.value?.edges ?? []).map((edge) => [edge.id, edge]));
       paths.graph.nodes.forEach((node) => nodes.set(node.id, node));
@@ -120,7 +124,11 @@ export const useLibraryStore = defineStore("library", () => {
         edges: [...edges.values()].slice(0, 120),
         truncated: Boolean(graph.value?.truncated || paths.truncated),
       };
-      graphPathError.value = paths.paths.length ? "" : "两个实体之间没有找到 3 跳以内的公开证据路径。";
+      graphPathError.value = !paths.paths.length
+        ? "两个实体之间没有找到 3 跳以内的公开证据路径。"
+        : expectedPathRef && !paths.paths.some((path) => path.path_id === expectedPathRef)
+          ? "当前图版本未返回推荐时引用的精确路径，已展示同端点的最近公开路径。"
+          : "";
     } catch (cause) {
       const code = cause instanceof Error && /^[A-Z0-9_]+$/.test(cause.message) ? cause.message : "GRAPH_PATH_UNAVAILABLE";
       graphPathError.value = `多跳证据路径暂时无法读取（${code}）。`;

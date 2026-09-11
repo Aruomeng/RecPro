@@ -40,6 +40,12 @@ from scripts.g4_llm_plan_policy import (
     load_deepseek_intent_policy,
     policy_hash,
 )
+from scripts.g4_graph_evidence_contract import (
+    V2_GRAPH_EVIDENCE_PRECONDITION,
+    V2_GRAPH_ZERO_LLM_PRECONDITION,
+    validate_v2_http_items,
+    validate_v2_readonly_evidence,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -235,6 +241,12 @@ def validate_plan(
             raise ValueError("DeepSeek G4 plan intent is not the exact bounded policy")
         if not DEEPSEEK_PRECONDITIONS.issubset(set(plan.get("preconditions", []))):
             raise ValueError("DeepSeek G4 plan is missing external-call preconditions")
+    if plan_requires_v2_graph_paths(plan):
+        preconditions = set(plan.get("preconditions", []))
+        if V2_GRAPH_ZERO_LLM_PRECONDITION not in preconditions:
+            raise ValueError("Stage 2 v2 Graph plan is missing its zero-LLM boundary")
+        if plan_enables_deepseek_intent(plan) or plan_enables_deepseek_explanation(plan):
+            raise ValueError("Stage 2 v2 Graph plan must not enable DeepSeek")
     return plan, raw
 
 
@@ -244,6 +256,11 @@ def plan_enables_deepseek_intent(plan: Mapping[str, Any]) -> bool:
 
 def plan_enables_deepseek_explanation(plan: Mapping[str, Any]) -> bool:
     return "deepseek_explanation_policy" in plan.get("input_hashes", {})
+
+
+def plan_requires_v2_graph_paths(plan: Mapping[str, Any]) -> bool:
+    preconditions = plan.get("preconditions", [])
+    return isinstance(preconditions, list) and V2_GRAPH_EVIDENCE_PRECONDITION in preconditions
 
 
 def validate_git_boundary(plan: Mapping[str, Any]) -> str:
@@ -791,13 +808,22 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         expected_hash=str(plan["input_hashes"]["g4_baseline_readonly_evidence"]),
         label="G4 baseline evidence",
     )
-    if g4_baseline.get("candidate_enrichment") != {
-        "channel_scores": True,
-        "channel_ranks": True,
-        "primary_channel": True,
-        "evidence_confidence": True,
-    }:
+    enrichment = g4_baseline.get("candidate_enrichment")
+    if not isinstance(enrichment, Mapping) or any(
+        enrichment.get(field) is not True
+        for field in {
+            "channel_scores",
+            "channel_ranks",
+            "primary_channel",
+            "evidence_confidence",
+        }
+    ):
         raise ValueError("G4 baseline does not prove candidate enrichment")
+    require_v2_graph_paths = plan_requires_v2_graph_paths(plan)
+    if require_v2_graph_paths:
+        validate_v2_readonly_evidence(g4_baseline, require_graph_paths=True)
+        if g4_baseline.get("git_commit") != current_commit:
+            raise ValueError("Stage 2 G4 evidence commit differs from the approved code")
     target_candidate_delta = next(
         int(target["expected_after_min_count"])
         - int(target["expected_before_count"])
@@ -895,7 +921,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         ),
         username=graph_username,
         password=graph_password,
-        timeout=8,
+        timeout=3 if require_v2_graph_paths else 8,
     )
     vector = ChromaVectorReader(
         collection=collection,
@@ -990,6 +1016,33 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         )
         if persisted.status_code != 200:
             raise RuntimeError(f"G4 persisted task GET returned {persisted.status_code}")
+    graph_path_coverage: dict[str, object] | None = None
+    if require_v2_graph_paths:
+        payload_items = payload.get("items")
+        replay_payload = replay.json()
+        persisted_payload = persisted.json()
+        if not isinstance(payload_items, list):
+            raise RuntimeError("Stage 2 live response has no bounded item list")
+        graph_path_coverage = validate_v2_http_items(
+            payload_items,
+            graph_version=graph_version,
+            require_graph_paths=True,
+        )
+        validate_v2_http_items(
+            replay_payload.get("items", []),
+            graph_version=graph_version,
+            require_graph_paths=True,
+        )
+        validate_v2_http_items(
+            persisted_payload.get("items", []),
+            graph_version=graph_version,
+            require_graph_paths=True,
+        )
+        for field in ("items", "groups", "decision", "versions"):
+            if replay_payload.get(field) != payload.get(field):
+                raise RuntimeError(f"G4 HTTP replay did not preserve {field}")
+            if persisted_payload.get(field) != payload.get(field):
+                raise RuntimeError(f"G4 persisted GET did not preserve {field}")
     if payload.get("status") not in {"COMPLETED", "DEGRADED_COMPLETED"}:
         raise RuntimeError(f"approved G4 projection did not complete: {payload.get('status')!r}")
     if not payload.get("record_id"):
@@ -1057,7 +1110,11 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
     if evidence_dir.exists():
         raise FileExistsError(f"evidence directory already exists: {evidence_dir}")
     evidence = {
-        "schema_version": "g4-recommendation-projection-approved-append-v1",
+        "schema_version": (
+            "g4-recommendation-projection-approved-append-v2"
+            if require_v2_graph_paths
+            else "g4-recommendation-projection-approved-append-v1"
+        ),
         "status": "PASS",
         "run_id": run_id,
         "approved_plan_id": args.plan_id,
@@ -1100,7 +1157,9 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "idempotency_replayed": replay.headers.get("Idempotency-Replayed"),
             "same_task_identity": replay.json().get("task_id") == payload.get("task_id"),
             "zero_additional_row_delta": True,
+            "v2_graph_evidence_preserved": bool(require_v2_graph_paths),
         },
+        "graph_path_coverage": graph_path_coverage,
         "http": {
             "business_posts": 2,
             "business_gets": 1,

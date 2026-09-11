@@ -83,4 +83,57 @@ describe("recommendation execution contract", () => {
       expect((error as RecommendationDecodeError).actualType).toBe("string");
     }
   });
+
+  it("accepts covered v2 Graph evidence only when its path is routeable", () => {
+    const encode = (value: string) => window.btoa(value).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const graphPath = `graphpath:v2:${encode("topic:ai")}.${encode("book:1")}.${"a".repeat(32)}`;
+    const execution = {
+      task_id: "208f35ac-80ae-54ea-93ab-458e6a3b6bd4",
+      trace_id: "ccad4c86-8951-52cb-82af-de7e56c68201",
+      status: "COMPLETED",
+      context_version: 1,
+      decision: {
+        output_type: "TOPIC_RESOURCES",
+        delivery_strategy: "DIRECT",
+        explanation_level: "EVIDENCE",
+        adaptation_state: "NORMAL",
+        decision_reason_codes: ["DIRECT_PATH"],
+        decision_reason: "ok",
+        policy_version: "v1",
+      },
+      items: [{
+        item_id: 1,
+        rank_no: 1,
+        reason_summary: "图谱路径支持该结果。",
+        evidence_confidence: 0.8,
+        unavailable_now: false,
+        resource: {
+          resource_id: 1,
+          resource_type: "BOOK",
+          title: "书",
+          authors: [],
+          availability_status: "AVAILABLE_BORROW",
+        },
+        evidence: {
+          score: 0.8,
+          channels: ["MYSQL", "GRAPH"],
+          channel_scores: { MYSQL: 0.7, GRAPH: 0.85 },
+          channel_ranks: { MYSQL: 1, GRAPH: 1 },
+          primary_channel: "GRAPH",
+          evidence_refs: ["catalog:resource:1:metadata:1", graphPath],
+          graph_path_refs: [graphPath],
+          graph_version: "lib-books-v2-20260828",
+          graph_path_coverage_state: "COVERED",
+          negative_penalty: 0,
+        },
+      }],
+      questions: null,
+      warnings: [],
+    };
+
+    expect(isRecommendationExecution(execution)).toBe(true);
+    const legacyOnly = structuredClone(execution);
+    legacyOnly.items[0].evidence.graph_path_refs = [`graphpath:${"a".repeat(32)}`];
+    expect(() => decodeRecommendationExecution(legacyOnly)).toThrow(RecommendationDecodeError);
+  });
 });

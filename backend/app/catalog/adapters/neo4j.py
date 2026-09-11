@@ -5,13 +5,13 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
-from hashlib import sha256
 from typing import Any, Mapping
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
 from backend.app.catalog.domain.models import GraphRecallEvidence
+from backend.app.shared_kernel.contracts.graph_evidence import build_graph_path_reference
 
 
 _GRAPH_VERSION_LIMIT = 64
@@ -291,9 +291,11 @@ class Neo4jGraphReader:
                 or any(not isinstance(item, str) or not item for item in node_ids + edge_ids)
             ):
                 continue
-            path_ref = "graphpath:" + sha256(
-                f"{graph_version}:{':'.join(node_ids)}:{':'.join(edge_ids)}".encode()
-            ).hexdigest()[:32]
+            path_ref = build_graph_path_reference(
+                graph_version=graph_version,
+                node_ids=node_ids,
+                edge_ids=edge_ids,
+            )
             valid.append((hop_count, term, path_ref))
         if not valid:
             return GraphRecallEvidence(

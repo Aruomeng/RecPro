@@ -930,6 +930,8 @@ def build_research_exploration_service(
             graph_version=graph_version,
             timeout=3.0,
         ),
+        dataset_version=settings.research_dataset_version,
+        graph_version=graph_version,
         cache_seconds=300.0,
     )
 

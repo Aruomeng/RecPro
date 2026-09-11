@@ -8,6 +8,7 @@ from scripts.execute_g4_recommendation_projection import (
     TARGET_TABLES,
     canonical,
     load_request_payload,
+    plan_requires_v2_graph_paths,
     validate_post_counts,
     validate_pre_counts,
     sha256_bytes,
@@ -128,6 +129,16 @@ class G4ProjectionExecutorTests(unittest.TestCase):
                 for target in self.plan["targets"]
             },
         )
+
+    def test_stage2_plan_marker_is_explicit_and_not_inferred_from_v1_plan(self) -> None:
+        self.assertFalse(plan_requires_v2_graph_paths(self.plan))
+        marked = {
+            **self.plan,
+            "preconditions": [
+                "Stage 2 v2 Graph scoring requires 100% routeable graphpath:v2 evidence; queries remain bounded to 3 hops, 10 paths, 60 nodes, 120 edges, and 3 seconds"
+            ],
+        }
+        self.assertTrue(plan_requires_v2_graph_paths(marked))
 
 
 if __name__ == "__main__":

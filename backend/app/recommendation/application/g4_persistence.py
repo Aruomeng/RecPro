@@ -232,6 +232,10 @@ def build_g4_projection_write_plan(
                 "rrf_score": candidate["score"],
                 "negative_penalty": candidate["negative_penalty"],
                 "graph_path_refs": list(candidate.get("graph_path_refs", [])),
+                "graph_version": candidate.get("graph_version"),
+                "graph_path_coverage_state": candidate.get(
+                    "graph_path_coverage_state"
+                ),
             }
             items.append(
                 G4ItemFact(

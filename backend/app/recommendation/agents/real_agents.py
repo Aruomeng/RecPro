@@ -30,6 +30,9 @@ from backend.app.recommendation.agents.base import (
 from backend.app.shared_kernel.contracts.agent import AgentMessage, AgentResult
 from backend.app.shared_kernel.contracts.agent import AgentDecision
 from backend.app.shared_kernel.contracts.enums import AgentActionType, AgentResultStatus
+from backend.app.shared_kernel.contracts.graph_evidence import (
+    is_routeable_graph_path_reference,
+)
 
 
 def _evaluation_at(message: AgentMessage) -> datetime:
@@ -595,7 +598,39 @@ class CatalogCandidateRecallAgent:
             vector_tool_calls,
         ) = vector_result
         optional_channel_configured = graph_configured or vector_configured
+        graph_path_contract = bool(
+            self._graph_version and self._graph_version.startswith("lib-books-v2-")
+        )
+        invalid_graph_path_hits = 0
+        if graph_path_contract:
+            invalid_graph_path_hits = sum(
+                1
+                for item in graph_hits.values()
+                if item.graph_version != self._graph_version
+                or not item.graph_path_refs
+                or any(
+                    not is_routeable_graph_path_reference(reference)
+                    for reference in item.graph_path_refs
+                )
+            )
+            graph_hits = {
+                external_id: item
+                for external_id, item in graph_hits.items()
+                if item.graph_version == self._graph_version
+                and item.graph_path_refs
+                and all(
+                    is_routeable_graph_path_reference(reference)
+                    for reference in item.graph_path_refs
+                )
+            }
         graph_channel_ready = graph_configured and not graph_warning and bool(terms)
+        graph_path_warning = (
+            ("GRAPH_PATH_EVIDENCE_UNAVAILABLE",)
+            if graph_path_contract
+            and graph_channel_ready
+            and (not graph_hits or invalid_graph_path_hits > 0)
+            else ()
+        )
         vector_channel_ready = vector_configured and not vector_warning and bool(query_text)
         candidates: list[dict[str, object]] = []
         resources_by_id = {resource.id: resource for resource in eligible}
@@ -623,19 +658,13 @@ class CatalogCandidateRecallAgent:
                 ),
             )
             graph_hit = graph_hits.get(resource.external_id)
-            if (
-                graph_hit is not None
-                and graph_hit.graph_version.startswith("lib-books-v2-")
-                and not graph_hit.graph_path_refs
-            ):
-                graph_hit = None
             graph_score = float(graph_hit.score) if graph_hit is not None else 0.0
             vector_hit = vector_hits.get(resource.external_id)
             vector_score = float(vector_hit.score) if vector_hit is not None else 0.0
             mysql_weighted_score = 0.50 * keyword_score + 0.25 * profile_score
             weighted_score = mysql_weighted_score
             effective_weight = 0.75
-            if graph_channel_ready:
+            if graph_hit is not None:
                 weighted_score += 0.15 * graph_score
                 effective_weight += 0.15
             if vector_channel_ready:
@@ -671,13 +700,20 @@ class CatalogCandidateRecallAgent:
                     "graph_path_refs": (
                         list(graph_hit.graph_path_refs) if graph_hit is not None else []
                     ),
-                    # ``None`` means the optional channel was unavailable or
-                    # did not participate.  A successful graph query with no
-                    # hit is represented by ``0.0`` instead, so downstream
-                    # explanations cannot turn a timeout into a graph fact.
+                    "graph_version": self._graph_version,
+                    "graph_path_coverage_state": (
+                        "COVERED"
+                        if graph_path_contract and graph_hit is not None
+                        else "DEGRADED"
+                        if graph_path_contract and graph_configured and bool(terms)
+                        else "NOT_USED"
+                    ),
+                    # ``None`` means Graph did not participate in this exact
+                    # candidate.  In particular, a successful v2 lookup with
+                    # no legal path is not exposed as a fabricated zero score.
                     "kg_score": (
                         round(max(0.0, min(1.0, graph_score)), 6)
-                        if graph_channel_ready
+                        if graph_hit is not None
                         else None
                     ),
                     "semantic_score": (
@@ -761,19 +797,48 @@ class CatalogCandidateRecallAgent:
                 + (["VECTOR"] if vector_hits else []),
                 "dependency_status": {
                     "MYSQL": "READY",
-                    "GRAPH": "READY" if graph_channel_ready else ("UNAVAILABLE" if graph_warning else "DISABLED"),
+                    "GRAPH": (
+                        "DEGRADED"
+                        if graph_path_warning
+                        else "READY"
+                        if graph_channel_ready
+                        else "UNAVAILABLE"
+                        if graph_warning
+                        else "DISABLED"
+                    ),
                     "VECTOR": "READY" if vector_channel_ready else ("UNAVAILABLE" if vector_warning else "DISABLED"),
+                },
+                "graph_path_evidence": {
+                    "graph_version": self._graph_version,
+                    "valid_hit_count": len(graph_hits),
+                    "rejected_hit_count": invalid_graph_path_hits,
+                    "coverage_state": (
+                        "COVERED"
+                        if graph_hits
+                        else "DEGRADED"
+                        if graph_path_warning
+                        else "NOT_USED"
+                    ),
                 },
             },
             confidence=0.8 if selected else 0.3,
             status=AgentResultStatus.PARTIAL
-            if (not selected or coverage_warning or graph_warning or vector_warning)
+            if (
+                not selected
+                or coverage_warning
+                or graph_warning
+                or graph_path_warning
+                or vector_warning
+            )
             else AgentResultStatus.SUCCESS,
             warnings=(("CATALOG_EMPTY",) if not selected else ())
             + coverage_warning
             + graph_warning
+            + graph_path_warning
             + vector_warning,
-            fallback_used=bool(coverage_warning or graph_warning or vector_warning),
+            fallback_used=bool(
+                coverage_warning or graph_warning or graph_path_warning or vector_warning
+            ),
             tool_calls=(
                 *evidence_tool_calls,
             )
@@ -781,12 +846,18 @@ class CatalogCandidateRecallAgent:
             + vector_tool_calls,
             decision=AgentDecision(
                 action=AgentActionType.DEGRADE
-                if (coverage_warning or graph_warning or vector_warning or not selected)
+                if (
+                    coverage_warning
+                    or graph_warning
+                    or graph_path_warning
+                    or vector_warning
+                    or not selected
+                )
                 else AgentActionType.SELECT_CHANNELS,
                 target="RankingAgent",
                 reason_code=(
                     "OPTIONAL_CHANNEL_DEGRADED"
-                    if (graph_warning or vector_warning)
+                    if (graph_warning or graph_path_warning or vector_warning)
                     else "INSUFFICIENT_POSITIVE_SCORE_COVERAGE"
                     if coverage_warning
                     else "CATALOG_EMPTY"

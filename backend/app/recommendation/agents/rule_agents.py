@@ -472,7 +472,18 @@ class RuleExplanationAgent:
                 "resource_id": int(item["resource_id"]),
                 "rank_no": int(item["rank_no"]),
                 "summary": "基于主题、画像和 MySQL 目录证据推荐。",
-                "evidence_refs": [str(item.get("evidence_ref", "catalog:unknown"))],
+                "evidence_refs": list(
+                    dict.fromkeys(
+                        (
+                            str(item.get("evidence_ref", "catalog:unknown")),
+                            *(
+                                str(ref)
+                                for ref in item.get("graph_path_refs", [])
+                                if isinstance(ref, str) and ref.startswith("graphpath:")
+                            ),
+                        )
+                    )
+                ),
             }
             for item in items
         ]

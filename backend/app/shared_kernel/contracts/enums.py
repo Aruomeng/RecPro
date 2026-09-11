@@ -208,6 +208,14 @@ class RecallChannel(StrEnum):
     FEEDBACK = "FEEDBACK"
 
 
+class GraphPathCoverageState(StrEnum):
+    """Whether a recommendation's Graph contribution is publicly provable."""
+
+    COVERED = "COVERED"
+    NOT_USED = "NOT_USED"
+    DEGRADED = "DEGRADED"
+
+
 class RecallPhase(StrEnum):
     PROBE = "PROBE"
     FULL = "FULL"

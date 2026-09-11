@@ -19,6 +19,9 @@ from backend.app.recommendation.application.g4_projection import (
 )
 from backend.app.recommendation.application.orchestration import build_rule_orchestrator
 from backend.app.recommendation.domain.public import RecommendationTaskCommand
+from backend.app.shared_kernel.contracts.graph_evidence import (
+    build_graph_path_reference,
+)
 
 
 def command() -> RecommendationTaskCommand:
@@ -142,6 +145,92 @@ class G4ProjectionTests(unittest.TestCase):
         self.assertEqual(101, response.items[0].item_id)
         self.assertGreaterEqual(len(response.agent_actions), 1)
         self.assertEqual("PLAN_RECALL", response.agent_actions[3].action.value)
+
+    def test_v2_graph_score_projects_only_with_routeable_path_evidence(self) -> None:
+        result = orchestration_result()
+        path_reference = build_graph_path_reference(
+            graph_version="lib-books-v2-20260828",
+            node_ids=("topic:multi-agent", "work:one", "book:one"),
+            edge_ids=("edge:topic", "edge:instance"),
+        )
+        items = list(result.payload["items"])
+        items[0] = {
+            **items[0],
+            "channel": "MYSQL+GRAPH",
+            "channel_scores": {"MYSQL": 0.7, "GRAPH": 0.8},
+            "channel_ranks": {"MYSQL": 1, "GRAPH": 1},
+            "primary_channel": "GRAPH",
+            "graph_path_refs": [path_reference],
+            "graph_version": "lib-books-v2-20260828",
+            "graph_path_coverage_state": "COVERED",
+        }
+        result = replace(result, payload={**result.payload, "items": items})
+        resources = {
+            resource_id: G4ResourceProjection(
+                resource_id=resource_id,
+                resource_type="BOOK",
+                title=f"Book {resource_id}",
+                authors=("Author",),
+                publication_year=2024,
+                availability_status="AVAILABLE_BORROW",
+            )
+            for resource_id in range(1, 4)
+        }
+
+        payload = build_http_execution_payload(
+            result,
+            resources=resources,
+            versions=G4ProjectionVersions(
+                config_bundle="rec-1.0.0",
+                dataset="lib-books-v2",
+                graph="lib-books-v2-20260828",
+            ),
+            evaluation_at=datetime(2026, 8, 11, 1, 0, tzinfo=UTC),
+            item_ids={1: 101, 2: 102, 3: 103},
+        )
+
+        evidence = payload["items"][0]["evidence"]
+        self.assertEqual("lib-books-v2-20260828", evidence["graph_version"])
+        self.assertEqual("COVERED", evidence["graph_path_coverage_state"])
+        self.assertEqual([path_reference], evidence["graph_path_refs"])
+
+    def test_v2_graph_score_rejects_legacy_unrouteable_path_reference(self) -> None:
+        result = orchestration_result()
+        items = list(result.payload["items"])
+        items[0] = {
+            **items[0],
+            "channel": "MYSQL+GRAPH",
+            "channel_scores": {"MYSQL": 0.7, "GRAPH": 0.8},
+            "channel_ranks": {"MYSQL": 1, "GRAPH": 1},
+            "primary_channel": "GRAPH",
+            "graph_path_refs": ["graphpath:" + "a" * 32],
+            "graph_version": "lib-books-v2-20260828",
+            "graph_path_coverage_state": "COVERED",
+        }
+        result = replace(result, payload={**result.payload, "items": items})
+
+        with self.assertRaisesRegex(G4ProjectionError, "routeable path evidence"):
+            build_http_execution_payload(
+                result,
+                resources={
+                    resource_id: G4ResourceProjection(
+                        resource_id=resource_id,
+                        resource_type="BOOK",
+                        title=f"Book {resource_id}",
+                        authors=("Author",),
+                        publication_year=2024,
+                        availability_status="AVAILABLE_BORROW",
+                    )
+                    for resource_id in range(1, 4)
+                },
+                versions=G4ProjectionVersions(
+                    config_bundle="rec-1.0.0",
+                    dataset="lib-books-v2",
+                    graph="lib-books-v2-20260828",
+                ),
+                evaluation_at=datetime(2026, 8, 11, 1, 0, tzinfo=UTC),
+                item_ids={1: 101, 2: 102, 3: 103},
+            )
 
     def test_projection_rejects_an_agent_action_outside_its_role(self) -> None:
         result = orchestration_result()

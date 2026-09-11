@@ -11,6 +11,8 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import ProxyHandler, Request, build_opener
 
+from backend.app.shared_kernel.contracts.graph_evidence import build_graph_path_reference
+
 
 PUBLIC_LABELS = frozenset(
     {"Book", "Work", "Topic", "Author", "Publisher", "Category", "Keyword", "SubjectCode"}
@@ -285,9 +287,17 @@ class PublicGraphReader:
                 edge_ids.append(edge_id)
             if len(edge_ids) != hop_count:
                 continue
-            path_id = "graphpath:" + sha256(
-                f"{self._graph_version}:{':'.join(node_ids)}:{':'.join(edge_ids)}".encode()
-            ).hexdigest()[:32]
+            path_id = (
+                build_graph_path_reference(
+                    graph_version=self._graph_version,
+                    node_ids=node_ids,
+                    edge_ids=edge_ids,
+                )
+                if self._graph_version.startswith("lib-books-v2-")
+                else "graphpath:" + sha256(
+                    f"{self._graph_version}:{':'.join(node_ids)}:{':'.join(edge_ids)}".encode()
+                ).hexdigest()[:32]
+            )
             paths.append({
                 "path_id": path_id,
                 "node_ids": node_ids,

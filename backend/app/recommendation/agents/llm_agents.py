@@ -245,9 +245,17 @@ def _template_explanation(item: dict[str, object]) -> tuple[str, list[str]]:
     """Return a bounded explanation using only the item's supplied reference."""
 
     evidence_ref = str(item.get("evidence_ref", "")).strip()
-    if not evidence_ref:
+    graph_refs = [
+        str(ref)
+        for ref in item.get("graph_path_refs", [])
+        if isinstance(ref, str) and ref.startswith("graphpath:")
+    ]
+    refs = list(dict.fromkeys(([evidence_ref] if evidence_ref else []) + graph_refs))
+    if not refs:
         return "当前仅有有限的可验证证据。", []
-    return "基于已验证的目录证据生成推荐解释。", [evidence_ref]
+    if graph_refs:
+        return "基于已验证的目录与图谱路径证据生成推荐解释。", refs
+    return "基于已验证的目录证据生成推荐解释。", refs
 
 
 class LLMExplanationAgent:
@@ -273,9 +281,17 @@ class LLMExplanationAgent:
         item = dict(raw_item) if isinstance(raw_item, dict) else {}
         resource_id = int(item.get("resource_id", 0))
         rank_no = int(item.get("rank_no", fallback_rank_no))
-        allowed_refs = [
-            str(item.get("evidence_ref", "")).strip()
-        ] if str(item.get("evidence_ref", "")).strip() else []
+        evidence_ref = str(item.get("evidence_ref", "")).strip()
+        allowed_refs = list(
+            dict.fromkeys(
+                ([evidence_ref] if evidence_ref else [])
+                + [
+                    str(ref)
+                    for ref in item.get("graph_path_refs", [])
+                    if isinstance(ref, str) and ref.startswith("graphpath:")
+                ]
+            )
+        )
         fallback_text, fallback_refs = _template_explanation(item)
         try:
             async with semaphore:

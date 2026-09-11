@@ -13,7 +13,7 @@ from typing import Any, Mapping
 from uuid import UUID
 
 from fastapi import APIRouter, Header, Response
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from backend.app.api.auth import PrincipalResolver, require_permission, resolve_user_principal
 from backend.app.api.errors import PublicAPIError
@@ -31,6 +31,7 @@ from backend.app.shared_kernel.contracts.enums import (
     AvailabilityStatus,
     DeliveryStrategy,
     ExplanationLevel,
+    GraphPathCoverageState,
     OutputType,
     ResourceType,
     TaskStatus,
@@ -38,6 +39,9 @@ from backend.app.shared_kernel.contracts.enums import (
 )
 from backend.app.shared_kernel.contracts.auth import AuthenticatedPrincipal
 from backend.app.shared_kernel.contracts.errors import ErrorCode, WarningCode
+from backend.app.shared_kernel.contracts.graph_evidence import (
+    is_routeable_graph_path_reference,
+)
 
 
 IDEMPOTENCY_HEADERS = {
@@ -60,6 +64,7 @@ _PUBLIC_WARNING_ALIASES = {
     "REPLAN_REQUIRED": ("REPLAN_EXHAUSTED",),
     "REPLAN_BUDGET_EXHAUSTED": ("REPLAN_EXHAUSTED",),
     "GRAPH_RECALL_UNAVAILABLE": ("KG_CHANNEL_UNAVAILABLE",),
+    "GRAPH_PATH_EVIDENCE_UNAVAILABLE": ("KG_CHANNEL_UNAVAILABLE",),
     "VECTOR_RECALL_UNAVAILABLE": ("VECTOR_CHANNEL_UNAVAILABLE",),
     "VECTOR_QUERY_UNAVAILABLE": ("VECTOR_CHANNEL_UNAVAILABLE",),
     "CATALOG_EMPTY": ("INSUFFICIENT_RESOURCE_COVERAGE",),
@@ -168,7 +173,31 @@ class RecommendationEvidenceResponse(StrictModel):
     primary_channel: str | None = None
     evidence_refs: list[str] = Field(min_length=1)
     graph_path_refs: list[str] = Field(default_factory=list, max_length=10)
+    graph_version: str | None = Field(default=None, min_length=1, max_length=64)
+    graph_path_coverage_state: GraphPathCoverageState | None = None
     negative_penalty: float = Field(ge=0, le=1)
+
+    @model_validator(mode="after")
+    def validate_graph_path_contract(self) -> "RecommendationEvidenceResponse":
+        if self.graph_path_refs and "GRAPH" not in self.channels:
+            raise ValueError("graph path evidence requires the Graph channel")
+        if self.graph_version and self.graph_version.startswith("lib-books-v2-"):
+            if "GRAPH" in self.channels and (
+                self.graph_path_coverage_state is not GraphPathCoverageState.COVERED
+                or not self.graph_path_refs
+                or any(
+                    not is_routeable_graph_path_reference(reference)
+                    for reference in self.graph_path_refs
+                )
+            ):
+                raise ValueError("v2 Graph scoring requires routeable covered path evidence")
+            if "GRAPH" not in self.channels and (
+                self.graph_path_refs
+                or "GRAPH" in self.channel_scores
+                or self.graph_path_coverage_state is GraphPathCoverageState.COVERED
+            ):
+                raise ValueError("non-Graph v2 evidence cannot expose a Graph contribution")
+        return self
 
 
 class RecommendationGroupResponse(StrictModel):

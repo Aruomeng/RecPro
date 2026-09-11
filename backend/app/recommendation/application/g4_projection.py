@@ -29,7 +29,11 @@ from backend.app.shared_kernel.contracts.autonomy import (
     AgentAutonomyError,
     validate_decision_dict,
 )
-from backend.app.shared_kernel.contracts.enums import TaskStatus
+from backend.app.shared_kernel.contracts.enums import GraphPathCoverageState, TaskStatus
+from backend.app.shared_kernel.contracts.graph_evidence import (
+    is_graph_path_reference,
+    is_routeable_graph_path_reference,
+)
 
 
 class G4ProjectionError(ValueError):
@@ -96,6 +100,43 @@ class G4ResourceProjection:
             raise ValueError("publication_year must be null or positive")
         if self.difficulty_level is not None and self.difficulty_level not in {1, 2, 3, 4}:
             raise ValueError("difficulty_level must be null or between 1 and 4")
+
+
+_READING_PATH_GROUPS = {
+    1: ("FOUNDATION", "入门", "建立主题基础概念与核心术语"),
+    2: ("ADVANCED", "进阶", "理解方法、系统与实践路径"),
+    3: ("DEEP_DIVE", "深化", "进入综合研究与专题拓展"),
+}
+
+
+def reading_path_group_id(
+    *, difficulty_level: object, rank_no: int, item_count: int
+) -> int:
+    """Return the stable reading stage used by live and replay projections."""
+
+    if difficulty_level in {1, 2}:
+        return 1
+    if difficulty_level == 3:
+        return 2
+    if difficulty_level == 4:
+        return 3
+    return 1 + min(2, ((rank_no - 1) * 3) // max(1, item_count))
+
+
+def reading_path_groups(group_ids: set[int]) -> list[dict[str, object]]:
+    """Materialize the bounded public reading-stage definitions."""
+
+    return [
+        {
+            "group_id": group_id,
+            "group_type": "READING_STAGE",
+            "group_key": _READING_PATH_GROUPS[group_id][0],
+            "title": _READING_PATH_GROUPS[group_id][1],
+            "goal": _READING_PATH_GROUPS[group_id][2],
+            "order_no": group_id,
+        }
+        for group_id in sorted(group_ids)
+    ]
 
 
 def derive_task_identity(command: RecommendationTaskCommand) -> G4TaskIdentity:
@@ -339,15 +380,64 @@ def _candidate_items(
             raise G4ProjectionError("ranked item.graph_path_refs must be a list")
         graph_path_refs = [str(ref).strip() for ref in raw_graph_path_refs]
         if len(graph_path_refs) > 10 or any(
-            not ref.startswith("graphpath:") for ref in graph_path_refs
+            not is_graph_path_reference(ref) for ref in graph_path_refs
         ):
             raise G4ProjectionError("graph path references are invalid")
-        if "GRAPH" in channels and not graph_path_refs:
-            graph_version = str(item.get("evidence_ref", ""))
-            if ":graph:lib-books-v2-" in graph_version:
-                raise G4ProjectionError(
-                    "v2 Graph channel requires at least one path reference"
-                )
+        raw_graph_version = item.get("graph_version")
+        graph_version: str | None = None
+        if raw_graph_version is not None:
+            if (
+                not isinstance(raw_graph_version, str)
+                or not raw_graph_version.strip()
+                or len(raw_graph_version.strip()) > 64
+            ):
+                raise G4ProjectionError("graph_version must be a bounded string or null")
+            graph_version = raw_graph_version.strip()
+        elif ":graph:lib-books-v2-" in str(item.get("evidence_ref", "")):
+            graph_version = (
+                str(item.get("evidence_ref", ""))
+                .split(":graph:", 1)[1]
+                .split(":", 1)[0]
+            )
+        raw_coverage_state = item.get("graph_path_coverage_state")
+        if raw_coverage_state is None:
+            coverage_state = (
+                GraphPathCoverageState.COVERED
+                if graph_path_refs
+                else GraphPathCoverageState.DEGRADED
+                if graph_version and graph_version.startswith("lib-books-v2-")
+                else GraphPathCoverageState.NOT_USED
+            )
+        else:
+            try:
+                coverage_state = GraphPathCoverageState(str(raw_coverage_state))
+            except ValueError as exc:
+                raise G4ProjectionError("graph path coverage state is invalid") from exc
+        if graph_path_refs and (
+            "GRAPH" not in channels
+            or graph_version is None
+            or not graph_version.startswith("lib-books-v2-")
+            or coverage_state is not GraphPathCoverageState.COVERED
+        ):
+            raise G4ProjectionError(
+                "graph path references require a covered v2 Graph channel"
+            )
+        if graph_version and graph_version.startswith("lib-books-v2-") and any(
+            not is_routeable_graph_path_reference(ref) for ref in graph_path_refs
+        ):
+            raise G4ProjectionError("v2 Graph channel requires routeable path evidence")
+        if (
+            "GRAPH" in channels
+            and graph_version is not None
+            and graph_version.startswith("lib-books-v2-")
+            and (
+                not graph_path_refs
+                or coverage_state is not GraphPathCoverageState.COVERED
+            )
+        ):
+            raise G4ProjectionError("v2 Graph channel requires covered path evidence")
+        if coverage_state is GraphPathCoverageState.COVERED and not graph_path_refs:
+            raise G4ProjectionError("covered graph evidence requires a path reference")
         projected.append(
             {
                 "rank_no": rank_no,
@@ -371,6 +461,8 @@ def _candidate_items(
                 "primary_channel": primary_channel,
                 "negative_penalty": negative_penalty,
                 "graph_path_refs": graph_path_refs,
+                "graph_version": graph_version,
+                "graph_path_coverage_state": coverage_state.value,
             }
         )
     if set(explanations) != seen_resources:
@@ -430,6 +522,10 @@ def extract_candidate_rows_for_persistence(
                         "channel": channel,
                         "evidence_refs": list(candidate["evidence_refs"]),
                         "graph_path_refs": list(candidate["graph_path_refs"]),
+                        "graph_version": candidate["graph_version"],
+                        "graph_path_coverage_state": candidate[
+                            "graph_path_coverage_state"
+                        ],
                     },
                 }
             )
@@ -493,11 +589,6 @@ def build_http_execution_payload(
             )
         projected_items = []
         reading_path = decision["output_type"] == "READING_PATH"
-        group_defs = {
-            1: ("入门", "建立主题基础概念与核心术语"),
-            2: ("进阶", "理解方法、系统与实践路径"),
-            3: ("深化", "进入综合研究与专题拓展"),
-        }
         used_groups: set[int] = set()
         for candidate in candidate_projections:
             resource_id = int(candidate["resource_id"])
@@ -509,17 +600,11 @@ def build_http_execution_payload(
             difficulty = candidate["resource"].get("difficulty_level")
             group_id: int | None = None
             if reading_path:
-                if difficulty in {1, 2}:
-                    group_id = 1
-                elif difficulty == 3:
-                    group_id = 2
-                elif difficulty == 4:
-                    group_id = 3
-                else:
-                    group_id = 1 + min(
-                        2,
-                        ((int(candidate["rank_no"]) - 1) * 3) // max(1, len(candidate_projections)),
-                    )
+                group_id = reading_path_group_id(
+                    difficulty_level=difficulty,
+                    rank_no=int(candidate["rank_no"]),
+                    item_count=len(candidate_projections),
+                )
                 used_groups.add(group_id)
             projected_items.append(
                 {
@@ -539,21 +624,15 @@ def build_http_execution_payload(
                         "evidence_refs": candidate["evidence_refs"],
                         "negative_penalty": candidate["negative_penalty"],
                         "graph_path_refs": candidate["graph_path_refs"],
+                        "graph_version": candidate["graph_version"],
+                        "graph_path_coverage_state": candidate[
+                            "graph_path_coverage_state"
+                        ],
                     },
                 }
             )
         if reading_path:
-            projected_groups = [
-                {
-                    "group_id": group_id,
-                    "group_type": "READING_STAGE",
-                    "group_key": ("FOUNDATION", "ADVANCED", "DEEP_DIVE")[group_id - 1],
-                    "title": group_defs[group_id][0],
-                    "goal": group_defs[group_id][1],
-                    "order_no": group_id,
-                }
-                for group_id in sorted(used_groups)
-            ]
+            projected_groups = reading_path_groups(used_groups)
         questions = None
     elif status == "WAITING_CLARIFICATION":
         if not isinstance(questions, Sequence) or isinstance(questions, (str, bytes, bytearray)):
@@ -610,5 +689,7 @@ __all__ = [
     "derive_task_identity",
     "extract_candidate_projections",
     "extract_candidate_rows_for_persistence",
+    "reading_path_group_id",
+    "reading_path_groups",
     "split_recall_channels",
 ]

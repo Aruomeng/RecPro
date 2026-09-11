@@ -10,11 +10,23 @@ from backend.app.exploration.ports import LibraryCatalogReadPort, PublicGraphRea
 
 
 class ExplorationService:
-    def __init__(self, *, catalog_reader: LibraryCatalogReadPort, graph_reader: PublicGraphReadPort, cache_seconds: float = 300.0) -> None:
+    def __init__(
+        self,
+        *,
+        catalog_reader: LibraryCatalogReadPort,
+        graph_reader: PublicGraphReadPort,
+        dataset_version: str = "lib-books-v1-20260810",
+        graph_version: str = "lib-books-v1-20260810",
+        cache_seconds: float = 300.0,
+    ) -> None:
         if cache_seconds <= 0:
             raise ValueError("cache_seconds must be positive")
+        if not dataset_version.strip() or not graph_version.strip():
+            raise ValueError("exploration versions must be non-blank")
         self._catalog = catalog_reader
         self._graph = graph_reader
+        self._dataset_version = dataset_version.strip()
+        self._graph_version = graph_version.strip()
         self._cache_seconds = cache_seconds
         self._overview_cache: tuple[float, dict[str, object]] | None = None
         self._cache_lock = asyncio.Lock()
@@ -50,8 +62,8 @@ class ExplorationService:
             mysql, graph = await asyncio.gather(self._catalog.overview(), self._graph.stats())
             payload = {
                 "schema_version": "library-overview-v1",
-                "dataset_version": "lib-books-v1-20260810",
-                "graph_version": "lib-books-v1-20260810",
+                "dataset_version": self._dataset_version,
+                "graph_version": self._graph_version,
                 "generated_at": datetime.now(UTC),
                 **mysql,
                 "graph": graph,

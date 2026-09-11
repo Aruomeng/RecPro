@@ -26,7 +26,11 @@ const relationCounts = computed(() => Object.entries((library.graph?.edges ?? []
 const activePath = computed(() => library.graphPaths?.paths.find((path) => path.path_id === library.highlightedPathId) ?? library.graphPaths?.paths[0]);
 onMounted(() => {
   const routedQuery = typeof route.query.q === "string" ? route.query.q.trim() : "";
-  if (routedQuery) void library.searchGraph(routedQuery);
+  const sourceId = typeof route.query.source_id === "string" ? route.query.source_id : "";
+  const targetId = typeof route.query.target_id === "string" ? route.query.target_id : "";
+  const evidenceRef = typeof route.query.evidence_ref === "string" ? route.query.evidence_ref : undefined;
+  if (sourceId && targetId && sourceId !== targetId) void library.loadGraphPaths(sourceId, targetId, evidenceRef);
+  else if (routedQuery) void library.searchGraph(routedQuery);
   else if (!library.graph) void library.searchGraph();
 });
 function select(node: GraphNode): void {
@@ -57,7 +61,7 @@ function toggleType(type: string): void { enabledTypes.value = enabledTypes.valu
       </aside>
       <div class="graph-main-panel">
         <div class="graph-toolbar"><span>查询：{{ library.graph?.query || library.graphQuery }}</span><em v-if="library.graph?.truncated">已展示局部子图</em></div>
-        <div v-if="typeof route.query.evidence_ref === 'string'" class="graph-evidence-context"><b>来自推荐结果的路径证据核验</b><span>{{ route.query.evidence_ref }}</span><small>当前展示与该书相关的真实局部子图；精确多跳高亮仅在对应 v2 图版本可用时呈现。</small></div>
+        <div v-if="typeof route.query.evidence_ref === 'string'" class="graph-evidence-context"><b>来自推荐结果的路径证据核验</b><span>{{ route.query.evidence_ref }}</span><small>图版本 {{ route.query.graph_version || library.graph?.graph_version || '待确认' }}；蓝色高亮边对应推荐时使用的有界多跳路径。</small></div>
         <div v-if="pathStart" class="graph-path-notice"><span>路径起点：<b>{{ pathStart.label }}</b></span><span v-if="activePath">当前高亮 {{ activePath.hop_count }} 跳 · 证据分 {{ Math.round(activePath.score * 100) }}%</span><span v-else>再选择一个节点，查询 3 跳以内证据</span><button type="button" @click="pathStart = null; library.graphPaths = null; library.highlightedPathId = null">结束路径模式</button></div>
         <GraphCanvas v-if="library.graph?.nodes.length" :graph="library.graph" :allowed-types="enabledTypes" :selected-id="selected?.id" :highlighted-edge-ids="activePath?.edge_ids" @node-click="select" />
         <div v-else-if="library.loadingGraph" class="loading-state"><h3>正在读取有界子图…</h3><p>查询只允许白名单实体与一跳关系。</p></div>

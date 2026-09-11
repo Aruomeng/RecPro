@@ -90,6 +90,27 @@ class FakeV2GraphWithoutPath:
         )
 
 
+class FakeV2GraphWithPath:
+    async def recall(self, *, terms, graph_version, limit):
+        from backend.app.shared_kernel.contracts.graph_evidence import build_graph_path_reference
+
+        return (
+            GraphRecallEvidence(
+                external_id="book:one",
+                score=0.95,
+                matched_terms=("多智能体",),
+                graph_version=graph_version,
+                graph_path_refs=(
+                    build_graph_path_reference(
+                        graph_version=graph_version,
+                        node_ids=("topic:agent", "book:one"),
+                        edge_ids=("edge:topic",),
+                    ),
+                ),
+            ),
+        )
+
+
 class FakeGraphTimeout:
     def __init__(self) -> None:
         self.calls = 0
@@ -218,6 +239,30 @@ class RetrievalFusionTests(unittest.TestCase):
         self.assertTrue(all("GRAPH" not in item["channel"] for item in candidates))
         self.assertTrue(all(item["graph_path_refs"] == [] for item in candidates))
         self.assertTrue(all(":graph:" not in item["evidence_ref"] for item in candidates))
+        self.assertTrue(all(item["kg_score"] is None for item in candidates))
+        self.assertTrue(all(item["graph_path_coverage_state"] == "DEGRADED" for item in candidates))
+        self.assertEqual("DEGRADED", result.payload["dependency_status"]["GRAPH"])
+        self.assertIn("GRAPH_PATH_EVIDENCE_UNAVAILABLE", result.warnings)
+        self.assertEqual(AgentResultStatus.PARTIAL, result.status)
+
+    def test_v2_graph_score_requires_routeable_path_evidence(self) -> None:
+        agent = CatalogCandidateRecallAgent(
+            FakeCatalog(),
+            graph=FakeV2GraphWithPath(),
+            graph_version="lib-books-v2-20260828",
+        )
+        result = asyncio.run(agent.handle(recall_message()))
+        covered = [
+            candidate
+            for candidate in result.payload["candidates"]
+            if "GRAPH" in candidate["channel"]
+        ]
+        self.assertEqual(1, len(covered))
+        self.assertGreater(covered[0]["kg_score"], 0)
+        self.assertEqual("COVERED", covered[0]["graph_path_coverage_state"])
+        self.assertEqual("lib-books-v2-20260828", covered[0]["graph_version"])
+        self.assertTrue(covered[0]["graph_path_refs"][0].startswith("graphpath:v2:"))
+        self.assertEqual("READY", result.payload["dependency_status"]["GRAPH"])
 
     def test_graph_and_vector_outage_keeps_sufficient_mysql_candidates(self) -> None:
         graph = FakeGraphTimeout()

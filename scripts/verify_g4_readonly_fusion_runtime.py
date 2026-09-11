@@ -16,6 +16,7 @@ from datetime import UTC, datetime, timedelta
 import json
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any, Sequence
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -34,6 +35,10 @@ from backend.app.recommendation.agents.base import RetryPolicy
 from backend.app.recommendation.agents.orchestrator import OrchestrationRequest
 from backend.app.recommendation.application.orchestration import build_port_orchestrator
 from backend.app.profile.adapters.mysql import MySQLProfileSnapshotReader
+from scripts.g4_graph_evidence_contract import (
+    V2_GRAPH_VERSION,
+    validate_v2_ranked_candidates,
+)
 from scripts.run_research_workbench import (
     merge_runtime_values,
     require_final_readonly_graph,
@@ -42,7 +47,7 @@ from scripts.validate_runtime_env import read_env, validate_compose
 
 
 RUN_ID_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{2,63}$")
-GRAPH_VERSION = "lib-books-v1-20260810"
+GRAPH_VERSION = V2_GRAPH_VERSION
 EMBEDDING_VERSION = "hash-char-ngram-v1"
 INDEX_VERSION = "lib-books-vector-v1-20260811"
 NAMESPACE_NAME = "library_resources__hash_char_ngram_v1"
@@ -64,6 +69,20 @@ def validate_run_id(value: str) -> str:
     if RUN_ID_PATTERN.fullmatch(value) is None:
         raise ValueError("run id must use 3-64 safe characters")
     return value
+
+
+def git_commit() -> str:
+    result = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=PROJECT_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    commit = result.stdout.strip()
+    if re.fullmatch(r"[0-9a-f]{40}", commit) is None:
+        raise ValueError("git HEAD is not a full commit hash")
+    return commit
 
 
 def parse_evaluation_at(value: str) -> datetime:
@@ -201,7 +220,7 @@ async def execute(args: argparse.Namespace) -> int:
             ),
             username=graph_username,
             password=graph_password,
-            timeout=8,
+            timeout=3,
         )
         vector = ChromaVectorReader(
             collection=collection,
@@ -277,6 +296,9 @@ async def execute(args: argparse.Namespace) -> int:
         "primary_channel",
         "evidence_confidence",
         "negative_penalty",
+        "graph_path_refs",
+        "graph_version",
+        "graph_path_coverage_state",
     }
     if any(
         not isinstance(candidate, dict)
@@ -309,6 +331,14 @@ async def execute(args: argparse.Namespace) -> int:
             "read-only recommendation still contains the resource expected to be suppressed: "
             f"{args.assert_resource_absent}"
         )
+    final_items = first.payload.get("items", []) if isinstance(first.payload, dict) else []
+    if not isinstance(final_items, list) or len(final_items) != len(candidates):
+        raise ValueError("final ranked items do not match the validated recall candidate count")
+    graph_path_coverage = validate_v2_ranked_candidates(
+        final_items,
+        graph_version=GRAPH_VERSION,
+        require_graph_paths=args.require_v2_graph_paths,
+    )
 
     evidence_dir = PROJECT_ROOT / "artifacts" / "verification" / "g4" / run_id
     if evidence_dir.exists():
@@ -325,8 +355,9 @@ async def execute(args: argparse.Namespace) -> int:
         for item in first.dispatches
     ]
     evidence = {
-        "schema_version": "g4-real-readonly-fusion-runtime-v1",
+        "schema_version": "g4-real-readonly-fusion-runtime-v2",
         "run_id": run_id,
+        "git_commit": git_commit(),
         "status": "PASS",
         "task_id": str(first.task_id),
         "trace_id": str(first.trace_id),
@@ -350,7 +381,11 @@ async def execute(args: argparse.Namespace) -> int:
             "channel_ranks": True,
             "primary_channel": True,
             "evidence_confidence": True,
+            "graph_path_refs": True,
+            "graph_version": True,
+            "graph_path_coverage_state": True,
         },
+        "graph_path_coverage": graph_path_coverage,
         "versions": {
             "graph_version": GRAPH_VERSION,
             "embedding_version": EMBEDDING_VERSION,
@@ -375,6 +410,7 @@ async def execute(args: argparse.Namespace) -> int:
             "neo4j_writes": 0,
             "chroma_writes": 0,
             "external_requests": 0,
+            "deepseek_requests": 0,
             "actual_delete_count": 0,
             "files_deleted": 0,
             "overwritten_inputs": 0,
@@ -401,6 +437,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--input-text", default="多智能体系统与智慧图书馆")
     parser.add_argument("--resource-type", action="append", default=None)
     parser.add_argument("--output-type", default="TOPIC_RESOURCES")
+    parser.add_argument(
+        "--require-v2-graph-paths",
+        action="store_true",
+        help="require at least one Graph-scored candidate with routeable v2 path evidence",
+    )
     parser.add_argument("--deadline-seconds", type=float, default=180.0)
     parser.add_argument(
         "--evaluation-at",
@@ -437,7 +478,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--deadline-seconds must be between 30 and 300")
     try:
         return asyncio.run(execute(args))
-    except (OSError, ValueError, RuntimeError, asyncmy.errors.Error, json.JSONDecodeError) as exc:
+    except (
+        OSError,
+        ValueError,
+        RuntimeError,
+        asyncmy.errors.Error,
+        json.JSONDecodeError,
+        subprocess.SubprocessError,
+    ) as exc:
         print(f"[FAIL] G4 real read-only fusion verification did not complete: {type(exc).__name__}: {exc}")
         return 1
 

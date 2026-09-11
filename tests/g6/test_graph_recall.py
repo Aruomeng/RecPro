@@ -5,6 +5,7 @@ from pathlib import Path
 import unittest
 
 from backend.app.catalog.adapters.neo4j import Neo4jGraphReader
+from backend.app.shared_kernel.contracts.graph_evidence import parse_graph_path_route
 
 
 class FixtureGraphReader(Neo4jGraphReader):
@@ -110,6 +111,10 @@ class GraphRecallTests(unittest.TestCase):
         self.assertEqual(("多智能体", "知识图谱"), result[0].matched_terms)
         self.assertEqual(2, len(result[0].graph_path_refs))
         self.assertTrue(all(ref.startswith("graphpath:") for ref in result[0].graph_path_refs))
+        route = parse_graph_path_route(result[0].graph_path_refs[0])
+        self.assertIsNotNone(route)
+        self.assertEqual("book:one", route.source_id)
+        self.assertEqual("topic:agent", route.target_id)
         self.assertIn("*1..3", reader.statement)
         self.assertNotIn("多智能体", reader.statement)
 

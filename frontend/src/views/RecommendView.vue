@@ -6,6 +6,7 @@ import UiIcon from "../components/UiIcon.vue";
 import { useLibraryStore } from "../stores/library";
 import { useRecommendationStore } from "../stores/recommendation";
 import { useAgentWorkspaceStore } from "../stores/agentWorkspace";
+import { parseGraphPathRoute } from "../domain/graphPathReference";
 
 const recommendation = useRecommendationStore();
 const library = useLibraryStore();
@@ -42,7 +43,17 @@ function channelName(channel: string): string { return ({ MYSQL: "MySQL", GRAPH:
 function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void {
   const refs = item.evidence?.graph_path_refs ?? [];
   if (!refs.length) return;
-  void router.push({ path: "/graph", query: { q: item.resource.title, evidence_ref: refs[0] } });
+  const route = parseGraphPathRoute(refs[0]);
+  void router.push({
+    path: "/graph",
+    query: {
+      q: item.resource.title,
+      evidence_ref: refs[0],
+      graph_version: item.evidence?.graph_version,
+      source_id: route?.sourceId,
+      target_id: route?.targetId,
+    },
+  });
 }
 </script>
 
@@ -108,6 +119,7 @@ function inspectGraphEvidence(item: (typeof recommendation.items)[number]): void
               <span v-for="channel in channels" :key="channel"><b>{{ channelName(channel) }}</b><i><em :style="{ width: `${Math.min(100, Math.round(channelScore(item, channel) * 100))}%` }" /></i><strong>{{ Math.round(channelScore(item, channel) * 100) }}%</strong></span>
             </div>
             <span v-if="(item.evidence?.negative_penalty ?? 0) > 0" class="penalty-label">负反馈惩罚 −{{ item.evidence?.negative_penalty.toFixed(2) }}</span>
+            <span v-if="item.evidence?.graph_path_coverage_state === 'DEGRADED'" class="graph-coverage-degraded">Neo4j 未提供合法路径，本项未计入图谱分数</span>
             <button v-if="item.evidence?.graph_path_refs?.length" class="graph-evidence-link" type="button" @click.stop="inspectGraphEvidence(item)">
               <span>Neo4j 路径证据 {{ item.evidence.graph_path_refs.length }} 条</span><b>进入图谱核验 <UiIcon name="arrow" /></b>
             </button>

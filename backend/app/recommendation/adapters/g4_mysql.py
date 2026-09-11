@@ -28,6 +28,8 @@ from backend.app.recommendation.application.g4_projection import (
     G4ResourceProjection,
     build_http_execution_payload,
     build_orchestration_request,
+    reading_path_group_id,
+    reading_path_groups,
 )
 from backend.app.recommendation.application.g4_clarification import (
     build_g4_clarification_continuation,
@@ -61,6 +63,11 @@ from backend.app.recommendation.ports.public import (
 )
 from backend.app.recommendation.ports.agent_logging import AgentExecutionLogPort
 from backend.app.shared_kernel.contracts.enums import TaskStatus
+from backend.app.shared_kernel.contracts.enums import GraphPathCoverageState
+from backend.app.shared_kernel.contracts.graph_evidence import (
+    is_graph_path_reference,
+    is_routeable_graph_path_reference,
+)
 
 
 def _canonical(value: object) -> str:
@@ -751,6 +758,187 @@ class MySQLG4RecommendationTaskService(MySQLRecommendationTaskService):
         self._g4_writer = MySQLG4ProjectionWriter(
             log_port=log_port or MySQLAgentExecutionLogWriter()
         )
+
+    async def _load_execution(self, connection: Any, *, task_id: UUID) -> dict[str, Any]:
+        """Rebuild the complete public G4 result for an idempotent replay.
+
+        The legacy G3 reader intentionally returned a small summary.  G4
+        persists the bounded channel and graph evidence in ``score_detail``;
+        omitting it on replay made a genuine v2 result indistinguishable from
+        an evidence-free response.  This reader restores only public fields
+        and performs no writes.
+        """
+
+        async with connection.cursor() as cursor:
+            await cursor.execute(
+                "SELECT t.trace_id, t.status, t.context_version, t.evaluation_at, "
+                "r.id, r.decision_json, r.warnings_json, r.versions_json "
+                "FROM recommendation_task t LEFT JOIN recommendation_record r ON r.task_id = t.id "
+                "WHERE t.id = %s",
+                (str(task_id),),
+            )
+            task = await cursor.fetchone()
+            if task is None:
+                raise LookupError("recommendation task not found")
+            if task[4] is None:
+                await cursor.execute(
+                    "SELECT response_json FROM recommendation_task_context "
+                    "WHERE task_id = %s ORDER BY context_version DESC LIMIT 1",
+                    (str(task_id),),
+                )
+                context = await cursor.fetchone()
+                if context is not None:
+                    return _g3_json_object(context[0])
+            await cursor.execute(
+                "SELECT i.id, i.rank_no, i.evidence_confidence, rc.id, rc.resource_type, "
+                "rc.title, rc.authors_json, rc.publication_year, rc.availability_status, "
+                "rc.difficulty_level, e.explanation_text, i.final_score, i.primary_channel, "
+                "i.score_detail_json, i.reason_evidence_json "
+                "FROM recommendation_item i "
+                "JOIN recommendation_record rr ON rr.id = i.record_id "
+                "JOIN resource_catalog rc ON rc.id = i.resource_id "
+                "LEFT JOIN recommendation_item_explanation e "
+                "ON e.recommendation_item_id = i.id AND e.explanation_version = 1 "
+                "WHERE rr.task_id = %s ORDER BY i.rank_no",
+                (str(task_id),),
+            )
+            item_rows = await cursor.fetchall()
+
+        decision = _g3_json_object(task[5])
+        warnings = [str(value) for value in _g3_json_array(task[6])]
+        versions = _g3_json_object(task[7])
+        output_type = str(decision.get("output_type", "TOPIC_RESOURCES"))
+        reading_path = output_type == "READING_PATH"
+        used_groups: set[int] = set()
+        items: list[dict[str, object]] = []
+        item_count = len(item_rows)
+        for row in item_rows:
+            score_detail = _g3_json_object(row[13])
+            score_values = score_detail.get("channel_scores")
+            rank_values = score_detail.get("channel_ranks")
+            if not isinstance(score_values, dict) or not isinstance(rank_values, dict):
+                raise RuntimeError("persisted G4 evidence lacks channel scores or ranks")
+            scores = {str(key).upper(): float(value) for key, value in score_values.items()}
+            ranks = {str(key).upper(): int(value) for key, value in rank_values.items()}
+            if not scores or set(scores) != set(ranks):
+                raise RuntimeError("persisted G4 channel evidence is inconsistent")
+            channels = [
+                channel
+                for channel in ("MYSQL", "GRAPH", "VECTOR")
+                if channel in scores
+            ] + sorted(set(scores) - {"MYSQL", "GRAPH", "VECTOR"})
+            raw_graph_refs = score_detail.get("graph_path_refs", [])
+            if not isinstance(raw_graph_refs, list) or len(raw_graph_refs) > 10 or any(
+                not is_graph_path_reference(ref) for ref in raw_graph_refs
+            ):
+                raise RuntimeError("persisted G4 graph path references are invalid")
+            graph_refs = [str(ref) for ref in raw_graph_refs]
+            graph_version_value = score_detail.get("graph_version", versions.get("graph"))
+            graph_version = (
+                str(graph_version_value)
+                if isinstance(graph_version_value, str) and graph_version_value
+                else None
+            )
+            coverage_value = score_detail.get("graph_path_coverage_state")
+            if coverage_value is None:
+                coverage_state = (
+                    GraphPathCoverageState.COVERED
+                    if graph_refs
+                    else GraphPathCoverageState.DEGRADED
+                    if graph_version and graph_version.startswith("lib-books-v2-")
+                    else GraphPathCoverageState.NOT_USED
+                )
+            else:
+                try:
+                    coverage_state = GraphPathCoverageState(str(coverage_value))
+                except ValueError as exc:
+                    raise RuntimeError(
+                        "persisted G4 graph path coverage state is invalid"
+                    ) from exc
+            if coverage_state is GraphPathCoverageState.COVERED and (
+                "GRAPH" not in channels or not graph_refs
+            ):
+                raise RuntimeError("persisted covered Graph evidence is inconsistent")
+            if "GRAPH" not in channels and graph_refs:
+                raise RuntimeError("persisted non-Graph item contains graph path evidence")
+            if (
+                "GRAPH" in channels
+                and graph_version
+                and graph_version.startswith("lib-books-v2-")
+                and (
+                    not graph_refs
+                    or any(
+                        not is_routeable_graph_path_reference(ref) for ref in graph_refs
+                    )
+                    or coverage_state is not GraphPathCoverageState.COVERED
+                )
+            ):
+                raise RuntimeError("persisted v2 Graph score lacks path evidence")
+            group_id = None
+            if reading_path:
+                group_id = reading_path_group_id(
+                    difficulty_level=row[9],
+                    rank_no=int(row[1]),
+                    item_count=item_count,
+                )
+                used_groups.add(group_id)
+            items.append(
+                {
+                    "item_id": int(row[0]),
+                    "resource": {
+                        "resource_id": int(row[3]),
+                        "resource_type": str(row[4]),
+                        "title": str(row[5]),
+                        "authors": [str(value) for value in _g3_json_array(row[6])],
+                        "publication_year": int(row[7]) if row[7] is not None else None,
+                        "availability_status": str(row[8]),
+                        "difficulty_level": int(row[9]) if row[9] is not None else None,
+                    },
+                    "rank_no": int(row[1]),
+                    "group_id": group_id,
+                    "reason_summary": str(row[10])
+                    if row[10]
+                    else "Evidence recorded in the recommendation trace.",
+                    "evidence_confidence": float(row[2]),
+                    "unavailable_now": False,
+                    "evidence": {
+                        "score": float(score_detail.get("rrf_score", row[11])),
+                        "channels": channels,
+                        "channel_scores": scores,
+                        "channel_ranks": ranks,
+                        "primary_channel": str(row[12]),
+                        "evidence_refs": [
+                            str(value) for value in _g3_json_array(row[14])
+                        ],
+                        "graph_path_refs": graph_refs,
+                        "graph_version": graph_version,
+                        "graph_path_coverage_state": coverage_state.value,
+                        "negative_penalty": float(
+                            score_detail.get("negative_penalty", 0.0)
+                        ),
+                    },
+                }
+            )
+        evaluation_at = task[3]
+        if isinstance(evaluation_at, datetime):
+            evaluation_at = evaluation_at.replace(tzinfo=UTC).isoformat().replace(
+                "+00:00", "Z"
+            )
+        return {
+            "task_id": str(task_id),
+            "record_id": int(task[4]) if task[4] is not None else None,
+            "trace_id": str(task[0]),
+            "status": str(task[1]),
+            "context_version": int(task[2]),
+            "evaluation_at": str(evaluation_at),
+            "decision": decision,
+            "groups": reading_path_groups(used_groups) if reading_path else None,
+            "items": items,
+            "questions": None,
+            "warnings": warnings,
+            "agent_actions": [],
+            "versions": versions,
+        }
 
     async def create_task(
         self,
