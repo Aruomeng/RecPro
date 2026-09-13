@@ -581,6 +581,53 @@ def validate_post_counts(
     return {table: deltas[table] for table in TARGET_TABLES}
 
 
+def validate_persisted_status_projection(
+    live_payload: Mapping[str, Any],
+    status_payload: Mapping[str, Any],
+) -> dict[str, object]:
+    """Validate the public task-status projection against a full result.
+
+    ``GET /recommendation-tasks/{task_id}`` is intentionally a status
+    resource, not a second full-result endpoint.  The idempotent POST replay
+    is the persisted full-result read and is validated separately.  Requiring
+    ``items`` or Graph evidence from the status response would therefore turn
+    a successfully committed append into a false-negative postflight.
+    """
+
+    for field in ("task_id", "trace_id", "status", "context_version", "record_id"):
+        if status_payload.get(field) != live_payload.get(field):
+            raise RuntimeError(f"G4 persisted status did not preserve {field}")
+    if status_payload.get("warnings") != live_payload.get("warnings"):
+        raise RuntimeError("G4 persisted status did not preserve warnings")
+    live_versions = live_payload.get("versions")
+    status_versions = status_payload.get("versions")
+    if not isinstance(live_versions, Mapping) or not isinstance(
+        status_versions, Mapping
+    ):
+        raise RuntimeError("G4 persisted status omitted version metadata")
+    status_version_fields = (
+        "config_bundle",
+        "policy",
+        "ranking",
+        "behavior_formula",
+        "dataset",
+    )
+    for field in status_version_fields:
+        if status_versions.get(field) != live_versions.get(field):
+            raise RuntimeError(
+                f"G4 persisted status did not preserve versions.{field}"
+            )
+    return {
+        "task_id": str(status_payload.get("task_id")),
+        "status": str(status_payload.get("status")),
+        "context_version": int(status_payload.get("context_version", 0)),
+        "record_id": int(status_payload["record_id"])
+        if status_payload.get("record_id") is not None
+        else None,
+        "version_fields": list(status_version_fields),
+    }
+
+
 def build_settings(
     values: Mapping[str, str],
     *,
@@ -1017,6 +1064,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
         if persisted.status_code != 200:
             raise RuntimeError(f"G4 persisted task GET returned {persisted.status_code}")
     graph_path_coverage: dict[str, object] | None = None
+    persisted_status_summary: dict[str, object] | None = None
     if require_v2_graph_paths:
         payload_items = payload.get("items")
         replay_payload = replay.json()
@@ -1033,16 +1081,13 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             graph_version=graph_version,
             require_graph_paths=True,
         )
-        validate_v2_http_items(
-            persisted_payload.get("items", []),
-            graph_version=graph_version,
-            require_graph_paths=True,
-        )
         for field in ("items", "groups", "decision", "versions"):
             if replay_payload.get(field) != payload.get(field):
                 raise RuntimeError(f"G4 HTTP replay did not preserve {field}")
-            if persisted_payload.get(field) != payload.get(field):
-                raise RuntimeError(f"G4 persisted GET did not preserve {field}")
+        persisted_status_summary = validate_persisted_status_projection(
+            payload,
+            persisted_payload,
+        )
     if payload.get("status") not in {"COMPLETED", "DEGRADED_COMPLETED"}:
         raise RuntimeError(f"approved G4 projection did not complete: {payload.get('status')!r}")
     if not payload.get("record_id"):
@@ -1160,6 +1205,7 @@ async def execute(args: argparse.Namespace) -> dict[str, Any]:
             "v2_graph_evidence_preserved": bool(require_v2_graph_paths),
         },
         "graph_path_coverage": graph_path_coverage,
+        "persisted_status_summary": persisted_status_summary,
         "http": {
             "business_posts": 2,
             "business_gets": 1,

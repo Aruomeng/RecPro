@@ -9,6 +9,7 @@ from scripts.execute_g4_recommendation_projection import (
     canonical,
     load_request_payload,
     plan_requires_v2_graph_paths,
+    validate_persisted_status_projection,
     validate_post_counts,
     validate_pre_counts,
     sha256_bytes,
@@ -139,6 +140,75 @@ class G4ProjectionExecutorTests(unittest.TestCase):
             ],
         }
         self.assertTrue(plan_requires_v2_graph_paths(marked))
+
+    def test_stage2_status_projection_does_not_require_full_result_items(self) -> None:
+        full = {
+            "task_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "trace_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "status": "COMPLETED",
+            "context_version": 1,
+            "record_id": 91,
+            "warnings": [],
+            "items": [{"evidence": {"channels": ["MYSQL", "GRAPH"]}}],
+            "versions": {
+                "config_bundle": "rec-1.0.0",
+                "policy": "policy-rule-v1",
+                "ranking": "ranking-g4-v1",
+                "behavior_formula": "profile-g4-v1",
+                "dataset": "lib-books-v1-20260810",
+                "embedding": "hash-char-ngram-v1",
+                "graph": "lib-books-v2-20260828",
+                "prompt": "prompt-v1",
+            },
+        }
+        status = {
+            key: full[key]
+            for key in (
+                "task_id",
+                "trace_id",
+                "status",
+                "context_version",
+                "record_id",
+                "warnings",
+            )
+        }
+        status["versions"] = {
+            key: full["versions"][key]
+            for key in (
+                "config_bundle",
+                "policy",
+                "ranking",
+                "behavior_formula",
+                "dataset",
+            )
+        }
+
+        summary = validate_persisted_status_projection(full, status)
+
+        self.assertEqual(91, summary["record_id"])
+        self.assertNotIn("items", status)
+        self.assertNotIn("graph", status["versions"])
+
+    def test_stage2_status_projection_rejects_identity_drift(self) -> None:
+        full = {
+            "task_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            "trace_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+            "status": "COMPLETED",
+            "context_version": 1,
+            "record_id": 91,
+            "warnings": [],
+            "versions": {
+                "config_bundle": "rec-1.0.0",
+                "policy": "policy-rule-v1",
+                "ranking": "ranking-g4-v1",
+                "behavior_formula": "profile-g4-v1",
+                "dataset": "lib-books-v1-20260810",
+            },
+        }
+        status = {**full, "task_id": "cccccccc-cccc-4ccc-8ccc-cccccccccccc"}
+
+        with self.assertRaisesRegex(RuntimeError, "task_id"):
+            validate_persisted_status_projection(full, status)
 
 
 if __name__ == "__main__":
