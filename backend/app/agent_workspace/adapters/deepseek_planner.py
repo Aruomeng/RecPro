@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import json
-from typing import Mapping, Protocol
+from typing import Protocol
 
 from backend.app.agent_workspace.ports.planning import (
     BackgroundPlanningPort,
@@ -27,6 +27,32 @@ class BackgroundPlanningModelPort(Protocol):
     async def plan_workspace_background(self, context_json: str) -> LLMResult: ...
 
 
+def serialize_sanitized_planning_context(context: SanitizedPlanningContext) -> str:
+    """Serialize the one model-facing context contract deterministically."""
+
+    context_json = json.dumps(
+        {
+            "mode": context.mode,
+            "context_version": context.context_version,
+            "trigger": context.trigger,
+            "route": context.route,
+            "query": context.query,
+            "top_topics": list(context.top_topics),
+            "source_statuses": dict(context.source_statuses),
+            "external_context": list(context.external_context),
+            "profile_summary": dict(context.profile_summary)
+            if context.profile_summary is not None
+            else None,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    if len(context_json) > 3000:
+        raise ValueError("sanitized background context exceeds the model boundary")
+    return context_json
+
+
 @dataclass(frozen=True, slots=True)
 class DeepSeekBackgroundPlanner(BackgroundPlanningPort):
     """Adapt a capability-scoped DeepSeek provider to Workspace planning."""
@@ -34,26 +60,7 @@ class DeepSeekBackgroundPlanner(BackgroundPlanningPort):
     provider: BackgroundPlanningModelPort
 
     async def plan(self, context: SanitizedPlanningContext) -> BackgroundPlanningResult:
-        context_json = json.dumps(
-            {
-                "mode": context.mode,
-                "context_version": context.context_version,
-                "trigger": context.trigger,
-                "route": context.route,
-                "query": context.query,
-                "top_topics": list(context.top_topics),
-                "source_statuses": dict(context.source_statuses),
-                "external_context": list(context.external_context),
-                "profile_summary": dict(context.profile_summary)
-                if context.profile_summary is not None
-                else None,
-            },
-            ensure_ascii=False,
-            sort_keys=True,
-            separators=(",", ":"),
-        )
-        if len(context_json) > 3000:
-            raise ValueError("sanitized background context exceeds the model boundary")
+        context_json = serialize_sanitized_planning_context(context)
         result = await self.provider.plan_workspace_background(context_json)
         topics = result.payload.get("suggested_topics")
         if not isinstance(topics, list) or len(topics) > 3:
@@ -84,4 +91,8 @@ class DeepSeekBackgroundPlanner(BackgroundPlanningPort):
         )
 
 
-__all__ = ["BackgroundPlanningModelPort", "DeepSeekBackgroundPlanner"]
+__all__ = [
+    "BackgroundPlanningModelPort",
+    "DeepSeekBackgroundPlanner",
+    "serialize_sanitized_planning_context",
+]

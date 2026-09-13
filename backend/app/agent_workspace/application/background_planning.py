@@ -418,12 +418,17 @@ class BackgroundPlanningCoordinator:
         budget: PlanningBudgetPort | None = None,
         sanitizer: PlanningContextSanitizer | None = None,
         validator: DirectiveValidator | None = None,
+        fallback_planner: BackgroundPlanningPort | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self._planner = planner
         self._budget = budget or InMemoryPlanningBudget()
         self._sanitizer = sanitizer or PlanningContextSanitizer()
         self._validator = validator or DirectiveValidator()
+        # The fallback is deterministic and model-free. It is invoked only
+        # after an admitted model attempt fails, so it cannot bypass or refund
+        # the low-frequency request budget.
+        self._fallback_planner = fallback_planner or FixtureBackgroundPlanner()
         self._clock = clock
         self._last_versions: dict[UUID, int] = {}
         self._keys: set[str] = set()
@@ -484,16 +489,22 @@ class BackgroundPlanningCoordinator:
         except TimeoutError:
             async with self._lock:
                 self._last_versions[context.session_id] = context.context_version
-            return BackgroundPlanningOutcome(
-                "DEGRADED", "BACKGROUND_MODEL_TIMEOUT", decision_id, context.context_version,
-                provider="unknown", model="unknown", model_requests=1, budget=reservation.snapshot,
+            return await self._degraded_with_rule_fallback(
+                sanitized=sanitized,
+                decision_id=decision_id,
+                context_version=context.context_version,
+                reason_code="BACKGROUND_MODEL_TIMEOUT",
+                reservation=reservation,
             )
         except DirectiveValidationError:
             async with self._lock:
                 self._last_versions[context.session_id] = context.context_version
-            return BackgroundPlanningOutcome(
-                "DEGRADED", "BACKGROUND_DIRECTIVE_INVALID", decision_id, context.context_version,
-                provider="unknown", model="unknown", model_requests=1, budget=reservation.snapshot,
+            return await self._degraded_with_rule_fallback(
+                sanitized=sanitized,
+                decision_id=decision_id,
+                context_version=context.context_version,
+                reason_code="BACKGROUND_DIRECTIVE_INVALID",
+                reservation=reservation,
             )
         except Exception as exc:
             async with self._lock:
@@ -503,9 +514,12 @@ class BackgroundPlanningCoordinator:
                 "DeepSeekPayloadError": "BACKGROUND_MODEL_PAYLOAD_INVALID",
                 "PromptBundleError": "BACKGROUND_MODEL_CONTRACT_INVALID",
             }.get(type(exc).__name__, "BACKGROUND_PLANNER_FAILED")
-            return BackgroundPlanningOutcome(
-                "DEGRADED", reason_code, decision_id, context.context_version,
-                provider="unknown", model="unknown", model_requests=1, budget=reservation.snapshot,
+            return await self._degraded_with_rule_fallback(
+                sanitized=sanitized,
+                decision_id=decision_id,
+                context_version=context.context_version,
+                reason_code=reason_code,
+                reservation=reservation,
             )
         async with self._lock:
             self._last_versions[context.session_id] = context.context_version
@@ -516,8 +530,65 @@ class BackgroundPlanningCoordinator:
             confidence=max(0.0, min(1.0, float(raw_result.confidence))),
             provider=raw_result.provider[:64], model=raw_result.model[:128],
             model_requests=max(0, min(1, int(raw_result.model_requests))),
+            attempted_provider=raw_result.provider[:64],
             budget=reservation.snapshot,
         )
+
+    async def _degraded_with_rule_fallback(
+        self,
+        *,
+        sanitized: SanitizedPlanningContext,
+        decision_id: UUID,
+        context_version: int,
+        reason_code: str,
+        reservation: PlanningReservation,
+    ) -> BackgroundPlanningOutcome:
+        """Return an explicit degradation while retaining safe local guidance.
+
+        The local fallback is required to report ``model_requests=0``. A
+        misconfigured fallback therefore cannot turn one approved attempt into
+        an unbudgeted second model call.
+        """
+
+        try:
+            fallback = await self._fallback_planner.plan(sanitized)
+            if fallback.model_requests != 0:
+                raise ValueError("background fallback must be model-free")
+            directives = self._validator.validate(fallback.directives)
+            evidence_refs = tuple(dict.fromkeys((
+                *fallback.evidence_refs,
+                f"fallback:{reason_code.lower()}",
+            )))[:8]
+            return BackgroundPlanningOutcome(
+                "DEGRADED",
+                reason_code,
+                decision_id,
+                context_version,
+                directives=directives,
+                evidence_refs=evidence_refs,
+                confidence=max(0.0, min(1.0, float(fallback.confidence))),
+                provider=fallback.provider[:64],
+                model=fallback.model[:128],
+                model_requests=1,
+                attempted_provider=type(self._planner).__name__[:64],
+                fallback_used=True,
+                budget=reservation.snapshot,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            return BackgroundPlanningOutcome(
+                "DEGRADED",
+                reason_code,
+                decision_id,
+                context_version,
+                provider="none",
+                model="none",
+                model_requests=1,
+                attempted_provider=type(self._planner).__name__[:64],
+                fallback_used=False,
+                budget=reservation.snapshot,
+            )
 
 
 __all__ = [

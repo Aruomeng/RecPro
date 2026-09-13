@@ -56,6 +56,15 @@
 .agent-detail dd,
 .agent-detail > p,
 .agent-panel-error { font-size: var(--v2-caption); }
+.background-planning-card > p,
+.background-planning-card > small {
+  display:block;
+  margin:6px 0 0;
+  color:var(--v2-muted);
+  font-size:var(--v2-caption);
+  line-height:1.55;
+  overflow-wrap:anywhere;
+}
 
 @media (max-width:620px) {
   .rail-agent-list button {

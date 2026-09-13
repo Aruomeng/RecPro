@@ -130,6 +130,8 @@ class BackgroundPlanningOutcome:
     provider: str = "none"
     model: str = "none"
     model_requests: int = 0
+    attempted_provider: str = "none"
+    fallback_used: bool = False
     budget: PlanningBudgetSnapshot | None = None
 
 

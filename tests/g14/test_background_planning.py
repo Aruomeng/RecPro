@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 import unittest
@@ -37,6 +38,25 @@ class _CapturingPlanner:
         return BackgroundPlanningResult(
             evidence_refs=("workspace:context",),
             confidence=0.8,
+        )
+
+
+class _InvalidDirectivePlanner:
+    async def plan(self, context: SanitizedPlanningContext) -> BackgroundPlanningResult:
+        return BackgroundPlanningResult(
+            directives=({
+                "directive_type": "EXECUTE_RECOMMENDATION",
+                "scope": "global",
+                "behavior": "AUTO_APPLY",
+                "payload": {"route": "/recommend"},
+                "reason_code": "MODEL_REQUESTED_WRITE",
+                "confidence": 0.99,
+                "evidence_refs": ["workspace:context"],
+                "reversible": False,
+            },),  # type: ignore[arg-type]
+            provider="deepseek",
+            model="deepseek-v4-flash",
+            model_requests=1,
         )
 
 
@@ -105,6 +125,25 @@ class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(exhausted.allowed)
         self.assertEqual("SESSION_BACKGROUND_BUDGET_EXHAUSTED", exhausted.reason_code)
 
+    async def test_budget_enforces_twelve_calls_per_device_day(self) -> None:
+        budget = InMemoryPlanningBudget()
+        device_id = "shared-library-screen"
+        first_time = datetime(2026, 8, 30, 0, 0, tzinfo=UTC)
+        for index in range(12):
+            reservation = budget.reserve(
+                session_id=uuid4(),
+                device_id=device_id,
+                now=first_time + timedelta(minutes=index),
+            )
+            self.assertTrue(reservation.allowed)
+        denied = budget.reserve(
+            session_id=uuid4(),
+            device_id=device_id,
+            now=first_time + timedelta(minutes=12),
+        )
+        self.assertFalse(denied.allowed)
+        self.assertEqual("DEVICE_BACKGROUND_BUDGET_EXHAUSTED", denied.reason_code)
+
     async def test_model_payload_failure_is_a_public_degradation_reason(self) -> None:
         payload_error = type("DeepSeekPayloadError", (ValueError,), {})()
         outcome = await BackgroundPlanningCoordinator(
@@ -112,6 +151,53 @@ class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
         ).plan(self._context())
         self.assertEqual("DEGRADED", outcome.status)
         self.assertEqual("BACKGROUND_MODEL_PAYLOAD_INVALID", outcome.reason_code)
+        self.assertTrue(outcome.fallback_used)
+        self.assertEqual("fixture", outcome.provider)
+        self.assertEqual(1, outcome.model_requests)
+        self.assertGreaterEqual(len(outcome.directives), 1)
+        self.assertIn(
+            "fallback:background_model_payload_invalid",
+            outcome.evidence_refs,
+        )
+
+    async def test_invalid_directive_falls_back_without_a_second_model_request(self) -> None:
+        outcome = await BackgroundPlanningCoordinator(
+            planner=_InvalidDirectivePlanner(),
+        ).plan(self._context())
+        self.assertEqual("DEGRADED", outcome.status)
+        self.assertEqual("BACKGROUND_DIRECTIVE_INVALID", outcome.reason_code)
+        self.assertTrue(outcome.fallback_used)
+        self.assertEqual(1, outcome.model_requests)
+        self.assertTrue(all(
+            item.directive_type != "EXECUTE_RECOMMENDATION"
+            for item in outcome.directives
+        ))
+
+    async def test_timeout_falls_back_without_a_second_model_request(self) -> None:
+        outcome = await BackgroundPlanningCoordinator(
+            planner=_FailingPlanner(TimeoutError()),
+        ).plan(self._context())
+        self.assertEqual("DEGRADED", outcome.status)
+        self.assertEqual("BACKGROUND_MODEL_TIMEOUT", outcome.reason_code)
+        self.assertTrue(outcome.fallback_used)
+        self.assertEqual(1, outcome.model_requests)
+        self.assertGreaterEqual(len(outcome.directives), 1)
+
+    async def test_budget_denial_never_dispatches_the_planner(self) -> None:
+        now = datetime(2026, 8, 30, 0, 0, tzinfo=UTC)
+        planner = _CapturingPlanner()
+        coordinator = BackgroundPlanningCoordinator(
+            planner=planner,
+            budget=InMemoryPlanningBudget(PlanningBudgetPolicy(max_calls_per_session=1)),
+            clock=lambda: now,
+        )
+        first_context = self._context(version=2)
+        first = await coordinator.plan(first_context)
+        denied = await coordinator.plan(replace(first_context, context_version=3))
+        self.assertEqual("PLANNED", first.status)
+        self.assertEqual("SKIPPED", denied.status)
+        self.assertEqual("SESSION_BACKGROUND_BUDGET_EXHAUSTED", denied.reason_code)
+        self.assertEqual(1, len(planner.contexts))
 
     def test_sanitizer_only_keeps_consented_profile_summary(self) -> None:
         sanitizer = PlanningContextSanitizer()
@@ -153,6 +239,9 @@ class BackgroundPlanningTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual("RecommendationPolicyAgent", starts[-1]["agent_name"])
         self.assertTrue(any(item["type"] == "SUGGEST_TOPICS" for item in snapshot["directives"]))
         self.assertEqual("PLANNED", snapshot["context_summary"]["background_planning"]["status"])
+        self.assertFalse(snapshot["context_summary"]["background_planning"]["fallback_used"])
+        self.assertIn("workspace:context", snapshot["context_summary"]["background_planning"]["evidence_refs"])
+        self.assertGreaterEqual(snapshot["context_summary"]["background_planning"]["duration_ms"], 0)
         self.assertEqual(0, sum(int(event.get("llm_requests", 0)) for event in events))
 
     async def test_authenticated_consent_sends_only_bounded_profile_summary(self) -> None:

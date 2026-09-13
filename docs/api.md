@@ -115,7 +115,7 @@ Neo4j recall、不调用外部 LLM，也不发送任何业务 POST。默认 Comp
 低频 Workspace 规划默认关闭；`fixture` 仅使用确定性规则。研究运行时若选择
 `RECPRO_BACKGROUND_PLANNING_PROVIDER=deepseek`，还必须显式启用 Planner、配置
 DeepSeek，并提供对应模型预算的 `RECPRO_BACKGROUND_PLANNING_PLAN_ID`、
-`RECPRO_BACKGROUND_PLANNING_PLAN_HASH` 与 `RECPRO_BACKGROUND_PLANNING_RUN_ID`。
+`RECPRO_BACKGROUND_PLANNING_PLAN_HASH` 与 `RECPRO_BACKGROUND_PLANNING_RUN_IDENTITY`。
 该配置只构造具备每会话 3 次、间隔 10 分钟限制的 Planner；启动和健康检查不会调用模型，
 每次真实调用仍须先通过独立 ChangePlan 审批。
 

@@ -35,6 +35,10 @@ function shortName(agent: WorkspaceAgent): string {
 function time(event: WorkspaceEvent): string {
   return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(event.occurred_at));
 }
+function nextAllowed(value: string | null): string {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }).format(new Date(value));
+}
 async function accept(directive: InteractionDirective): Promise<void> {
   try {
     await workspace.action(directive, "ACCEPT");
@@ -84,9 +88,11 @@ async function accept(directive: InteractionDirective): Promise<void> {
 
         <section v-if="workspace.backgroundPlanning" class="agent-panel-section background-planning-card">
           <div class="section-caption"><b>低频后台规划</b><span>{{ workspace.backgroundPlanning.status }}</span></div>
-          <p>{{ workspace.backgroundPlanning.reason_code }} · v{{ workspace.backgroundPlanning.context_version }}</p>
-          <small>Provider {{ workspace.backgroundPlanning.provider }} · 请求 {{ workspace.backgroundPlanning.model_requests }} 次 · 指令 {{ workspace.backgroundPlanning.directive_count }} 条</small>
-          <small v-if="workspace.backgroundPlanning.budget">会话 {{ workspace.backgroundPlanning.budget.session_calls }}/{{ workspace.backgroundPlanning.budget.session_limit }} · 设备今日 {{ workspace.backgroundPlanning.budget.device_calls_today }}/{{ workspace.backgroundPlanning.budget.device_limit_today }}</small>
+          <p>{{ workspace.backgroundPlanning.reason_code }} · 上下文 v{{ workspace.backgroundPlanning.context_version }}</p>
+          <small>决策 {{ workspace.backgroundPlanning.decision_id || '未触发' }} · {{ workspace.backgroundPlanning.duration_ms }} ms</small>
+          <small>来源 {{ workspace.backgroundPlanning.attempted_provider }}<template v-if="workspace.backgroundPlanning.fallback_used"> → {{ workspace.backgroundPlanning.provider }} 规则回退</template> · 模型请求 {{ workspace.backgroundPlanning.model_requests }} 次 · 指令 {{ workspace.backgroundPlanning.directive_count }} 条</small>
+          <small v-if="workspace.backgroundPlanning.budget">会话 {{ workspace.backgroundPlanning.budget.session_calls }}/{{ workspace.backgroundPlanning.budget.session_limit }} · 设备今日 {{ workspace.backgroundPlanning.budget.device_calls_today }}/{{ workspace.backgroundPlanning.budget.device_limit_today }} · 下次允许 {{ nextAllowed(workspace.backgroundPlanning.budget.next_allowed_at) }}</small>
+          <div v-if="workspace.backgroundPlanning.evidence_refs.length" class="agent-evidence"><b>后台规划证据</b><span v-for="ref in workspace.backgroundPlanning.evidence_refs" :key="ref">{{ ref }}</span></div>
         </section>
 
         <section class="agent-panel-section agent-roster">

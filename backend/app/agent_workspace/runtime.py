@@ -813,12 +813,17 @@ class AgentWorkspaceBroker:
             personalization_enabled=observation.context_personalization_enabled,
             profile_summary=profile_summary,
         )
+        planning_started = time.perf_counter()
         outcome = await self._background_planner.plan(
             context,
             idempotency_key=f"workspace:{workspace.workspace_id}:context:{observation.context_version}",
             on_dispatch=announce,
         )
-        workspace.background_planning = self._public_background_outcome(outcome)
+        duration_ms = max(0, int((time.perf_counter() - planning_started) * 1000))
+        workspace.background_planning = self._public_background_outcome(
+            outcome,
+            duration_ms=duration_ms,
+        )
         if outcome.status == "SKIPPED":
             self._publish(workspace, "BACKGROUND_PLAN_SKIPPED", {
                 "reason_code": outcome.reason_code,
@@ -835,7 +840,7 @@ class AgentWorkspaceBroker:
             target="InteractionDirectiveEngine",
             reason=outcome.reason_code,
             confidence=outcome.confidence,
-            duration_ms=0,
+            duration_ms=duration_ms,
             evidence_refs=outcome.evidence_refs,
         )
         terminal = "AGENT_COMPLETED" if outcome.status in {"PLANNED", "DEGRADED"} else "AGENT_FAILED"
@@ -846,12 +851,14 @@ class AgentWorkspaceBroker:
             "target": "InteractionDirectiveEngine",
             "reason_code": outcome.reason_code,
             "confidence": outcome.confidence,
-            "duration_ms": 0,
+            "duration_ms": duration_ms,
             "evidence_refs": list(outcome.evidence_refs),
             "outcome": outcome.status,
             "observation_context_version": observation.context_version,
             "provider": outcome.provider,
             "model": outcome.model,
+            "attempted_provider": outcome.attempted_provider,
+            "fallback_used": outcome.fallback_used,
             "llm_requests": outcome.model_requests,
             "budget": self._public_budget(outcome),
         })
@@ -882,7 +889,12 @@ class AgentWorkspaceBroker:
         }
 
     @classmethod
-    def _public_background_outcome(cls, outcome: BackgroundPlanningOutcome) -> dict[str, object]:
+    def _public_background_outcome(
+        cls,
+        outcome: BackgroundPlanningOutcome,
+        *,
+        duration_ms: int,
+    ) -> dict[str, object]:
         return {
             "status": outcome.status,
             "reason_code": outcome.reason_code,
@@ -890,8 +902,12 @@ class AgentWorkspaceBroker:
             "context_version": outcome.context_version,
             "provider": outcome.provider,
             "model": outcome.model,
+            "attempted_provider": outcome.attempted_provider,
+            "fallback_used": outcome.fallback_used,
             "model_requests": outcome.model_requests,
             "directive_count": len(outcome.directives),
+            "duration_ms": duration_ms,
+            "evidence_refs": list(outcome.evidence_refs),
             "budget": cls._public_budget(outcome),
         }
 

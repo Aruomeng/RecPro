@@ -63,8 +63,12 @@ export interface WorkspaceContextSummary {
     context_version: number;
     provider: string;
     model: string;
+    attempted_provider: string;
+    fallback_used: boolean;
     model_requests: number;
     directive_count: number;
+    duration_ms: number;
+    evidence_refs: string[];
     budget: {
       session_calls: number;
       session_limit: number;
@@ -153,12 +157,32 @@ export function isWorkspaceEvent(value: unknown): value is WorkspaceEvent {
     (value.directive === undefined || isDirective(value.directive));
 }
 
+function isBackgroundPlanning(value: unknown): value is NonNullable<WorkspaceContextSummary["background_planning"]> {
+  if (!isRecord(value)) return false;
+  const statuses = ["PLANNED", "SKIPPED", "DEGRADED", "FAILED"];
+  if (!statuses.includes(String(value.status)) || typeof value.reason_code !== "string" ||
+      !(value.decision_id === null || typeof value.decision_id === "string") ||
+      !Number.isInteger(value.context_version) || Number(value.context_version) < 1 ||
+      typeof value.provider !== "string" || typeof value.model !== "string" ||
+      typeof value.attempted_provider !== "string" || typeof value.fallback_used !== "boolean" ||
+      !Number.isInteger(value.model_requests) || Number(value.model_requests) < 0 ||
+      !Number.isInteger(value.directive_count) || Number(value.directive_count) < 0 ||
+      !Number.isInteger(value.duration_ms) || Number(value.duration_ms) < 0 ||
+      !Array.isArray(value.evidence_refs) || !value.evidence_refs.every((item) => typeof item === "string")) return false;
+  if (value.budget === null) return true;
+  return isRecord(value.budget) &&
+    Number.isInteger(value.budget.session_calls) && Number.isInteger(value.budget.session_limit) &&
+    Number.isInteger(value.budget.device_calls_today) && Number.isInteger(value.budget.device_limit_today) &&
+    (value.budget.next_allowed_at === null || typeof value.budget.next_allowed_at === "string");
+}
+
 export function isAgentWorkspaceSnapshot(value: unknown): value is AgentWorkspaceSnapshot {
   if (!isRecord(value) || !["agent-workspace-v1", "agent-workspace-v2"].includes(String(value.schema_version)) || typeof value.workspace_id !== "string" || typeof value.session_id !== "string" || !["guest", "demo", "authenticated"].includes(String(value.mode))) return false;
   if (!isRecord(value.orchestrator) || !Array.isArray(value.agents) || value.agents.length !== 8 || !value.agents.every(isWorkspaceAgent)) return false;
   if (!Array.isArray(value.directives) || !value.directives.every(isDirective) || !Array.isArray(value.recent_events) || !value.recent_events.every(isWorkspaceEvent)) return false;
   if (!Array.isArray(value.sources) || !value.sources.every((source) => isRecord(source) && typeof source.source_id === "string" && ["INTERNAL", "EXTERNAL_DEMO"].includes(String(source.kind)) && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string")) return false;
   if (!isRecord(value.context_summary) || typeof value.context_summary.route !== "string" || typeof value.context_summary.query !== "string" || !Array.isArray(value.context_summary.external)) return false;
+  if (value.context_summary.background_planning !== undefined && value.context_summary.background_planning !== null && !isBackgroundPlanning(value.context_summary.background_planning)) return false;
   if (!value.context_summary.external.every((source) => isRecord(source) && source.kind === "EXTERNAL_DEMO" && typeof source.source_id === "string" && typeof source.label === "string" && typeof source.status === "string" && typeof source.observed_at === "string" && typeof source.expires_at === "string" && isRecord(source.values) && Object.values(source.values).every((item) => item === null || ["string", "number", "boolean"].includes(typeof item) || (Array.isArray(item) && item.length <= 20 && item.every((entry) => typeof entry === "string"))))) return false;
   if (value.schema_version === "agent-workspace-v1") return value.session_topic_graph === undefined;
   if (!isRecord(value.session_topic_graph) || !Number.isInteger(value.session_topic_graph.version) || !Array.isArray(value.session_topic_graph.nodes) || value.session_topic_graph.nodes.length > 64 || !Array.isArray(value.session_topic_graph.edges) || value.session_topic_graph.edges.length > 128 || typeof value.session_topic_graph.truncated !== "boolean") return false;
