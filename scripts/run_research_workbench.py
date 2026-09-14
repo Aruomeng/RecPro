@@ -15,7 +15,7 @@ import socket
 import subprocess
 import sys
 import time
-from typing import Mapping, Sequence
+from typing import AbstractSet, Mapping, Sequence
 from urllib.parse import urlsplit
 
 from scripts.validate_runtime_env import read_env
@@ -245,8 +245,16 @@ def preflight(
     }
 
 
-def wait_for_url(url: str, *, timeout: float) -> None:
+def wait_for_url(
+    url: str,
+    *,
+    timeout: float,
+    accepted_statuses: AbstractSet[int] | None = None,
+) -> None:
     target = urlsplit(url)
+    request_target = target.path or "/"
+    if target.query:
+        request_target = f"{request_target}?{target.query}"
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         remaining = max(0.1, deadline - time.monotonic())
@@ -256,10 +264,16 @@ def wait_for_url(url: str, *, timeout: float) -> None:
             timeout=min(20.0, remaining),
         )
         try:
-            connection.request("GET", target.path or "/")
+            connection.request("GET", request_target)
             response = connection.getresponse()
-            if response.status < 500:
+            ready = (
+                response.status in accepted_statuses
+                if accepted_statuses is not None
+                else response.status < 500
+            )
+            if ready:
                 return
+            time.sleep(0.2)
         except OSError:
             time.sleep(0.5)
         finally:
@@ -311,19 +325,10 @@ def run(args: argparse.Namespace) -> int:
         cwd=PROJECT_ROOT,
         env=environment,
     )
-    frontend = subprocess.Popen(
-        [
-            str(node),
-            str(vite),
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(args.frontend_port),
-        ],
-        cwd=PROJECT_ROOT / "frontend",
-        env=environment,
-    )
-    processes = (backend, frontend)
+    # Keep the frontend port closed until the backend and both bounded
+    # Exploration reads are ready. This prevents an already-open kiosk tab
+    # from racing the backend process during a workbench restart.
+    processes: list[subprocess.Popen[bytes]] = [backend]
     shutdown_requested = False
 
     def handle_signal(_signum: int, _frame: object) -> None:
@@ -338,10 +343,41 @@ def run(args: argparse.Namespace) -> int:
         wait_for_url(
             f"http://127.0.0.1:{args.backend_port}/api/v1/health/ready",
             timeout=args.startup_timeout,
+            accepted_statuses={200},
         )
+        # The final read-only Neo4j replica can require one bounded cold query
+        # before its page cache is warm. Prime the two public Exploration paths
+        # sequentially so the browser does not race them on first paint. These
+        # GETs cannot append business facts and retain the adapter's 3-second
+        # query timeout and fail-closed behavior.
+        wait_for_url(
+            f"http://127.0.0.1:{args.backend_port}/api/v1/explore/overview",
+            timeout=args.startup_timeout,
+            accepted_statuses={200},
+        )
+        wait_for_url(
+            f"http://127.0.0.1:{args.backend_port}/api/v1/explore/graph/search"
+            "?q=%E6%8E%A8%E8%8D%90%E7%B3%BB%E7%BB%9F&limit=8",
+            timeout=args.startup_timeout,
+            accepted_statuses={200},
+        )
+        frontend = subprocess.Popen(
+            [
+                str(node),
+                str(vite),
+                "--host",
+                "127.0.0.1",
+                "--port",
+                str(args.frontend_port),
+            ],
+            cwd=PROJECT_ROOT / "frontend",
+            env=environment,
+        )
+        processes.append(frontend)
         wait_for_url(
             f"http://127.0.0.1:{args.frontend_port}/",
             timeout=args.startup_timeout,
+            accepted_statuses={200},
         )
         print(f"LibraMAS workbench ready: http://127.0.0.1:{args.frontend_port}")
         while all(process.poll() is None for process in processes):

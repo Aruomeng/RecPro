@@ -1,8 +1,13 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import MagicMock, patch
 
-from scripts.run_research_workbench import merge_runtime_values, validate_configuration
+from scripts.run_research_workbench import (
+    merge_runtime_values,
+    validate_configuration,
+    wait_for_url,
+)
 
 
 class ResearchWorkbenchTests(unittest.TestCase):
@@ -82,6 +87,42 @@ class ResearchWorkbenchTests(unittest.TestCase):
     def test_incomplete_final_graph_secret_bundle_is_rejected(self) -> None:
         with self.assertRaisesRegex(RuntimeError, "incomplete"):
             merge_runtime_values({}, {}, {"RECPRO_FINAL_NEO4J_PASSWORD": "present"})
+
+    @patch("scripts.run_research_workbench.HTTPConnection")
+    def test_wait_for_url_preserves_the_bounded_warmup_query(self, connection: MagicMock) -> None:
+        response = connection.return_value.getresponse.return_value
+        response.status = 200
+
+        wait_for_url(
+            "http://127.0.0.1:8000/api/v1/explore/graph/search?q=topic%20graph&limit=8",
+            timeout=1,
+            accepted_statuses={200},
+        )
+
+        connection.return_value.request.assert_called_once_with(
+            "GET", "/api/v1/explore/graph/search?q=topic%20graph&limit=8"
+        )
+        connection.return_value.close.assert_called_once_with()
+
+    @patch("scripts.run_research_workbench.time.sleep")
+    @patch("scripts.run_research_workbench.HTTPConnection")
+    def test_wait_for_url_retries_a_non_accepted_status(
+        self,
+        connection: MagicMock,
+        sleep: MagicMock,
+    ) -> None:
+        unavailable = MagicMock(status=503)
+        ready = MagicMock(status=200)
+        connection.return_value.getresponse.side_effect = [unavailable, ready]
+
+        wait_for_url(
+            "http://127.0.0.1:8000/api/v1/explore/overview",
+            timeout=1,
+            accepted_statuses={200},
+        )
+
+        self.assertEqual(2, connection.return_value.request.call_count)
+        sleep.assert_called_once_with(0.2)
 
 
 if __name__ == "__main__":
