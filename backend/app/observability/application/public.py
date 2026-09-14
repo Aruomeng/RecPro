@@ -65,6 +65,7 @@ class ReadinessService:
             "chroma",
             "neo4j",
             "llm",
+            "identity_mysql",
             "interaction_pipeline",
             "knowledge_review",
             "background_planning",

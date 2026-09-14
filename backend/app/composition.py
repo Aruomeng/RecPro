@@ -835,6 +835,13 @@ def build_research_g4_http_app_from_runtime(
             error_code="VECTOR_READINESS_FAILED",
         ),
     }
+    if identity_service is not None:
+        component_probes["identity_mysql"] = AsyncOperationReadinessProbe(
+            operation=identity_service.check_readiness,
+            required=True,
+            active_version="iam-local-v1",
+            error_code="CORE_STORAGE_UNAVAILABLE",
+        )
     component_overrides = {
         "llm": ComponentReadiness(
             status=ComponentStatus.UP if llm_enabled else ComponentStatus.MOCK,

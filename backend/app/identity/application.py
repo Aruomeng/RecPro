@@ -82,6 +82,22 @@ class IdentityService:
         value = snapshot()
         return dict(value) if isinstance(value, dict) else None
 
+    async def check_readiness(self) -> bool:
+        """Verify the configured identity store without reading user data.
+
+        Memory adapters are intrinsically ready.  Persistent adapters may
+        expose a bounded read-only probe; its result is surfaced through the
+        global readiness contract before the login UI is made available.
+        """
+
+        check = getattr(self._repo, "check_readiness", None)
+        if not callable(check):
+            return True
+        result = check()
+        if inspect.isawaitable(result):
+            result = await result
+        return result is True
+
     async def provision_reader(
         self, *, display_name: str, identifier_type: IdentifierType,
         identifier: str, actor: AuthenticatedPrincipal, idempotency_key: str,

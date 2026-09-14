@@ -53,6 +53,9 @@ class IdentityRuntimeTests(unittest.IsolatedAsyncioTestCase):
             user_id=9002, roles=frozenset({"research_admin"}),
         )
 
+    async def test_memory_identity_store_is_ready_without_external_io(self) -> None:
+        self.assertTrue(await self.service.check_readiness())
+
     async def provision_and_activate(self, identifier: str = "LIB-2026-0001"):
         provisioned = await self.service.provision_reader(
             display_name="测试读者", identifier_type=IdentifierType.READER_NUMBER,

@@ -80,6 +80,27 @@ class MySQLIdentityRepository:
             value = as_dict()
         return dict(value) if isinstance(value, dict) else None
 
+    async def check_readiness(self) -> bool:
+        """Warm and verify the least-privilege IAM connection pool read-only.
+
+        The research workbench uses a dedicated MySQL identity, so the primary
+        catalog probe cannot prove that login storage is reachable.  This
+        bounded ``SELECT 1`` also leaves one healthy lease in the lazy pool,
+        avoiding a first-login race while keeping construction side-effect
+        free and performing no database mutation.
+        """
+
+        connection = await self._connection_factory()
+        try:
+            async with connection.cursor() as cursor:
+                await cursor.execute("SELECT 1")
+                row = await cursor.fetchone()
+            return row is not None and int(row[0]) == 1
+        finally:
+            result = connection.close()
+            if inspect.isawaitable(result):
+                await result
+
     async def provision_reader(
         self, *, display_name: str, identifier_type: IdentifierType,
         identifier_hash: bytes, display_suffix: str, actor_user_id: int,

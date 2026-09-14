@@ -136,6 +136,57 @@ class G4RuntimePortTests(unittest.TestCase):
             body["components"]["recommendation_pipeline"]["active_version"],
         )
 
+    def test_local_identity_store_is_required_and_warmed_by_readiness(self) -> None:
+        class Probe:
+            async def check(self):
+                from backend.app.observability.domain import ComponentReadiness, ComponentStatus
+
+                return ComponentReadiness(ComponentStatus.UP, required=True)
+
+        class Identity:
+            calls = 0
+
+            async def check_readiness(self) -> bool:
+                self.calls += 1
+                return True
+
+            async def validate_principal(self, candidate):
+                return candidate
+
+            async def close(self) -> None:
+                return None
+
+            def runtime_metrics(self):
+                return None
+
+        identity = Identity()
+        application = build_research_g4_http_app_from_runtime(
+            AppSettings(
+                app_env="demo",
+                mysql_password=SecretStr("RecProMysqlRuntime.20260802"),
+                g4_http_enabled=True,
+                auth_enabled=True,
+                local_identity_api_enabled=True,
+                auth_cookie_secure=False,
+                auth_jwt_secret=SecretStr("j" * 32),
+                auth_identifier_pepper=SecretStr("i" * 32),
+                auth_token_pepper=SecretStr("t" * 32),
+                identity_mysql_user="recpro_identity",
+                identity_mysql_password=SecretStr("IdentityRuntime.2026"),
+            ),
+            runtime=ready_runtime(),
+            connection_factory=lambda: None,
+            readiness_probe=Probe(),
+            config_bundle_probe=Probe(),
+            identity_service=identity,
+        )
+        with TestClient(application) as client:
+            response = client.get("/api/v1/health/ready")
+        self.assertEqual(200, response.status_code)
+        self.assertEqual("UP", response.json()["components"]["identity_mysql"]["status"])
+        self.assertTrue(response.json()["components"]["identity_mysql"]["required"])
+        self.assertEqual(1, identity.calls)
+
 
 if __name__ == "__main__":
     unittest.main()
